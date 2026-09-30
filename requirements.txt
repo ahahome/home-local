@@ -1,0 +1,16 @@
+openai
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+httpx
+jieba
+numpy
+apscheduler
+python-multipart
+pypdf
+python-docx
+openpyxl
+python-pptx
+pillow
+pytest

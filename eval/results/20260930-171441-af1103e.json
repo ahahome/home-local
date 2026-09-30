@@ -1,0 +1,1562 @@
+{
+ "meta": {
+  "model": "qwen-plus",
+  "prompt_hash": "61e70f3df734",
+  "git_sha": "af1103e",
+  "ran_at": "2026-09-30T17:14:41",
+  "elapsed_s": 0.1,
+  "cases_file": "extract.jsonl",
+  "tag": null,
+  "cached": 32
+ },
+ "summary": {
+  "cases": 32,
+  "passed": 26,
+  "pass_rate": 0.8125,
+  "field_recall": 0.9286,
+  "promise_recall": 1.0,
+  "evidence_hit_rate": 0.9459,
+  "promise_false_positive_rate": 0.25,
+  "negative_promise_cases": 4
+ },
+ "details": [
+  {
+   "id": "extract-p01",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 2,
+    "field_hit": 2,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 6,
+    "evidence_hit": 6
+   }
+  },
+  {
+   "id": "extract-p02",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 1,
+    "promise_hit": 1,
+    "evidence_total": 0,
+    "evidence_hit": 0
+   }
+  },
+  {
+   "id": "extract-p03",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 1,
+    "evidence_hit": 1
+   }
+  },
+  {
+   "id": "extract-p04",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 3,
+    "evidence_hit": 3
+   }
+  },
+  {
+   "id": "extract-p05",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 4,
+    "evidence_hit": 4
+   }
+  },
+  {
+   "id": "extract-p06",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 1,
+    "field_hit": 1,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 3,
+    "evidence_hit": 3
+   }
+  },
+  {
+   "id": "extract-p07",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 1,
+    "field_hit": 1,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 4,
+    "evidence_hit": 4
+   }
+  },
+  {
+   "id": "extract-p08",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 4,
+    "evidence_hit": 4
+   }
+  },
+  {
+   "id": "extract-p09",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 1,
+    "field_hit": 1,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 2,
+    "evidence_hit": 2
+   }
+  },
+  {
+   "id": "extract-p10",
+   "passed": false,
+   "failures": [
+    "evidence 不在原文中（1/6）：['陈总.value_read: 做外贸的，公司规模五十多人，女儿在加拿大读书，喜欢打高尔夫']"
+   ],
+   "people_found": 1,
+   "stats": {
+    "field_total": 2,
+    "field_hit": 2,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 6,
+    "evidence_hit": 5
+   }
+  },
+  {
+   "id": "extract-n01",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 0,
+    "evidence_hit": 0
+   }
+  },
+  {
+   "id": "extract-n02",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 2,
+    "evidence_hit": 2
+   }
+  },
+  {
+   "id": "extract-n03",
+   "passed": true,
+   "failures": [],
+   "people_found": 0,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 0,
+    "evidence_hit": 0
+   }
+  },
+  {
+   "id": "extract-n04",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 1,
+    "evidence_hit": 1
+   }
+  },
+  {
+   "id": "extract-n05",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 1,
+    "evidence_hit": 1
+   }
+  },
+  {
+   "id": "extract-n06",
+   "passed": true,
+   "failures": [],
+   "people_found": 0,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 0,
+    "evidence_hit": 0
+   }
+  },
+  {
+   "id": "extract-n07",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 2,
+    "evidence_hit": 2
+   }
+  },
+  {
+   "id": "extract-n08",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 1,
+    "field_hit": 1,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 2,
+    "evidence_hit": 2
+   }
+  },
+  {
+   "id": "extract-n09",
+   "passed": true,
+   "failures": [],
+   "people_found": 0,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 0,
+    "evidence_hit": 0
+   }
+  },
+  {
+   "id": "extract-n10",
+   "passed": true,
+   "failures": [],
+   "people_found": 0,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 0,
+    "evidence_hit": 0
+   }
+  },
+  {
+   "id": "extract-r01",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 1,
+    "evidence_hit": 1
+   }
+  },
+  {
+   "id": "extract-r02",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 1,
+    "field_hit": 1,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 1,
+    "evidence_hit": 1
+   }
+  },
+  {
+   "id": "extract-r03",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 1,
+    "field_hit": 1,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 2,
+    "evidence_hit": 2
+   }
+  },
+  {
+   "id": "extract-r04",
+   "passed": true,
+   "failures": [],
+   "people_found": 3,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 0,
+    "evidence_hit": 0
+   }
+  },
+  {
+   "id": "extract-r05",
+   "passed": false,
+   "failures": [
+    "张伟：字段缺失：city（实得 ['company']）"
+   ],
+   "people_found": 1,
+   "stats": {
+    "field_total": 1,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 2,
+    "evidence_hit": 2
+   }
+  },
+  {
+   "id": "extract-r06",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 1,
+    "promise_hit": 1,
+    "evidence_total": 1,
+    "evidence_hit": 1
+   }
+  },
+  {
+   "id": "extract-r07",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 3,
+    "evidence_hit": 3
+   }
+  },
+  {
+   "id": "extract-r08",
+   "passed": false,
+   "failures": [
+    "不该出现账本，却抽到了：['张伟']"
+   ],
+   "people_found": 1,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 3,
+    "evidence_hit": 3
+   }
+  },
+  {
+   "id": "extract-r09",
+   "passed": true,
+   "failures": [],
+   "people_found": 1,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 2,
+    "evidence_hit": 2
+   }
+  },
+  {
+   "id": "extract-r10",
+   "passed": false,
+   "failures": [
+    "evidence 不在原文中（1/9）：['王芳.value_read: 在苏州一家医疗器械公司做销售总监，她儿子今年高考']"
+   ],
+   "people_found": 1,
+   "stats": {
+    "field_total": 2,
+    "field_hit": 2,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 9,
+    "evidence_hit": 8
+   }
+  },
+  {
+   "id": "extract-n11",
+   "passed": false,
+   "failures": [
+    "evidence 不在原文中（2/8）：['张伟.trait.特点: 年初升了技术总监，带了三十多人；我女儿今年上小学一年级，正好也过去了', '张伟.value_read: 年初升了技术总监，带了三十多人；我女儿今年上小学一年级，正好也过去了']"
+   ],
+   "people_found": 1,
+   "stats": {
+    "field_total": 1,
+    "field_hit": 1,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 8,
+    "evidence_hit": 6
+   }
+  },
+  {
+   "id": "extract-n12",
+   "passed": false,
+   "failures": [
+    "不该出现承诺，却抽到了：['老陆']"
+   ],
+   "people_found": 1,
+   "stats": {
+    "field_total": 0,
+    "field_hit": 0,
+    "promise_expected": 0,
+    "promise_hit": 0,
+    "evidence_total": 1,
+    "evidence_hit": 1
+   }
+  }
+ ],
+ "raw": {
+  "extract-p01": {
+   "people": [
+    {
+     "name": "老陆",
+     "canonical_name": "老陆",
+     "fields": [
+      {
+       "field": "company",
+       "value": "杭州的一家新能源公司",
+       "confidence": 0.9,
+       "evidence": "现在在杭州的一家新能源公司做采购总监"
+      },
+      {
+       "field": "title",
+       "value": "采购总监",
+       "confidence": 0.9,
+       "evidence": "现在在杭州的一家新能源公司做采购总监"
+      },
+      {
+       "field": "city",
+       "value": "杭州",
+       "confidence": 0.9,
+       "evidence": "现在在杭州的一家新能源公司做采购总监"
+      },
+      {
+       "field": "trait.特点",
+       "value": "跳槽中高层管理者",
+       "confidence": 0.8,
+       "evidence": "老陆昨天跟我说他跳槽了，现在在杭州的一家新能源公司做采购总监"
+      }
+     ],
+     "aliases": [],
+     "relations": [],
+     "facts": [
+      {
+       "text": "老陆于2026-09-29跳槽至杭州一家新能源公司担任采购总监",
+       "confidence": 0.9,
+       "evidence": "老陆昨天跟我说他跳槽了，现在在杭州的一家新能源公司做采购总监"
+      }
+     ],
+     "promises": [],
+     "ledger": [],
+     "value_read": {
+      "text": "具备供应链管理经验的中高层职业经理人",
+      "confidence": 0.8,
+      "evidence": "现在在杭州的一家新能源公司做采购总监"
+     }
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-p02": {
+   "people": [
+    {
+     "name": "老陆",
+     "canonical_name": "老陆",
+     "fields": [],
+     "aliases": [],
+     "relations": [],
+     "facts": [],
+     "promises": [
+      {
+       "who": "me",
+       "content": "把报价单发给老陆",
+       "due": "2026-10-07",
+       "confidence": 0.9
+      }
+     ],
+     "ledger": [],
+     "value_read": null
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-p03": {
+   "people": [
+    {
+     "name": "张伟",
+     "canonical_name": "张伟",
+     "fields": [],
+     "aliases": [],
+     "relations": [],
+     "facts": [
+      {
+       "text": "2026-09-30 用户向张伟转账2000元，作为其婚礼份子钱",
+       "confidence": 0.9,
+       "evidence": "今天给张伟转了两千块钱，算是上次他婚礼的份子钱。"
+      }
+     ],
+     "promises": [],
+     "ledger": [
+      {
+       "direction": "out",
+       "amount_cents": 200000,
+       "note": "婚礼份子钱",
+       "occurred": "2026-09-30",
+       "confidence": 0.9
+      }
+     ],
+     "value_read": null
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-p04": {
+   "people": [
+    {
+     "name": "陆建国",
+     "canonical_name": "陆建国",
+     "fields": [
+      {
+       "field": "trait.特点",
+       "value": "被朋友称为老陆，且自己已习惯该称呼",
+       "confidence": 0.9,
+       "evidence": "陆建国的朋友都叫他老陆，他自己也习惯了。"
+      }
+     ],
+     "aliases": [
+      {
+       "alias": "老陆",
+       "confidence": 0.9
+      }
+     ],
+     "relations": [],
+     "facts": [
+      {
+       "text": "陆建国的朋友称呼他为老陆，他本人接受并习惯这一称呼。",
+       "confidence": 0.9,
+       "evidence": "陆建国的朋友都叫他老陆，他自己也习惯了。"
+      }
+     ],
+     "promises": [],
+     "ledger": [],
+     "value_read": {
+      "text": "具有亲和力、随和、不拘泥于正式称谓",
+      "confidence": 0.75,
+      "evidence": "陆建国的朋友都叫他老陆，他自己也习惯了。"
+     }
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-p05": {
+   "people": [
+    {
+     "name": "王工",
+     "canonical_name": "王工",
+     "fields": [
+      {
+       "field": "family",
+       "value": "已婚，配偶即将分娩",
+       "confidence": 0.85,
+       "evidence": "王工说他老婆下个月要生了"
+      }
+     ],
+     "aliases": [],
+     "relations": [],
+     "facts": [
+      {
+       "text": "王工的配偶预计于2026-10-31前后分娩",
+       "confidence": 0.8,
+       "evidence": "王工说他老婆下个月要生了"
+      },
+      {
+       "text": "王工近期在医院和公司之间频繁往返",
+       "confidence": 0.9,
+       "evidence": "他最近在医院和公司两头跑"
+      }
+     ],
+     "promises": [],
+     "ledger": [],
+     "value_read": {
+      "text": "重视家庭，当前处于工作与育儿责任兼顾的高压力阶段",
+      "confidence": 0.75,
+      "evidence": "他老婆下个月要生了，他最近在医院和公司两头跑"
+     }
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-p06": {
+   "people": [
+    {
+     "name": "李娜",
+     "canonical_name": "李娜",
+     "fields": [
+      {
+       "field": "city",
+       "value": "上海",
+       "confidence": 0.9,
+       "evidence": "我下个月调到上海了"
+      }
+     ],
+     "aliases": [],
+     "relations": [],
+     "facts": [
+      {
+       "text": "李娜将于2026-10-31前调往上海工作",
+       "confidence": 0.9,
+       "evidence": "我下个月调到上海了"
+      },
+      {
+       "text": "李娜的孩子将随其于2026-10-31前转学至上海",
+       "confidence": 0.9,
+       "evidence": "孩子也跟着转学过去"
+      }
+     ],
+     "promises": [],
+     "ledger": [],
+     "value_read": null
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-p07": {
+   "people": [
+    {
+     "name": "张伟",
+     "canonical_name": "张伟",
+     "fields": [
+      {
+       "field": "company",
+       "value": "宁德时代",
+       "confidence": 0.95,
+       "evidence": "张伟说他在「宁德时代」做电池研发"
+      },
+      {
+       "field": "title",
+       "value": "电池研发工程师（电芯方向）",
+       "confidence": 0.9,
+       "evidence": "他在「宁德时代」做电池研发，具体是电芯那块"
+      }
+     ],
+     "aliases": [],
+     "relations": [],
+     "facts": [
+      {
+       "text": "张伟在宁德时代从事电池电芯研发工作",
+       "confidence": 0.95,
+       "evidence": "张伟说他在「宁德时代」做电池研发，具体是电芯那块"
+      }
+     ],
+     "promises": [],
+     "ledger": [],
+     "value_read": {
+      "text": "具备动力电池核心部件（电芯）研发经验的技术人员",
+      "confidence": 0.85,
+      "evidence": "他在「宁德时代」做电池研发，具体是电芯那块"
+     }
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-p08": {
+   "people": [
+    {
+     "name": "老陆",
+     "canonical_name": "老陆",
+     "fields": [
+      {
+       "field": "trait.特点",
+       "value": "大学室友，同事",
+       "confidence": 0.9,
+       "evidence": "老陆是我大学室友，后来一起进的这家公司。"
+      }
+     ],
+     "aliases": [],
+     "relations": [
+      {
+       "to": "我",
+       "kind": "colleague",
+       "confidence": 0.9,
+       "evidence": "老陆是我大学室友，后来一起进的这家公司。"
+      },
+      {
+       "to": "我",
+       "kind": "friend",
+       "confidence": 0.9,
+       "evidence": "老陆是我大学室友，后来一起进的这家公司。"
+      }
+     ],
+     "facts": [
+      {
+       "text": "老陆和我是大学室友。",
+       "confidence": 0.9,
+       "evidence": "老陆是我大学室友，后来一起进的这家公司。"
+      },
+      {
+       "text": "老陆和我同一家公司工作。",
+       "confidence": 0.9,
+       "evidence": "老陆是我大学室友，后来一起进的这家公司。"
+      }
+     ],
+     "promises": [],
+     "ledger": [],
+     "value_read": {
+      "text": "与用户有长期信任关系（同窗+同事）",
+      "confidence": 0.8,
+      "evidence": "老陆是我大学室友，后来一起进的这家公司。"
+     }
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-p09": {
+   "people": [
+    {
+     "name": "赵敏",
+     "canonical_name": "赵敏",
+     "fields": [
+      {
+       "field": "birthday",
+       "value": "2026-03-12",
+       "confidence": 0.9,
+       "evidence": "赵敏生日是 3 月 12 号"
+      }
+     ],
+     "aliases": [],
+     "relations": [],
+     "facts": [
+      {
+       "text": "赵敏生日是2026年3月12日",
+       "confidence": 0.9,
+       "evidence": "赵敏生日是 3 月 12 号"
+      }
+     ],
+     "promises": [
+      {
+       "who": "me",
+       "content": "送赵敏一套茶具",
+       "due": "2026-03-12",
+       "confidence": 0.85
+      }
+     ],
+     "ledger": [],
+     "value_read": null
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-p10": {
+   "people": [
+    {
+     "name": "陈总",
+     "canonical_name": "陈总",
+     "fields": [
+      {
+       "field": "city",
+       "value": "宁波",
+       "confidence": 0.9,
+       "evidence": "他是宁波人"
+      },
+      {
+       "field": "company",
+       "value": "恒远进出口",
+       "confidence": 0.9,
+       "evidence": "公司叫恒远进出口"
+      },
+      {
+       "field": "trait.特点",
+       "value": "喜欢打高尔夫",
+       "confidence": 0.9,
+       "evidence": "他自己喜欢打高尔夫"
+      },
+      {
+       "field": "need.需求",
+       "value": "外贸相关服务（合理推断）",
+       "confidence": 0.75,
+       "evidence": "他是宁波人，做外贸的，公司叫恒远进出口"
+      }
+     ],
+     "aliases": [
+      {
+       "alias": "陈总",
+       "confidence": 0.9
+      }
+     ],
+     "relations": [],
+     "facts": [
+      {
+       "text": "2026-09-30 与陈总见面，其为宁波人、从事外贸、公司名为恒远进出口、规模五十多人、女儿在加拿大读书、本人喜欢打高尔夫。",
+       "confidence": 0.9,
+       "evidence": "今天见了个新客户陈总:他是宁波人，做外贸的，公司叫恒远进出口，公司规模五十多人，他女儿在加拿大读书，他自己喜欢打高尔夫。"
+      }
+     ],
+     "promises": [],
+     "ledger": [],
+     "value_read": {
+      "text": "具备一定经济实力和国际视野的外贸企业负责人",
+      "confidence": 0.8,
+      "evidence": "做外贸的，公司规模五十多人，女儿在加拿大读书，喜欢打高尔夫"
+     }
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-n01": {
+   "people": [
+    {
+     "name": "老陆",
+     "canonical_name": "老陆",
+     "fields": [],
+     "aliases": [],
+     "relations": [],
+     "facts": [],
+     "promises": [],
+     "ledger": [],
+     "value_read": null
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-n02": {
+   "people": [
+    {
+     "name": "张伟",
+     "canonical_name": "张伟",
+     "fields": [
+      {
+       "field": "city",
+       "value": "杭州",
+       "confidence": 0.9,
+       "evidence": "我八月搬去杭州了"
+      }
+     ],
+     "aliases": [],
+     "relations": [],
+     "facts": [
+      {
+       "text": "张伟于2026年8月搬至杭州",
+       "confidence": 0.9,
+       "evidence": "我八月搬去杭州了"
+      }
+     ],
+     "promises": [],
+     "ledger": [],
+     "value_read": null
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-n03": {
+   "people": [],
+   "my_notes": []
+  },
+  "extract-n04": {
+   "people": [
+    {
+     "name": "王总",
+     "canonical_name": "王总",
+     "fields": [],
+     "aliases": [],
+     "relations": [],
+     "facts": [
+      {
+       "text": "王总2026-09-30不在公司",
+       "confidence": 0.9,
+       "evidence": "前台说王总今天不在"
+      }
+     ],
+     "promises": [],
+     "ledger": [],
+     "value_read": null
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-n05": {
+   "people": [
+    {
+     "name": "王大伟",
+     "canonical_name": "王大伟",
+     "fields": [],
+     "aliases": [],
+     "relations": [],
+     "facts": [
+      {
+       "text": "王大伟于2026-09-23来公司，并表示其团队要招人",
+       "confidence": 0.9,
+       "evidence": "王大伟上周来公司，说他们团队要招人。"
+      }
+     ],
+     "promises": [],
+     "ledger": [],
+     "value_read": null
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-n06": {
+   "people": [],
+   "my_notes": [
+    {
+     "text": "用户正在考虑换工作，近期投递了多家从事 AI 领域的公司。",
+     "kind": "episodic",
+     "confidence": 0.9
+    }
+   ]
+  },
+  "extract-n07": {
+   "people": [
+    {
+     "name": "赵敏",
+     "canonical_name": "赵敏",
+     "fields": [],
+     "aliases": [],
+     "relations": [
+      {
+       "to": "赵敏的妈",
+       "kind": "family",
+       "confidence": 0.9,
+       "evidence": "赵敏说她妈住院花了点钱"
+      }
+     ],
+     "facts": [
+      {
+       "text": "赵敏的母亲于近期住院并产生医疗支出",
+       "confidence": 0.8,
+       "evidence": "赵敏说她妈住院花了点钱"
+      }
+     ],
+     "promises": [],
+     "ledger": [],
+     "value_read": {
+      "text": "赵敏家庭近期面临医疗相关经济压力",
+      "confidence": 0.75,
+      "evidence": "赵敏说她妈住院花了点钱，具体多少没细说"
+     }
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-n08": {
+   "people": [
+    {
+     "name": "李娜",
+     "canonical_name": "李娜",
+     "fields": [
+      {
+       "field": "city",
+       "value": "成都",
+       "confidence": 0.9,
+       "evidence": "她一直在成都"
+      }
+     ],
+     "aliases": [],
+     "relations": [],
+     "facts": [
+      {
+       "text": "李娜2026-09-30在成都，未去上海",
+       "confidence": 0.9,
+       "evidence": "李娜没去上海，她一直在成都"
+      }
+     ],
+     "promises": [],
+     "ledger": [],
+     "value_read": null
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-n09": {
+   "people": [],
+   "my_notes": [
+    {
+     "text": "用户希望明年（2027年）调到上海工作，但认为目前没有可能。",
+     "kind": "semantic",
+     "confidence": 0.9
+    }
+   ]
+  },
+  "extract-n10": {
+   "people": [],
+   "my_notes": [
+    {
+     "text": "有人通过微信申请添加我，自称从事保险行业",
+     "kind": "episodic",
+     "confidence": 0.9
+    },
+    {
+     "text": "我未通过该微信好友申请",
+     "kind": "episodic",
+     "confidence": 0.9
+    }
+   ]
+  },
+  "extract-r01": {
+   "people": [
+    {
+     "name": "老陆",
+     "canonical_name": "老陆",
+     "fields": [],
+     "aliases": [],
+     "relations": [],
+     "facts": [
+      {
+       "text": "老陆在上次聚餐中垫付了饭费",
+       "confidence": 0.9,
+       "evidence": "老陆:上次那顿饭我付的，你回头给我转五百就行"
+      }
+     ],
+     "promises": [
+      {
+       "who": "me",
+       "content": "给老陆转账五百元",
+       "due": null,
+       "confidence": 0.75
+      }
+     ],
+     "ledger": [
+      {
+       "direction": "out",
+       "amount_cents": 50000,
+       "note": "偿还老陆垫付的饭费",
+       "occurred": null,
+       "confidence": 0.85
+      }
+     ],
+     "value_read": null
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-r02": {
+   "people": [
+    {
+     "name": "张伟",
+     "canonical_name": "张伟",
+     "fields": [
+      {
+       "field": "phone",
+       "value": "13900002222",
+       "confidence": 0.95,
+       "evidence": "我换号了，现在是１３９００００２２２２"
+      }
+     ],
+     "aliases": [],
+     "relations": [],
+     "facts": [],
+     "promises": [],
+     "ledger": [],
+     "value_read": null
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-r03": {
+   "people": [
+    {
+     "name": "李娜",
+     "canonical_name": "李娜",
+     "fields": [
+      {
+       "field": "city",
+       "value": "杭州",
+       "confidence": 0.9,
+       "evidence": "这是我新房，在杭州钱江新城那边"
+      }
+     ],
+     "aliases": [],
+     "relations": [],
+     "facts": [
+      {
+       "text": "李娜在杭州钱江新城有一套新房",
+       "confidence": 0.9,
+       "evidence": "这是我新房，在杭州钱江新城那边"
+      }
+     ],
+     "promises": [],
+     "ledger": [],
+     "value_read": null
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-r04": {
+   "people": [
+    {
+     "name": "老王",
+     "canonical_name": "老王",
+     "fields": [],
+     "aliases": [],
+     "relations": [],
+     "facts": [],
+     "promises": [],
+     "ledger": [],
+     "value_read": null
+    },
+    {
+     "name": "阿强",
+     "canonical_name": "阿强",
+     "fields": [],
+     "aliases": [],
+     "relations": [],
+     "facts": [],
+     "promises": [],
+     "ledger": [],
+     "value_read": null
+    },
+    {
+     "name": "陈工",
+     "canonical_name": "陈工",
+     "fields": [],
+     "aliases": [],
+     "relations": [],
+     "facts": [],
+     "promises": [],
+     "ledger": [],
+     "value_read": null
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-r05": {
+   "people": [
+    {
+     "name": "张伟",
+     "canonical_name": "张伟",
+     "fields": [
+      {
+       "field": "company",
+       "value": "张伟的公司",
+       "confidence": 0.85,
+       "evidence": "张伟他那个公司搬到杭州了"
+      }
+     ],
+     "aliases": [],
+     "relations": [],
+     "facts": [
+      {
+       "text": "张伟的公司于2026-08-31前搬迁至杭州",
+       "confidence": 0.85,
+       "evidence": "张伟他那个公司搬到杭州了已经上个月搬的"
+      }
+     ],
+     "promises": [],
+     "ledger": [],
+     "value_read": null
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-r06": {
+   "people": [
+    {
+     "name": "老陆",
+     "canonical_name": "老陆",
+     "fields": [],
+     "aliases": [],
+     "relations": [],
+     "facts": [
+      {
+       "text": "2026-08-28，老陆查看了方案的付款条件",
+       "confidence": 0.9,
+       "evidence": "8/28 老陆:方案的付款条件我看了"
+      }
+     ],
+     "promises": [
+      {
+       "who": "me",
+       "content": "在2026-09-08之前向老陆确认方案",
+       "due": "2026-09-08",
+       "confidence": 0.9
+      }
+     ],
+     "ledger": [],
+     "value_read": null
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-r07": {
+   "people": [
+    {
+     "name": "老路",
+     "canonical_name": "老路",
+     "fields": [
+      {
+       "field": "company",
+       "value": "他门公司",
+       "confidence": 0.7,
+       "evidence": "他门公司要裁员了"
+      }
+     ],
+     "aliases": [
+      {
+       "alias": "老陆",
+       "confidence": 0.8
+      }
+     ],
+     "relations": [],
+     "facts": [
+      {
+       "text": "老路所在公司计划裁员",
+       "confidence": 0.75,
+       "evidence": "老路说他门公司要裁员了"
+      }
+     ],
+     "promises": [
+      {
+       "who": "them",
+       "content": "让帮忙留意工作机会",
+       "due": "2026-09-30",
+       "confidence": 0.9
+      }
+     ],
+     "ledger": [],
+     "value_read": {
+      "text": "老路正面临职业不确定性，可能需要求职支持",
+      "confidence": 0.8,
+      "evidence": "老路说他门公司要裁员了，让我帮忙留意机会"
+     }
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-r08": {
+   "people": [
+    {
+     "name": "张伟",
+     "canonical_name": "张伟",
+     "fields": [
+      {
+       "field": "salary",
+       "value": "800000",
+       "confidence": 0.95,
+       "evidence": "张伟年薪涨到 80 万了"
+      }
+     ],
+     "aliases": [],
+     "relations": [],
+     "facts": [
+      {
+       "text": "张伟年薪涨至80万元",
+       "confidence": 0.95,
+       "evidence": "张伟年薪涨到 80 万了"
+      }
+     ],
+     "promises": [
+      {
+       "who": "them",
+       "content": "发放3个月奖金",
+       "due": "2026-12-31",
+       "confidence": 0.85
+      }
+     ],
+     "ledger": [
+      {
+       "direction": "in",
+       "amount_cents": 20000000,
+       "note": "年底3个月奖金（按年薪80万估算）",
+       "occurred": "2026-12-31",
+       "confidence": 0.75
+      }
+     ],
+     "value_read": {
+      "text": "张伟收入显著提升，具备较强经济实力和职场价值",
+      "confidence": 0.8,
+      "evidence": "张伟年薪涨到 80 万了，他说年底还有 3 个月奖金"
+     }
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-r09": {
+   "people": [
+    {
+     "name": "赵敏",
+     "canonical_name": "赵敏",
+     "fields": [],
+     "aliases": [],
+     "relations": [],
+     "facts": [
+      {
+       "text": "赵敏在2026-09-01收到2000元转账",
+       "confidence": 0.9,
+       "evidence": "月初给赵敏转了 2000"
+      },
+      {
+       "text": "赵敏在2026-09-30收到500元转账",
+       "confidence": 0.9,
+       "evidence": "今天又转了 500"
+      }
+     ],
+     "promises": [],
+     "ledger": [
+      {
+       "direction": "out",
+       "amount_cents": 200000,
+       "note": "转账",
+       "occurred": "2026-09-01",
+       "confidence": 0.9
+      },
+      {
+       "direction": "out",
+       "amount_cents": 50000,
+       "note": "转账",
+       "occurred": "2026-09-30",
+       "confidence": 0.9
+      }
+     ],
+     "value_read": null
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-r10": {
+   "people": [
+    {
+     "name": "王芳",
+     "canonical_name": "王芳",
+     "fields": [
+      {
+       "field": "gender",
+       "value": "女",
+       "confidence": 0.9,
+       "evidence": "王芳，女，42岁"
+      },
+      {
+       "field": "age",
+       "value": "42",
+       "confidence": 0.9,
+       "evidence": "王芳，女，42岁"
+      },
+      {
+       "field": "city",
+       "value": "苏州",
+       "confidence": 0.9,
+       "evidence": "王芳，女，42岁，苏州人"
+      },
+      {
+       "field": "company",
+       "value": "苏州一家医疗器械公司",
+       "confidence": 0.85,
+       "evidence": "在苏州一家医疗器械公司做销售总监"
+      },
+      {
+       "field": "title",
+       "value": "销售总监",
+       "confidence": 0.9,
+       "evidence": "在苏州一家医疗器械公司做销售总监"
+      }
+     ],
+     "aliases": [],
+     "relations": [
+      {
+       "to": "她老公",
+       "kind": "family",
+       "confidence": 0.9,
+       "evidence": "她老公是医生"
+      },
+      {
+       "to": "她儿子",
+       "kind": "family",
+       "confidence": 0.9,
+       "evidence": "她儿子今年高考"
+      }
+     ],
+     "facts": [
+      {
+       "text": "王芳与用户认识八年",
+       "confidence": 0.9,
+       "evidence": "我们认识八年了"
+      },
+      {
+       "text": "王芳的丈夫是医生",
+       "confidence": 0.9,
+       "evidence": "她老公是医生"
+      },
+      {
+       "text": "王芳的儿子2026年参加高考",
+       "confidence": 0.9,
+       "evidence": "她儿子今年高考"
+      }
+     ],
+     "promises": [],
+     "ledger": [],
+     "value_read": {
+      "text": "王芳是资深医疗行业销售管理者，家庭稳定，当前处于子女升学关键期，可能对教育、医疗资源或职业发展支持有潜在需求",
+      "confidence": 0.75,
+      "evidence": "在苏州一家医疗器械公司做销售总监，她儿子今年高考"
+     }
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-n11": {
+   "people": [
+    {
+     "name": "张伟",
+     "canonical_name": "张伟",
+     "fields": [
+      {
+       "field": "title",
+       "value": "技术总监",
+       "confidence": 0.95,
+       "evidence": "年初升了技术总监"
+      },
+      {
+       "field": "company",
+       "value": "未知公司（未提名称）",
+       "confidence": 0.7,
+       "evidence": "我们公司下个月整体搬到杭州了"
+      },
+      {
+       "field": "city",
+       "value": "杭州",
+       "confidence": 0.95,
+       "evidence": "我们公司下个月整体搬到杭州了，我八月过去，以后在杭州能常见面"
+      },
+      {
+       "field": "trait.特点",
+       "value": "有管理经验（带三十多人）、家庭重心明确（携女儿迁居）",
+       "confidence": 0.85,
+       "evidence": "年初升了技术总监，带了三十多人；我女儿今年上小学一年级，正好也过去了"
+      }
+     ],
+     "aliases": [],
+     "relations": [],
+     "facts": [
+      {
+       "text": "张伟于2024年初晋升为技术总监，团队规模约30人",
+       "confidence": 0.95,
+       "evidence": "年初升了技术总监，带了三十多人"
+      },
+      {
+       "text": "张伟所在公司计划于2024年7月整体搬迁至杭州，张伟本人将于2024-08-01起常驻杭州",
+       "confidence": 0.95,
+       "evidence": "我们公司下个月整体搬到杭州了，我八月过去，以后在杭州能常见面"
+      },
+      {
+       "text": "张伟的女儿于2024年9月入学小学一年级，并随家庭迁往杭州",
+       "confidence": 0.9,
+       "evidence": "我女儿今年上小学一年级，正好也过去了"
+      }
+     ],
+     "promises": [],
+     "ledger": [],
+     "value_read": {
+      "text": "张伟处于职业上升期且重视家庭，具备较强组织协调能力与生活规划性",
+      "confidence": 0.85,
+      "evidence": "年初升了技术总监，带了三十多人；我女儿今年上小学一年级，正好也过去了"
+     }
+    }
+   ],
+   "my_notes": []
+  },
+  "extract-n12": {
+   "people": [
+    {
+     "name": "老陆",
+     "canonical_name": "老陆",
+     "fields": [],
+     "aliases": [],
+     "relations": [],
+     "facts": [
+      {
+       "text": "老陆于2026-09-28 19:02主动发起对话，称‘好久不见了，改天一起吃个饭’",
+       "confidence": 0.9,
+       "evidence": "19:02 老陆:好久不见了，改天一起吃个饭"
+      }
+     ],
+     "promises": [
+      {
+       "who": "them",
+       "content": "一起吃饭",
+       "due": null,
+       "confidence": 0.6
+      }
+     ],
+     "ledger": [],
+     "value_read": null
+    }
+   ],
+   "my_notes": []
+  }
+ }
+}

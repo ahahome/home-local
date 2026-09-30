@@ -4,7 +4,7 @@
 
 | 层 | 位置 | 花钱 | 覆盖什么 |
 |----|------|------|---------|
-| **L1 抽取** | `eval/run.py` + `eval/cases/extract.jsonl` | 是 | 从文本抽人物/字段/事实/承诺/账本对不对 |
+| **L1 抽取** | `eval/run.py` + `eval/cases/tune.jsonl` `holdout.jsonl` | 是 | 从文本抽人物/字段/事实/承诺/账本对不对 |
 | **L2 落库** | `tests/test_invariants.py` | 否 | 三档置信度、幂等、待确认不进汇总、删除不复活 |
 | **L3 检索** | 待补 | 否 | Recall@5 / MRR（需要 (query, 相关 id) 标注） |
 | **L5 不变量** | `tests/test_invariants.py` | 否 | 七原则：违反即失败，没有「大部分情况对」 |
@@ -13,35 +13,70 @@
 评估器本身的比对逻辑在 `eval/metrics.py`，由 `tests/test_eval_metrics.py` 覆盖。
 **理由：评估器写错了比被测代码错了更危险**——指标会假绿，问题被掩盖。
 
+## 分集：tune / holdout（L1 的核心纪律）
+
+| 集 | 文件 | 用途 | 卡门槛？ |
+|----|------|------|---------|
+| **tune** | `eval/cases/tune.jsonl` | 提示词/代码**就是对着它调的**；只作回归守卫 | **不卡** |
+| **holdout** | `eval/cases/holdout.jsonl` | 出题只看 PRD、不看提示词，写完冻结 | **只有它卡** |
+
+**对 tune 调参、用 holdout 验收，两个数字分开报。** 混成一个数，就等于给自己发奖状。
+
+- 两者的差 = **泛化缺口**（当前 1.0000 − 0.9231 = 7.7 个百分点），
+  也就是「tune 全绿」里有多少是对着答案改出来的。
+- **holdout 会被烧掉**：一旦照着它的失败去改提示词，它就退化成 tune。
+  所以每一轮修完，必须把旧 holdout 并入 tune、**新建 holdout v2**。协议见 `results/BASELINE.md` 第六节。
+
+## 每集采样 k 次（`--repeat`）
+
+单次通过率会骗人（实测出现过「连过两次 32/32，第三次掉到 31/32」）。所以：
+
+```bash
+.venv/bin/python eval/run.py --repeat 3        # 每条采样 3 次，按最差判定（worst-of-k）
+```
+
+- 判定用**最差那次**，报告里同时给 `runs_passed/runs_total`。
+- 单独列出 **flaky**（k 次里有的过、有的挂）——它们最值得看：说明规则只是概率好转，还没落成确定性保证。
+- 缓存键含 `run_index`，所以 k 次会拿到 k 个不同样本，且**可复现**（同一缓存下重跑得到同一结论）。
+  想要全新样本加 `--no-cache`。
+
 ## 怎么跑
 
 ```bash
 cd /Users/emdoor/Documents/projects/integrate/home
 
 # 免费层（不调 LLM，秒级）
-.venv/bin/python -m pytest tests/ -q
+.venv/bin/python -m pytest tests/ -q --basetemp=.pytest-tmp
 
-# L1 全量（调真实 API，约 1 分钟 / 30 条 / 几块钱）
-.venv/bin/python eval/run.py
+# L1：两集都跑，每条采样 3 次（推荐口径）
+.venv/bin/python eval/run.py --repeat 3
+
+# 只看留出集（门槛只对它生效）
+.venv/bin/python eval/run.py --split holdout --repeat 3
 
 # 只跑某一类
 .venv/bin/python eval/run.py --tag negative-promise
 .venv/bin/python eval/run.py --tag real
 
 # 调试单条：跳过缓存重跑
-.venv/bin/python eval/run.py --limit 5 --no-cache
+.venv/bin/python eval/run.py --cases eval/cases/holdout.jsonl --limit 5 --no-cache
 
-# 当成门禁：指标不达标时退出码非 0（给 CI 用）
+# 当成门禁：门槛不达标时退出码非 0（只对 holdout 生效，给 CI 用）
 .venv/bin/python eval/run.py --gate
 ```
 
-结果落在 `eval/results/<时间戳>-<git sha>.json`，里面连带记录 `model`、`prompt_hash`、
-`git_sha`、耗时，任何一次分数都能复现和回溯。响应缓存放在 `eval/.cache/`
-（key = `sha256(input + known_persons + today + prompt_hash + model)`），重复跑不重复花钱。
+结果落在 `eval/results/<时间戳>-<git sha>.json`，内含 `splits.{tune,holdout}` 两套汇总 + 明细，
+并记录 `model`、`prompt_hash`、`git_sha`、`repeat`、`no_cache`，任何一次分数都能复现和回溯。
+响应缓存放在 `eval/.cache/`
+（key = `sha256(input + known_persons + today + prompt_hash + model + run_index)`），重复跑不重复花钱。
+
+> ⚠️ **`--no-cache` 不是可选项（改后处理代码时）**：缓存存的是 **`sanitize()` 之后**的结果，
+> 而缓存键只含**提示词** hash。所以只改抽取后处理、不改提示词时，缓存会返回旧代码的结果，
+> 让你量出一个假的「没变化」。改 `app/memory/extract.py` 的后处理逻辑务必加 `--no-cache`。
 
 ## 用例怎么写
 
-一行一条 JSON，见 `eval/cases/extract.jsonl`。字段：
+一行一条 JSON，见 `eval/cases/tune.jsonl` / `holdout.jsonl`。字段：
 
 ```json
 {"id": "extract-p01",
@@ -85,6 +120,8 @@ cd /Users/emdoor/Documents/projects/integrate/home
 | `promise_false_positive_rate` | ≤ 0.05 | 标了 negative-promise 的用例里仍抽出承诺的比例 |
 | `pass_rate` | ≥ 0.70 | 严格口径：一条用例所有断言都过才算过 |
 
+**门槛只对 holdout 生效**（`eval/run.py:GATED_SPLITS`）。tune 是调参集，卡它等于自己给自己发奖状。
+
 L5 不变量层不设门槛——**必须 100%**。
 
 ## 用例从哪来（按性价比排序）
@@ -98,10 +135,18 @@ L5 不变量层不设门槛——**必须 100%**。
 
 ## 已知缺口
 
+- **`must_not` 没有作用域**：`field:X` / `value:X` 都是**全局**的，写不出
+  「**只**检查某个人身上不该有这个字段」。attribution 类断言（PRD FR-MEM-06「不得把他人特征
+  归档到当前人物名下」）因此只能靠 `max_people` 间接覆盖。待支持 `王芳.field:title` 这种带人名的写法。
+- **字段名无白名单**：模型可以自造 `family` 这类 schema 外的字段并原样落库
+  （`sanitize()` 只做类型归一化，不校验字段名）。要不要加白名单需先定字段表。
 - **L3 检索层**没做，`retrieve.hybrid_search` 目前的排序质量无量化依据。
 - **L4 端到端**没做，Agent 工具调用是否越权、多轮上下文是否正确，目前没有回归。
+- **负样本偏少**：holdout 里标 `negative-promise` 的只有 5 条 → 误判率的分辨率是 0.2 一档。
+  要更细的结论，负样本得加到 20 条以上。
 - **无 LLM-as-judge**：`value_read` 的质量、回复是否得体这类主观项还没评。若引入 judge，
   必须先做人工双盲校准（抽 20 条算 Cohen's κ，≥0.6 才能信它的分数）。
-- `tests/test_invariants.py::test_p5_delete_is_physical` 标了 `xfail`：P5 要求「删除是真删除」，
-  现在 `repo.soft_delete_person` 只打 `deleted_at`，字段与别名行仍留在库里。行为层没问题（AC-02 过），
-  数据层未达标，需要产品决策：物理删除（含 blob 与证据），或者 UI 上改口径为「归档」并提供彻底清除。
+- **P5 删除语义已决策、待实现**：定为「**归档 + 提供彻底清除入口**」。
+  `tests/test_invariants.py::test_p5_delete_is_physical` 现为 `xfail`；`repo.soft_delete_person`
+  目前只打 `deleted_at`，字段与别名行仍在库里。依据是 PRD **FR-ID-02 边界**（删除时别名必须一并删除）
+  与其验收（删后全库搜索该人任何曾用名返回 0 条）。实现后该 `xfail` 应转正。

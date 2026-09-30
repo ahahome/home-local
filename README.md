@@ -62,7 +62,7 @@ home 是一个**完全跑在你自己机器上**的「关系维护 Agent」。�
 | P2 | 写入必有回执 | 全部 16 个工具返回结构化 receipt |
 | P3 | 时间是一等公民 | 双时态字段 + 间隔感知 + 全本地时区 |
 | P4 | 假设优于断言 | 抽取带 confidence + evidence，低置信进 pending |
-| P5 | 删除是真删除 | 物理删除；合并用 tombstone 可拆分 |
+| P5 | 删除是真删除 | 语义已拍板：**归档**（可恢复）+ **彻底清除**（物理删，含别名/记忆/账本/证据引用/blob）。⚠️ 彻底清除入口**尚未实现**——当前 `soft_delete_person` 仍是软删（只置 `deleted_at`，字段/别名行仍在），`test_p5_delete_is_physical` 暂为 xfail |
 | P6 | 代笔不代发 | 系统提示硬约束 + 无发送类工具 |
 | P7 | 不假装知道 | 「严禁模拟工具」硬规则；无来源论断被审校丢弃 |
 
@@ -99,7 +99,7 @@ home 是一个**完全跑在你自己机器上**的「关系维护 Agent」。�
 | 每日 journal | 本地时区 23:50 生成，跨天不错位 |
 | Deep Research | 并行子 Agent 出报告，附来源链接 |
 | 单元测试 | **81 通过 + 1 xfail**（消歧 / 幂等写入 / 账本 / 聊天记录解析 / 抽取后处理 / 评测器自测 / 7 条不变量） |
-| **抽取质量评测** | L1 抽取层 32 条用例；修完 A/B/C 三类缺陷后连续 3 次 **32/32**，凭证逐字率 0.9459→**1.0**、承诺误判率 0.25→**0**（详见 `eval/results/BASELINE.md`） |
+| **抽取质量评测** | L1 抽取层分 **tune 32 条 / holdout 26 条**两集，每集采样 **k=3** 按最差判定。tune **32/32**（3 次全 3/3，已验证是确定性保证而非概率好转）；holdout **24/26**（`pass_rate` 0.9231、凭证逐字率 1.0、承诺误判率 0）→ **泛化缺口 7.7pt**：tune 那个「满分」里约 8 个点是对着调参集改出来的。两处 holdout 失败均已归因（详见 `eval/results/BASELINE.md`） |
 
 ### ⚠️ 未做 / 未做满
 
@@ -110,9 +110,10 @@ home 是一个**完全跑在你自己机器上**的「关系维护 Agent」。�
 - **Projects**：未实现。
 - **云浏览器代操作**：未实现，且与 P6「代笔不代发」有边界冲突，需要先设计权限模型。
 - **IM 直连**：无自动同步通道，靠导出文件/截图中转。
-- **评测体系**：L1 抽取层已建成（32 条用例 + 门槛 + 基线文档），L2/L5 免费层就绪；
+- **评测体系**：L1 抽取层已建成（**tune 32 + holdout 26** 分集、k=3 复跑、最差判定、门槛 + 基线文档），L2/L5 免费层就绪；
   **L3 检索层、L4 端到端层仍未做**，81 条 FR 也尚未逐条落成验收测试。
-  当前 32 条是对着提示词改过的**调参集**，还缺留出集——见 `eval/results/BASELINE.md` 第七、八节。
+  留出集已建成并把泛化缺口量成 **7.7pt**；但负样本只 5 条（`promise_false_positive_rate` 分辨率 0.2/档），
+  `must_not` 也还不支持「人名.field:X」作用域——见 `eval/results/BASELINE.md` 第八节。
 
 ### 技术栈与规模
 
@@ -141,9 +142,10 @@ source .venv/bin/activate
 .venv/bin/python -m pytest tests/ -q --basetemp=.pytest-tmp
 
 # 抽取质量评测（调真实 API，结果归档到 eval/results/）
-.venv/bin/python eval/run.py              # 全量；命中缓存不重复花钱
-.venv/bin/python eval/run.py --no-cache   # 强制重跑
-.venv/bin/python eval/run.py --gate       # 低于门槛时退出码非 0（给 CI 用）
+.venv/bin/python eval/run.py --split holdout --repeat 3 --no-cache   # 验收集标准跑法（门槛只对它生效）
+.venv/bin/python eval/run.py --split tune                            # 回归守卫：只看调参集有没有被改坏
+.venv/bin/python eval/run.py --split all --repeat 3                  # 两集一起跑
+.venv/bin/python eval/run.py --gate                                  # 低于门槛时退出码非 0（给 CI 用）
 ```
 
 沙箱环境下 pytest 默认 tmp 目录会报 `PermissionError: EEXIST`，需显式 `--basetemp` 指到项目内
@@ -180,7 +182,7 @@ app/
   api/           FastAPI，各模块路由
 web/             单文件 SPA
 tests/           单元测试（消歧 / 幂等写入 / 账本 / 聊天记录 / 抽取后处理 / 评测器自测 / 不变量）
-eval/            L1 抽取层评测：cases 用例集 + metrics.py(纯计算,无 LLM) + run.py(缓存/门槛/结果归档)
+eval/            L1 抽取层评测：cases/{tune,holdout}.jsonl 分集 + metrics.py(纯计算,无 LLM) + run.py(分集/复跑/门槛/结果归档)
 ```
 
 ## 设计取舍备忘（踩过的坑）
@@ -200,7 +202,7 @@ eval/            L1 抽取层评测：cases 用例集 + metrics.py(纯计算,无
 
 ## 相关文档
 
-- 评测基线：`eval/results/BASELINE.md`——修复前后数字、四轮迭代过程、方法论发现与已知边界
+- 评测基线：`eval/results/BASELINE.md`——tune/holdout 分工与 **7.7pt 泛化缺口**、k=3 结果、两处失败归因、四轮迭代过程、烧留出集协议与已知边界
 - 评测设计：`eval/README.md`（L1~L5 分层、指标定义、门槛）
 - PRD：`/Users/emdoor/WorkBuddy/2026-09-29-16-25-48/home-PRD.md`（13 模块 / 60+ 需求 / 20 验收用例，已剥离商业模式）
 

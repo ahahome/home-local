@@ -267,7 +267,10 @@ async function uploadFile(input) {
 /* ---------- 人物 ---------- */
 async function pagePersons() {
   const ps = (await api("/api/persons")).persons;
-  $("#main").innerHTML = head("人物", `${ps.length} 人`, `<button onclick="importNames()">批量导入名单</button>`) + `
+  $("#main").innerHTML = head("人物", `${ps.length} 人`, `
+    <input type="file" id="chatfile" class="hidden" accept=".txt,.md,text/plain" onchange="importChatlog(this)">
+    <button onclick="askChatlog()" style="margin-right:8px">导入聊天记录</button>
+    <button onclick="importNames()">批量导入名单</button>`) + `
     <div class="card" style="padding:6px 16px">
       ${ps.map(p => `<div class="row" onclick="personDetail('${p.id}')" style="cursor:pointer">
         ${avatar(p.display_name)}
@@ -286,6 +289,30 @@ async function importNames() {
   const r = await api("/api/import/names", { method: "POST", body: j({ text }) });
   alert(`新建 ${r.created} 人，待确认 ${r.pending} 人，已存在/跳过 ${r.skipped} 人`);
   pagePersons(); refreshBadges();
+}
+function askChatlog() {
+  const me = prompt("你在聊天记录里叫什么名字？（留空自动判断）", "");
+  if (me === null) return;
+  window.__chatlogMe = me.trim();
+  document.getElementById("chatfile").click();
+}
+async function importChatlog(input) {
+  const f = input.files[0]; if (!f) return;
+  const me = window.__chatlogMe || "";
+  alert(`正在导入「${f.name}」，聊天记录逐段抽取需要一点时间，完成后会提示结果。`);
+  const fd = new FormData(); fd.append("file", f);
+  if (me) fd.append("me", me);
+  try {
+    const r = await api("/api/ingest/chatlog", { method: "POST", body: fd, headers: {} });
+    if (r.duplicate) { alert(r.message || "该文件已导入过"); }
+    else {
+      const saved = (r.outcomes || []).filter(o => o.status === "ok").length;
+      const pend = (r.outcomes || []).filter(o => o.status === "pending").length;
+      alert([r.transcript, `已记录 ${saved} 条，待确认 ${pend} 条`].filter(Boolean).join("\n\n"));
+    }
+    pagePersons(); refreshBadges();
+  } catch (e) { alert("导入失败：" + e.message); }
+  input.value = ""; window.__chatlogMe = "";
 }
 async function personDetail(pid) {
   const d = await api(`/api/persons/${pid}`);

@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from app.ingest import documents, screenshot, webpage
+from app.ingest import chatlog, documents, screenshot, webpage
 from app.memory import apply as apply_mod
 from app.memory import extract
 from app.store import blob, repo
@@ -27,6 +27,9 @@ def _link_person_ids(conn, applied: dict) -> list[tuple[str, str]]:
 
 def ingest_file(conn, filename: str, data: bytes, source_msg_id: str | None = None) -> dict:
     ext = Path(filename).suffix.lower()
+    # 聊天记录导出（微信/QQ）走专用解析：保留发言人+时间，按人切块抽取
+    if ext in (".txt", ".md") and chatlog.looks_like_chatlog(chatlog.decode_text(data)):
+        return chatlog.import_chatlog(conn, filename, data, source_msg_id=source_msg_id)
     kind = "screenshot" if ext in IMAGE_EXT else "document"
     jid, created = repo.create_job(conn, kind, payload=filename,
                                    idempotency_key=sha256_bytes(data))

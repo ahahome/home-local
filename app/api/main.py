@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from app.agent import harness
-from app.ingest import importer, normalize
+from app.ingest import chatlog, importer, normalize
 from app.memory import apply as apply_mod
 from app.memory import compile_card, retrieve
 from app.store import repo
@@ -93,6 +93,20 @@ async def ingest_file(file: UploadFile = File(...)):
 
 class UrlIn(BaseModel):
     url: str
+
+
+@app.post("/api/ingest/chatlog")
+async def ingest_chatlog(file: UploadFile = File(...), me: str = ""):
+    """导入微信/QQ 导出聊天记录（.txt）。me 可显式指定「我」在记录里的名字。"""
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "空文件")
+    conn = get_conn()
+    try:
+        return chatlog.import_chatlog(conn, file.filename or "chatlog.txt", data,
+                                      me=me.strip() or None)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @app.post("/api/ingest/url")

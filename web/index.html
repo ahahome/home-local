@@ -270,7 +270,8 @@ async function pagePersons() {
   $("#main").innerHTML = head("人物", `${ps.length} 人`, `
     <input type="file" id="chatfile" class="hidden" accept=".txt,.md,text/plain" onchange="importChatlog(this)">
     <button onclick="askChatlog()" style="margin-right:8px">导入聊天记录</button>
-    <button onclick="importNames()">批量导入名单</button>`) + `
+    <button onclick="importNames()" style="margin-right:8px">批量导入名单</button>
+    <button onclick="pageArchived()">已归档</button>`) + `
     <div class="card" style="padding:6px 16px">
       ${ps.map(p => `<div class="row" onclick="personDetail('${p.id}')" style="cursor:pointer">
         ${avatar(p.display_name)}
@@ -339,7 +340,8 @@ async function personDetail(pid) {
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button onclick="editField('${pid}')">编辑字段</button>
         <button onclick="mergePerson('${pid}')">合并到…</button>
-        <button class="danger" onclick="delPerson('${pid}')">删除此人</button>
+        <button onclick="archivePerson('${pid}')">归档</button>
+        <button class="danger" onclick="purgePerson('${pid}')">彻底清除…</button>
       </div>
     </div>`;
 }
@@ -356,10 +358,46 @@ async function mergePerson(pid) {
   alert("已合并，merge_log_id=" + r.merge_log_id + "（可用于拆分）");
   closeDrawer(); pagePersons();
 }
-async function delPerson(pid) {
-  if (!confirm("删除此人及其别名与记忆？（不可复活）")) return;
+async function pageArchived() {
+  const ps = (await api("/api/persons/archived")).persons;
+  $("#main").innerHTML = head("已归档", `${ps.length} 人`, `<button onclick="pagePersons()">返回人物</button>`) + `
+    <div class="card" style="padding:6px 16px">
+      ${ps.map(p => `<div class="row">
+        ${avatar(p.display_name)}
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:550">${esc(p.display_name)}
+            ${p.aliases.slice(0,3).map(a=>`<span class="tag">${esc(a)}</span>`).join("")}</div>
+          <div class="mut small">归档于 ${fmt(p.archived_at)}</div>
+        </div>
+        <button onclick="restorePerson('${p.id}')" style="margin-right:6px">恢复</button>
+        <button class="danger" onclick="purgePerson('${p.id}')">彻底清除…</button>
+      </div>`).join("") || '<div class="row mut">没有已归档的人</div>'}
+    </div>`;
+}
+async function archivePerson(pid) {
+  if (!confirm("归档此人？（从列表与检索中消失，不会复活；之后可在「已归档」里恢复或彻底清除）")) return;
   await api(`/api/persons/${pid}`, { method: "DELETE" });
   closeDrawer(); pagePersons();
+}
+async function restorePerson(pid) {
+  await api(`/api/persons/${pid}/restore`, { method: "POST" });
+  pageArchived();
+}
+async function purgePerson(pid) {
+  const ok = confirm("彻底清除此人？\n\n字段、别名、记忆、账本、关系边、凭证与 blob 都会被物理删除，不可恢复。\n建议先「归档」确认没问题再清除。");
+  if (!ok) return;
+  const typed = prompt('请输入「彻底清除」四个字确认：');
+  if (typed !== "彻底清除") return;
+  try {
+    const r = await api(`/api/persons/${pid}/purge`, { method: "POST" });
+    const parts = Object.entries(r.deleted || {}).map(([k,v]) => `${k} ${v}`).join("、");
+    alert(`已彻底清除。删除行：${parts || "（无）"}；解绑：${Object.keys(r.unlinked||{}).join("、") || "无"}；blob ${(r.blobs||[]).length} 个`);
+    closeDrawer(); pagePersons();
+  } catch (e) {
+    // FR-ID-02：校验不通过时必须报「部分删除」，不能假装删干净了
+    alert("清除未通过校验：" + e.message);
+    closeDrawer(); pagePersons();
+  }
 }
 
 /* ---------- 待确认 ---------- */

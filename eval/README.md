@@ -26,6 +26,12 @@
   也就是「tune 全绿」里有多少是对着答案改出来的。
 - **holdout 会被烧掉**：一旦照着它的失败去改提示词，它就退化成 tune。
   所以每一轮修完，必须把旧 holdout 并入 tune、**新建 holdout v2**。协议见 `results/BASELINE.md` 第六节。
+- **已经烧过一次**（2026-09-30）：v1 的 26 条并入 `tune.jsonl`，每条带 `from-holdout-v1` 标签便于溯源
+  （tune 因此 32 → **58** 条）；当前 `holdout.jsonl` 是**按 PRD 重出的 v2**（30 条）。
+  用法例溯源自检：
+  ```bash
+  .venv/bin/python -c "import json;print(sum(1 for l in open('eval/cases/tune.jsonl',encoding='utf-8') if 'from-holdout-v1' in l))"
+  ```
 
 ## 每集采样 k 次（`--repeat`）
 
@@ -142,11 +148,19 @@ L5 不变量层不设门槛——**必须 100%**。
   （`sanitize()` 只做类型归一化，不校验字段名）。要不要加白名单需先定字段表。
 - **L3 检索层**没做，`retrieve.hybrid_search` 目前的排序质量无量化依据。
 - **L4 端到端**没做，Agent 工具调用是否越权、多轮上下文是否正确，目前没有回归。
-- **负样本偏少**：holdout 里标 `negative-promise` 的只有 5 条 → 误判率的分辨率是 0.2 一档。
-  要更细的结论，负样本得加到 20 条以上。
+- **负样本仍偏少**：v1 只有 5 条 `negative-promise`（误判率分辨率 0.2 一档，一个数字由 5 条撑着）→
+  **v2 已加到 11 条**（分辨率 0.091）。目标 20 条以上，且要覆盖**闸门词表里还没有的说法**
+  （例如「找时间一起…」「改天顺道…」——这类新触发词正是测「词表是不是又在枚举」的地方）。
 - **无 LLM-as-judge**：`value_read` 的质量、回复是否得体这类主观项还没评。若引入 judge，
   必须先做人工双盲校准（抽 20 条算 Cohen's κ，≥0.6 才能信它的分数）。
-- **P5 删除语义已决策、待实现**：定为「**归档 + 提供彻底清除入口**」。
-  `tests/test_invariants.py::test_p5_delete_is_physical` 现为 `xfail`；`repo.soft_delete_person`
-  目前只打 `deleted_at`，字段与别名行仍在库里。依据是 PRD **FR-ID-02 边界**（删除时别名必须一并删除）
-  与其验收（删后全库搜索该人任何曾用名返回 0 条）。实现后该 `xfail` 应转正。
+- **P5 删除语义：已实现（两级）**。
+  - `DELETE /api/persons/{id}` = **归档**：打 `deleted_at`，从列表/检索里消失、不复活，但可
+    `POST /api/persons/{id}/restore` 恢复（UI 有「已归档」面板，否则「可恢复」只是口号）。
+  - `POST /api/persons/{id}/purge` = **彻底清除**：物理删除字段/别名/记忆/账本/提醒/互动关联/
+    关系边/向量索引/该人独占的凭证与 blob；删完调 `repo.verify_purged()` 自检，不通过就报
+    「**部分删除**」而不是「已删除」（PRD FR-ID-02 的验收原文要求的）。
+  - 原 `xfail` 的 `test_p5_delete_is_physical` 已拆成两条并转正：
+    `test_p5_purge_removes_every_trace` + `test_p5_archive_is_reversible`。
+  - ⚠️ 一处**刻意的口径修正**：schema 明确允许两个人共享同一别名（三个「小张」），
+    所以验收口径是「**这个别名再也指不到被清除的那个人**」，而不是字面的「全库搜不到这个别名」——
+    后者在共享别名时会误报「部分删除」。判据写在 `verify_purged()` 的 docstring 里。

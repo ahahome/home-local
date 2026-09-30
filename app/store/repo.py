@@ -1,7 +1,10 @@
 """数据访问层：所有表的 CRUD。只在这里写 SQL。
 
 不变量（对应 PRD）：
-- 人物删除是软删 + 墓碑，永不物理删除（FR-ID-07 的"不复活"由写入侧 status/deleted_at 检查保证）
+- 人物删除分两级：**归档**（archive_person：打 deleted_at，可恢复，默认动作）与
+  **彻底清除**（purge_person：物理删除，含字段/别名/记忆/账本/关系边/凭证/blob）。
+  「删除后不得复活」由写入侧 status/deleted_at 检查保证（FR-ID-07）；
+  「删人就删别名」由 purge_person + verify_purged 保证（FR-ID-02）
 - person_field 双时态：upsert = 关闭旧版本 + 追加新版本（FR-ID-03）
 - interaction / ledger / applied_patch 都有幂等键，重放不产生重复（FR-ING-06）
 - 待确认的条目不进入任何汇总（FR-MEM-03 / FR-LED-03）
@@ -46,6 +49,16 @@ def all_active_persons(conn) -> list:
     ).fetchall()
 
 
+def archived_persons(conn) -> list:
+    """已归档的人物（deleted_at 非空、且不是合并墓碑）——「已归档」面板用它提供恢复入口。
+
+    有归档而没有恢复入口，等于「可恢复」只是一句口号。
+    """
+    return conn.execute(
+        "SELECT * FROM person WHERE deleted_at IS NOT NULL AND status!='merged'"
+        " ORDER BY deleted_at DESC").fetchall()
+
+
 def add_alias(conn, person_id: str, alias: str, source: str, confidence: float = 1.0) -> None:
     conn.execute(
         "INSERT OR IGNORE INTO person_alias(person_id,alias,source,confidence,created_at) VALUES(?,?,?,?,?)",
@@ -80,10 +93,184 @@ def touch_person(conn, pid: str) -> None:
     conn.execute("UPDATE person SET updated_at=? WHERE id=?", (now_ms(), pid))
 
 
-def soft_delete_person(conn, pid: str) -> None:
+def archive_person(conn, pid: str) -> None:
+    """**归档**：打 deleted_at，人物/字段/别名/记忆都留在库里，可恢复。
+
+    P5 的语义是两级（见 eval/results/BASELINE.md 第八节的拍板）：
+    - 日常点「删除」是**归档**——从所有列表/检索里消失、不复活，但可 restore；
+    - 真要抹掉痕迹走 `purge_person()`（物理删除，含别名/blob）。
+    这样既满足「删除后不得复活」，又给了误删后悔的余地。
+    """
     t = now_ms()
     conn.execute("UPDATE person SET deleted_at=? WHERE id=?", (t, pid))
     conn.execute("UPDATE memory_item SET deleted_at=? WHERE person_id=?", (t, pid))
+
+
+def restore_person(conn, pid: str) -> bool:
+    """把归档的人恢复回来。返回是否真的恢复了（墓碑/不存在都返回 False）。"""
+    row = conn.execute("SELECT deleted_at, status FROM person WHERE id=?", (pid,)).fetchone()
+    if not row or row["deleted_at"] is None or row["status"] == "merged":
+        return False
+    conn.execute("UPDATE person SET deleted_at=NULL, updated_at=? WHERE id=?", (now_ms(), pid))
+    conn.execute("UPDATE memory_item SET deleted_at=NULL WHERE person_id=?", (pid,))
+    return True
+
+
+# 旧名兼容：当年的 soft_delete 就是现在的「归档」
+soft_delete_person = archive_person
+
+
+# 彻底清除要清的表：(表名, 外键列)
+_PURGE_LINKS = (
+    ("person_field", "person_id"),
+    ("person_alias", "person_id"),
+    ("interaction_person", "person_id"),
+    ("memory_item", "person_id"),
+    ("promise", "person_id"),
+    ("ledger_entry", "person_id"),
+    ("reminder", "person_id"),
+    ("applied_patch", "person_id"),
+)
+
+
+def purge_person(conn, pid: str) -> dict:
+    """**彻底清除**：物理删除该人的全部痕迹（FR-ID-02）。
+
+    与归档的区别是「真的没了」——删完之后：
+    - person / person_field / person_alias / memory_item / promise / ledger_entry /
+      reminder / interaction_person / applied_patch / relation_edge 里不许再有该人的行；
+    - 别名行一并删除（FR-ID-02 的硬要求：删人必须删别名）；
+    - 该人独占的 evidence 连同 blob 文件一起删（隐私缺口就在这里）；
+    - 全库搜任何曾用名都返回 0 条。
+
+    为什么 evidence 要判「独占」：一次 apply_extraction 只建**一条** evidence，
+    同一批次里所有人都指向它。若无脑删，清一个人会把别人的凭证一起删掉。
+
+    为什么 skill 只解绑不删：话术/流程是用户自己攒下的资产，不该跟着人一起消失。
+    （单测里可用 `verify=True` 做删除后自检；不通过就返回 ok=False，让上层报
+    「部分删除」而不是「已删除」。）
+
+    返回 {ok, deleted:{表:行数}, unlinked:{表:行数}, blobs:[hash], leftovers:[...]}。
+    """
+    row = conn.execute("SELECT * FROM person WHERE id=?", (pid,)).fetchone()
+    if not row:
+        return {"ok": False, "deleted": {}, "unlinked": {}, "blobs": [],
+                "leftovers": ["person 不存在"]}
+    if row["status"] == "merged":
+        return {"ok": False, "deleted": {}, "unlinked": {}, "blobs": [],
+                "leftovers": ["该人物是合并后的墓碑，行数据已迁到存活方，请清除存活方"]}
+
+    aliases = [r["alias"] for r in conn.execute(
+        "SELECT DISTINCT alias FROM person_alias WHERE person_id=?", (pid,)).fetchall()]
+
+    # 先取要清理的 id 集合（删掉行之后就查不到了）
+    memory_ids = [r["id"] for r in conn.execute(
+        "SELECT id FROM memory_item WHERE person_id=?", (pid,)).fetchall()]
+    ev_ids = _evidence_ids_of(conn, pid)
+
+    deleted: dict[str, int] = {}
+
+    def _del(table: str, where: str, params: tuple) -> None:
+        cur = conn.execute(f"DELETE FROM {table} WHERE {where}", params)
+        if cur.rowcount:
+            deleted[table] = deleted.get(table, 0) + cur.rowcount
+
+    # FTS 索引（memory 的名字/内容副本）必须一起删，否则搜索仍能命中
+    for mid in memory_ids:
+        _del("memory_fts", "owner_type='memory' AND owner_id=?", (mid,))
+    for table, col in _PURGE_LINKS:
+        _del(table, f"{col}=?", (pid,))
+    _del("relation_edge", "from_person=? OR to_person=?", (pid, pid))
+    for mid in memory_ids:
+        _del("vector_item", "owner_type='memory' AND owner_id=?", (mid,))
+    _del("vector_item", "owner_type='person_name' AND owner_id=?", (pid,))
+    # 人物最后删（person_alias 有外键指向它）
+    _del("person", "id=?", (pid,))
+
+    # 人物专属的凭证与 blob
+    blobs = _purge_evidence(conn, ev_ids, deleted)
+
+    unlinked: dict[str, int] = {}
+    cur = conn.execute("UPDATE skill SET person_id=NULL, updated_at=? WHERE person_id=?",
+                       (now_ms(), pid))
+    if cur.rowcount:
+        unlinked["skill"] = cur.rowcount
+
+    return {"ok": True, "deleted": deleted, "unlinked": unlinked, "blobs": blobs,
+            "leftovers": [], "aliases": aliases}
+
+
+def verify_purged(conn, pid: str, aliases: list[str]) -> list[str]:
+    """删除后自检：还有残留就返回清单（上层据此报「部分删除」而不是「已删除」）。
+
+    别名检查**按 person_id 限定**：schema 允许两个人物共享同一个别名（三个「小张」），
+    所以「全库搜不到这个别名」是不成立的验收口径——成立的口径是
+    「这个别名再也指不到被清除的那个人」。
+    """
+    leftovers: list[str] = []
+    if conn.execute("SELECT COUNT(*) n FROM person WHERE id=?", (pid,)).fetchone()["n"]:
+        leftovers.append("person")
+    for table, col in _PURGE_LINKS:
+        n = conn.execute(f"SELECT COUNT(*) n FROM {table} WHERE {col}=?", (pid,)).fetchone()["n"]
+        if n:
+            leftovers.append(f"{table}({n})")
+    n = conn.execute(
+        "SELECT COUNT(*) n FROM relation_edge WHERE from_person=? OR to_person=?",
+        (pid, pid)).fetchone()["n"]
+    if n:
+        leftovers.append(f"relation_edge({n})")
+    n = conn.execute(
+        "SELECT COUNT(*) n FROM vector_item WHERE owner_type='person_name' AND owner_id=?",
+        (pid,)).fetchone()["n"]
+    if n:
+        leftovers.append(f"vector_item({n})")
+    for alias in aliases:
+        if conn.execute("SELECT 1 FROM person_alias WHERE alias=? AND person_id=? LIMIT 1",
+                        (alias, pid)).fetchone():
+            leftovers.append(f"alias:{alias}")
+    return leftovers
+
+
+def _evidence_ids_of(conn, pid: str) -> list[str]:
+    """该人名下所有行引用到的 evidence id。"""
+    ids: set[str] = set()
+    for sql in (
+        "SELECT DISTINCT evidence_id e FROM person_field WHERE person_id=?",
+        "SELECT DISTINCT evidence_id e FROM memory_item WHERE person_id=?",
+        "SELECT DISTINCT evidence_id e FROM promise WHERE person_id=?",
+        "SELECT DISTINCT evidence_id e FROM ledger_entry WHERE person_id=?",
+    ):
+        for r in conn.execute(sql, (pid,)).fetchall():
+            if r["e"]:
+                ids.add(r["e"])
+    return sorted(ids)
+
+
+def _purge_evidence(conn, ev_ids: list[str], deleted: dict[str, int]) -> list[str]:
+    """删掉「只被这个人引用」的 evidence 及其 blob（被别人引用的留着）。"""
+    from app.store import blob
+    blobs: list[str] = []
+    for eid in ev_ids:
+        if conn.execute(
+            "SELECT 1 FROM person_field WHERE evidence_id=? LIMIT 1", (eid,)).fetchone():
+            continue
+        if conn.execute(
+            "SELECT 1 FROM memory_item WHERE evidence_id=? LIMIT 1", (eid,)).fetchone():
+            continue
+        if conn.execute("SELECT 1 FROM promise WHERE evidence_id=? LIMIT 1", (eid,)).fetchone():
+            continue
+        if conn.execute(
+            "SELECT 1 FROM ledger_entry WHERE evidence_id=? LIMIT 1", (eid,)).fetchone():
+            continue
+        ev = conn.execute("SELECT blob_hash FROM evidence WHERE id=?", (eid,)).fetchone()
+        conn.execute("DELETE FROM evidence WHERE id=?", (eid,))
+        deleted["evidence"] = deleted.get("evidence", 0) + 1
+        h = ev["blob_hash"] if ev else None
+        if h and not conn.execute(
+                "SELECT 1 FROM evidence WHERE blob_hash=? LIMIT 1", (h,)).fetchone():
+            blob.delete(h)
+            blobs.append(h)
+    return blobs
 
 
 def update_value_read(conn, pid: str, value_read: str, evidence: str | None) -> None:

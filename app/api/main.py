@@ -150,6 +150,20 @@ def list_persons():
     return {"persons": out}
 
 
+@app.get("/api/persons/archived")
+def list_archived_persons():
+    """已归档的人物——归档要能恢复，就必须有个入口找到它们。
+
+    注意：这条必须声明在 /api/persons/{pid} 之前，否则会被当成 pid="archived"。
+    """
+    conn = get_conn()
+    return {"persons": [
+        {"id": p["id"], "display_name": p["display_name"],
+         "aliases": repo.aliases_of(conn, p["id"]),
+         "archived_at": ms_to_local_str(p["deleted_at"])}
+        for p in repo.archived_persons(conn)]}
+
+
 @app.get("/api/persons/{pid}")
 def person_detail(pid: str):
     conn = get_conn()
@@ -192,13 +206,47 @@ def edit_field(pid: str, body: FieldIn):
 
 
 @app.delete("/api/persons/{pid}")
-def delete_person(pid: str):
+def archive_person(pid: str):
+    """归档（旧接口语义改了）：从所有列表/检索里消失、不复活，但可恢复。
+
+    P5 把「删除」拆成两级，这里给的是**可恢复**的那一级——真正抹掉痕迹走 /purge。
+    """
     conn = get_conn()
     if not repo.get_person(conn, pid):
         raise HTTPException(404, "人物不存在")
-    repo.soft_delete_person(conn, pid)
+    repo.archive_person(conn, pid)
     conn.commit()
-    return {"ok": True, "message": "已删除（含别名与记忆，不会复活）"}
+    return {"ok": True, "action": "archived",
+            "message": "已归档（含别名与记忆，不会复活；可恢复，彻底清除请用 purge）"}
+
+
+@app.post("/api/persons/{pid}/restore")
+def restore_person(pid: str):
+    conn = get_conn()
+    if not repo.restore_person(conn, pid):
+        raise HTTPException(400, "该人物不处于可恢复的归档状态")
+    conn.commit()
+    return {"ok": True, "action": "restored"}
+
+
+@app.post("/api/persons/{pid}/purge")
+def purge_person(pid: str):
+    """彻底清除：物理删除（字段/别名/记忆/账本/关系边/凭证/blob）。
+
+    FR-ID-02：删完必须能通过「全库搜该人的任何曾用名返回 0 条」的校验；
+    校验不过要报「部分删除」，而不是含糊地说「已删除」。
+    """
+    conn = get_conn()
+    rep = repo.purge_person(conn, pid)
+    if not rep.get("ok") and "person 不存在" in rep.get("leftovers", []):
+        raise HTTPException(404, "人物不存在")
+    aliases = rep.pop("aliases", [])
+    conn.commit()
+    leftovers = repo.verify_purged(conn, pid, aliases)
+    if leftovers:
+        raise HTTPException(500, f"部分删除：仍有残留 {leftovers}（未声称已删除）")
+    return {"ok": True, "action": "purged", "message": "已彻底清除（含别名与凭证）",
+            "deleted": rep["deleted"], "unlinked": rep["unlinked"], "blobs": rep["blobs"]}
 
 
 class MergeIn(BaseModel):

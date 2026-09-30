@@ -2,16 +2,23 @@
 
 输出统一为带 confidence 与 evidence 的 patch 结构，交由 apply.py 分档落库。
 
-SL1 评测暴露的三类缺陷，处理方式不一样——记在这里免得后人以为都靠 prompt：
+SL1 评测暴露的缺陷，处理方式不一样——记在这里免得后人以为都靠 prompt：
 - A 承诺误判：SYSTEM 第 5 条给正/反例降概率，_is_pleasantry() 在代码里兜底拦截。
   （只改 prompt 不够：实测仍会低置信地猜出「以后常见面」。）
+  判定方式刻意【不用动词白名单】——白名单会漏（「回头再说吧」「请你搓一顿」），
+  改用「命中客套触发词 且 全句无具体动作/时间」。
 - B evidence 拼接：_evidence() 强制 evidence 必须是原文中的连续片段。纯代码保证。
 - C 字段归位（薪资误入账本、城市误入 company）：只靠 SYSTEM 的归位规则，没有代码兜底。
   归位是语义问题，硬规则容易误伤，所以留在 prompt 层，靠评测监控。
+- E 角色词建档（「王芳的老公」被建成独立人物，违反 FR-ID-01）：is_role_person() 在代码里拦掉，
+  并把该亲属的信息收拢到本人名下（家属信息），避免「不建档」变成「丢信息」。
+- F 相对日期算错（「这周五」算成周六）：根因是喂给模型的时间信息缺了「星期几」，
+  由 _with_weekday() 补上，不让模型自己推星期。
 """
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from typing import Any
 
 from app.llm import get_llm
@@ -21,16 +28,20 @@ SYSTEM = """你是一个信息抽取器。从文本中抽取关于「人」的�
 
 硬规则：
 1. 只有能确定指向一个真实人物的名字才抽取。"我对象""那个客户""前台"这类角色词不算人名；无法确定是谁的称呼不算。
+   「王芳的老公」「李娜的儿子」这种「某人 + 亲属称谓」也不是独立的人，不要为它单独建人物；
+   把关于他的信息记到本人名下（facts 或 family 字段）：例如「王芳她老公是主任医师」→ 记成王芳的一条事实/家属信息。
 2. 每条事实必须带 evidence：从原文【逐字、连续】截取的依据片段。不要改写；
    不要用「；」把不相邻的两处原文拼成一条；如果找不到一整段连续的原文，就把 evidence 留空。
 3. confidence 校准：明确陈述=0.9以上；合理推断=0.6~0.8；猜测=0.6以下。涉及金钱从严，不确定给 0.75 以下。
-4. 相对日期（"下周三""前两天"）基于给出的今天日期换算成 YYYY-MM-DD；无法确定填 null。
+4. 相对日期（"下周三""这周五""前两天"）基于给出的今天日期换算成 YYYY-MM-DD。
+   给出的今天日期已注明星期几，那是权威值，直接据此推算，不要自己重算星期。无法确定填 null。
 5. 承诺 = 具体事项 + 可执行动作（通常还带时间）。下列一律不算承诺，无论它出现在单句、
    多轮对话还是聊天记录片段里：「改天吃饭」「回头联系」「以后常见面」「以后常联系」
    「有机会聚聚」「保持联系」「有空一起…」。这些是社交客套，只是寒暄。
    - 不算：「改天一起吃个饭」「以后咱们能常见面」「回头我联系你」
-   - 算：  「我答应下周三之前把报价单发给他」「9/8 之前给你确认」
-   不要因为对话轮次变多、语气变正式就放宽标准——语境不改变一句话是不是客套。
+          「那个事回头再说吧」「改天请你搓一顿」「哪天得空喝一杯」（没有具体事项和时间的寒暄）
+   - 算：  「我答应下周三之前把报价单发给他」「9/8 之前给你确认」「明天上午把合同扫描件发他邮箱」
+   判断依据是【有没有具体的、可执行的事】，不是用词——不要因为对话轮次变多、语气变正式就放宽标准。
 6. 关于"用户自己"的目标、偏好、状态，不要放进 people，放进 my_notes。
 7. 只输出一个 JSON 对象。不要解释、不要 markdown 代码围栏。
 
@@ -74,23 +85,50 @@ SYSTEM = """你是一个信息抽取器。从文本中抽取关于「人」的�
 # 切分 evidence 用：模型最常见的拼接分隔符
 _EV_SPLIT = re.compile(r"[，。！？；：、\n\r]+")
 
-# 社交客套（缺陷 A 的代码兜底）。
+# 社交客套的触发词（缺陷 A 的代码兜底）。
 # 提示词第 5 条已经写了「客套不是承诺」，但实测模型偶尔仍会低置信地猜出一条
 # （例如 0.4 分的「以后在杭州能常见面」）。统计上它从「高置信断言」降成了
 # 「待确认」，但客套就是客套，跟置信度无关——所以在代码里直接拦掉，不交给模型自觉。
+#
+# 【刻意不做动词白名单】：早期版本要求触发词后面 8 字内必须跟着
+# 「吃饭|聚|聊|见面|喝|约|坐|玩|联系」，holdout 一测就漏了一半——
+# 「那个事回头再说吧」（说）、「改天请你搓一顿」（搓）都不在白名单里，
+# 那两条只是「模型这次听话」才过的，不是代码兜住的。
+# 白名单天生会漏；反过来判「命中触发词 且 全句没有具体动作/时间」更稳。
 _PLEASANTRY = re.compile(
-    r"(改天|哪天|有空|回头|下次|以后|日后|有时间)"
-    r".{0,8}"
-    r"(吃饭|吃个饭|吃|聚|聊|见面|见|喝|约|坐|玩|联系)"
-    r"|(保持|经常|常常|常)联系"
+    r"改天|哪天|有空|得空|抽空|择日|有机会|回头|下次|以后|日后|有时间"
+    r"|保持联系|经常联系|常联系|常常联系|多联系|再联系"
 )
-# 但「下次见面把合同签了」「以后每周五发报表」是真承诺——带具体动作/时间的不算客套。
+# 反向豁免：带具体动作/时间的不是客套——「下次见面把合同签了」「以后每周五发报表」是真承诺。
 # 注意别把数字写得太宽：「一起」的一不能算具体量，所以只认「数词+单位」。
 _CONCRETE = re.compile(
     r"把|将|[0-9０-９]"
     r"|[一二三四五六七八九十百千万]+(?:块|元|钱|万|亿|个|天|周|月|日|号|点|次|份|张|件|条)"
     r"|之前|以前|周[一二三四五六日天]|月|号|点前|以后.{0,3}(?:每|第)"
 )
+
+# 角色词（缺陷 E 的代码兜底，FR-ID-01）。
+# 「我对象」「那个客户」「前台」这类不是人名，提示词第 1 条已经写了，但实测模型仍会
+# 把「王芳的老公」建成一个独立人物（3 次里 2 次），而且 apply.py 的关系边也会顺手建档
+# （relations[].to 找不到人时 create_person），所以必须在 sanitize 这个所有摄入路径的
+# 公共收口处拦掉，并且连关系边一起过滤。
+#
+# 为什么不能只靠提示词：这是「语义事实」而不是「概率倾向」——见 llm-extract-eval-tuning 规则 3。
+_KIN = ("老公|老婆|丈夫|妻子|媳妇|太太|先生|对象|男友|女友|男朋友|女朋友|"
+        "儿子|女儿|孩子|娃|孙子|孙女|外孙|外孙女|儿媳|女婿|"
+        "爸爸|妈妈|父亲|母亲|爹|娘|公公|婆婆|岳父|岳母|"
+        "哥哥|姐姐|弟弟|妹妹|表哥|表姐|表弟|表妹|堂哥|堂姐|堂弟|堂妹|"
+        "叔叔|阿姨|舅舅|姑姑|伯伯|爷爷|奶奶|姥姥|姥爷")
+# 纯角色词：只做**全等**匹配（「老师」是角色词，但「张老师」不是——那是个称呼/名字）。
+_ROLE_ONLY = ("我对象|我的对象|那个客户|这个客户|客户|前台|老板|领导|同事|朋友|同学|室友|"
+              "房东|司机|师傅|老师|医生|护士|邻居|甲方|乙方|供应商|下属|助理|秘书|"
+              "快递员|外卖员|有个人|一个人|某人")
+_ROLE_PERSON = re.compile(rf"^(?:.+的(?:{_KIN}|{_ROLE_ONLY})|(?:{_ROLE_ONLY}))$")
+# 「王芳的老公」→ base=王芳。用来把家属信息收拢回本人名下。
+_KIN_OF = re.compile(rf"^(?P<base>.+?)的(?:{_KIN})$")
+
+# 中文星期，索引对齐 datetime.weekday()（周一=0）
+_WEEKDAY_CN = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
 
 def _f(x: Any, default: float = 0.5) -> float:
@@ -108,13 +146,100 @@ def _s(x: Any) -> str:
 def _is_pleasantry(content: str) -> bool:
     """这句话是不是社交客套（「改天吃饭」「以后常见面」这类寒暄）。
 
-    命中客套模式、且没有任何具体动作/时间标记时才算。带「把…给…」「周X」「号」「点前」
-    这种可执行细节的，即使含「以后」「下次」也照常当承诺保留。
+    判定式 = 命中客套触发词 **且** 全句没有任何具体动作/时间标记。
+    带「把…给…」「周X」「号」「点前」「数词+量词」这种可执行细节的，
+    即使含「以后」「下次」「回头」也照常当承诺保留。
+
+    刻意【不是】「触发词 + 动词白名单」：白名单会漏（实测「回头再说吧」「请你搓一顿」
+    都漏掉了），而漏掉的表现是「靠模型这次听话」，看起来绿其实是脆的。
     """
     text = _s(content)
     if not text or not _PLEASANTRY.search(text):
         return False
     return not _CONCRETE.search(text)
+
+
+def is_role_person(name: str) -> bool:
+    """这个名字是角色词/亲属称谓，还是真人名（FR-ID-01）。
+
+    「我对象」「那个客户」「前台」→ True；
+    「王芳的老公」「李娜的儿子」「她的同事」→ True（不是独立的人）；
+    「张老师」「老王」「陈工」→ False（这是称呼/名字，不是角色词）。
+
+    公开给 apply.py 用：落库层要再拦一道，不能因为「上游 sanitize 应该已经过滤了」
+    就放行——apply.py 的 relations 分支会 create_person，那是一条真实的旁路。
+    """
+    n = _s(name)
+    return bool(n) and bool(_ROLE_PERSON.match(n))
+
+
+def _with_weekday(today: str) -> str:
+    """把 '2026-09-30' 补成 '2026-09-30（周三）'，算不出就原样返回。
+
+    为什么在代码里算：LLM 自己做星期运算是不可靠的——实测「这周五」（今天周三）
+    被算成了周六。把星期几直接喂给它，而不是让它推。这是一行代码的事，
+    但它决定的是一条承诺提醒建在哪一天（FR-TIM-02）。
+    """
+    s = _s(today)[:10]
+    try:
+        d = datetime.strptime(s, "%Y-%m-%d")
+    except ValueError:
+        return _s(today)
+    return f"{d.strftime('%Y-%m-%d')}（{_WEEKDAY_CN[d.weekday()]}）"
+
+
+def _inherit_family_facts(ref: dict, pseudo: dict) -> None:
+    """把「X 的 <亲属>」的信息收拢到 X 名下（家属信息），不再为它建人物。
+
+    只用**原文里逐字出现过的片段**作为 fact 文本（evidence 已经是校验过的连续片段），
+    不自己造句——否则「为了不丢信息」反而会造出一条幻觉。
+    """
+    seen = {flatten_for_match(f["text"]) for f in ref["facts"]}
+    for fa in pseudo["facts"]:
+        key = flatten_for_match(fa["text"])
+        if key and key not in seen:
+            seen.add(key)
+            ref["facts"].append(dict(fa))
+    for f in pseudo["fields"]:
+        text = _s(f.get("evidence"))
+        key = flatten_for_match(text)
+        if not text or key in seen:
+            continue
+        seen.add(key)
+        ref["facts"].append({"text": text, "confidence": f["confidence"], "evidence": text})
+
+
+def _drop_role_persons(people: list[dict]) -> list[dict]:
+    """剔除角色词「人物」，并把它们的内容收拢回本人（FR-ID-01 / FR-MEM-06）。
+
+    三条规则：
+    1. 名字是角色词/亲属称谓的条目 → 不作为人物保留。
+    2. 「X 的 <亲属>」且 X 也在本批里 → 把内容并到 X 名下（家属信息）；
+       **只有**这种指名道姓的参照才做归属——「前台」「那个客户」这种没有明确参照人的，
+       直接丢弃而不是塞给本批唯一的那个人（那恰恰是 FR-MEM-06 禁止的
+       「把他人特征归档到当前人物名下」）。
+    3. 关系边/别名指向角色词的 → 一并过滤。apply.py 在 relations[].to 找不到人时
+       会 `create_person`，不过滤等于绕开这道闸门又建了一个人物。
+    """
+    real: list[dict] = []
+    pseudo: list[dict] = []
+    for p in people:
+        if is_role_person(p.get("canonical_name")) or is_role_person(p.get("name")):
+            pseudo.append(p)
+        else:
+            real.append(p)
+
+    by_name = {p["canonical_name"]: p for p in real}
+    for ps in pseudo:
+        m = _KIN_OF.match(_s(ps.get("canonical_name")))
+        ref = by_name.get(m.group("base")) if m else None
+        if ref is not None and ref is not ps:
+            _inherit_family_facts(ref, ps)
+
+    for p in real:
+        p["relations"] = [r for r in p["relations"] if not is_role_person(r.get("to"))]
+        p["aliases"] = [a for a in p["aliases"] if not is_role_person(a.get("alias"))]
+    return real
 
 
 def _evidence(ev: Any, src_flat: str) -> str:
@@ -147,6 +272,7 @@ def sanitize(obj: Any, source: str = "") -> dict:
     source：原文。给定时会强制 evidence 必须是原文里的连续片段（缺陷 B 的兜底）。
     """
     out: dict[str, Any] = {"people": [], "my_notes": []}
+    built: list[dict] = []
     if not isinstance(obj, dict):
         return out
     src_flat = flatten_for_match(source) if source else ""
@@ -216,7 +342,9 @@ def sanitize(obj: Any, source: str = "") -> dict:
                 "text": _s(vr["text"]), "confidence": _f(vr.get("confidence"), 0.7),
                 "evidence": _evidence(vr.get("evidence"), src_flat),
             }
-        out["people"].append(person)
+        built.append(person)
+
+    out["people"] = _drop_role_persons(built)
 
     for n in obj.get("my_notes") or []:
         if isinstance(n, dict) and _s(n.get("text")):
@@ -233,6 +361,6 @@ def extract_from_text(text: str, known_names: list[str], today: str) -> dict:
     names = "、".join(known_names) if known_names else "（暂无）"
     messages = [
         {"role": "system", "content": SYSTEM},
-        {"role": "user", "content": f"今天是 {today}。已知人物：{names}\n\n待抽取文本：\n{text}"},
+        {"role": "user", "content": f"今天是 {_with_weekday(today)}。已知人物：{names}\n\n待抽取文本：\n{text}"},
     ]
     return sanitize(llm.chat_json(messages, tier="mid", max_tokens=4000), source=text)

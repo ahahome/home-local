@@ -49,7 +49,7 @@ home 是一个**完全跑在你自己机器上**的「关系维护 Agent」。�
 所有不确定的抽取结果进 Pending 面板，人工确认/丢弃后才生效——假设优于断言，但不等于断言。
 
 ### 9. 合并与拆分
-误建的两个「老陆」可合并，合并时写快照（tombstone），可**反向拆分**恢复原状；删除是真删除，不会复活。
+误建的两个「老陆」可合并，合并时写快照（tombstone），可**反向拆分**恢复原状；删除分两级——**归档**（从列表/检索消失、可恢复）与**彻底清除**（物理删，含别名/字段/记忆/账本/提醒/关系边/向量索引/独占 blob）。两者都不是「假装删掉」：清除完会逐表自检，有残留就报「部分删除」。
 
 ### 10. Deep Research
 需要深度调研时：预检索 → 出研究提案 → 3 个边界互斥的子 Agent 并行调研 → lead agent 审校（丢弃无来源的论断）→ 出带引用来源的报告。
@@ -62,7 +62,7 @@ home 是一个**完全跑在你自己机器上**的「关系维护 Agent」。�
 | P2 | 写入必有回执 | 全部 16 个工具返回结构化 receipt |
 | P3 | 时间是一等公民 | 双时态字段 + 间隔感知 + 全本地时区 |
 | P4 | 假设优于断言 | 抽取带 confidence + evidence，低置信进 pending |
-| P5 | 删除是真删除 | 语义已拍板：**归档**（可恢复）+ **彻底清除**（物理删，含别名/记忆/账本/证据引用/blob）。⚠️ 彻底清除入口**尚未实现**——当前 `soft_delete_person` 仍是软删（只置 `deleted_at`，字段/别名行仍在），`test_p5_delete_is_physical` 暂为 xfail |
+| P5 | 删除是真删除 | **两级语义已实现**：`DELETE /api/persons/{id}` 归档（打 `deleted_at`，从列表/检索消失、可恢复）+ `POST /api/persons/{id}/purge` 彻底清除（物理删，含别名/字段/记忆/账本/提醒/互动/关系边/向量索引/该人独占的凭证与 blob）。删完 `repo.verify_purged()` 逐表自检，有残留即报「部分删除」而非「已删除」（FR-ID-02） |
 | P6 | 代笔不代发 | 系统提示硬约束 + 无发送类工具 |
 | P7 | 不假装知道 | 「严禁模拟工具」硬规则；无来源论断被审校丢弃 |
 
@@ -98,8 +98,8 @@ home 是一个**完全跑在你自己机器上**的「关系维护 Agent」。�
 | 人物合并/拆分 | 「陆/老陆」合并后成功拆分还原 |
 | 每日 journal | 本地时区 23:50 生成，跨天不错位 |
 | Deep Research | 并行子 Agent 出报告，附来源链接 |
-| 单元测试 | **81 通过 + 1 xfail**（消歧 / 幂等写入 / 账本 / 聊天记录解析 / 抽取后处理 / 评测器自测 / 7 条不变量） |
-| **抽取质量评测** | L1 抽取层分 **tune 32 条 / holdout 26 条**两集，每集采样 **k=3** 按最差判定。tune **32/32**（3 次全 3/3，已验证是确定性保证而非概率好转）；holdout **24/26**（`pass_rate` 0.9231、凭证逐字率 1.0、承诺误判率 0）→ **泛化缺口 7.7pt**：tune 那个「满分」里约 8 个点是对着调参集改出来的。两处 holdout 失败均已归因（详见 `eval/results/BASELINE.md`） |
+| 单元测试 | **121 通过（0 xfail）**（消歧 / 幂等写入 / 账本 / 聊天记录解析 / 抽取后处理 / 评测器自测 / 7 条不变量 / P5 归档·恢复·彻底清除·残留自检） |
+| **抽取质量评测** | L1 抽取层分 **tune 58 条 / holdout v2 30 条**两集，每集采样 **k=3** 按最差判定。tune **57/58**（`pass_rate` 0.9828）；holdout v2 **27/30**（`pass_rate` 0.9000、凭证逐字率 1.0）→ **泛化缺口 8.3pt**：tune 那个接近满分里，有几个点是对着调参集改出来的。三项门槛 `pass_rate`、`evidence_hit_rate` 已过，**`promise_false_positive_rate` 0.0909 未过**（1/11，由一条稳定失败撑着）——当前唯一未过项。三处失败均已归因（详见 `eval/results/BASELINE.md`） |
 
 ### ⚠️ 未做 / 未做满
 
@@ -110,15 +110,15 @@ home 是一个**完全跑在你自己机器上**的「关系维护 Agent」。�
 - **Projects**：未实现。
 - **云浏览器代操作**：未实现，且与 P6「代笔不代发」有边界冲突，需要先设计权限模型。
 - **IM 直连**：无自动同步通道，靠导出文件/截图中转。
-- **评测体系**：L1 抽取层已建成（**tune 32 + holdout 26** 分集、k=3 复跑、最差判定、门槛 + 基线文档），L2/L5 免费层就绪；
+- **评测体系**：L1 抽取层已建成（**tune 58 + holdout v2 30** 分集、k=3 复跑、最差判定、门槛 + 基线文档），L2/L5 免费层就绪；
   **L3 检索层、L4 端到端层仍未做**，81 条 FR 也尚未逐条落成验收测试。
-  留出集已建成并把泛化缺口量成 **7.7pt**；但负样本只 5 条（`promise_false_positive_rate` 分辨率 0.2/档），
-  `must_not` 也还不支持「人名.field:X」作用域——见 `eval/results/BASELINE.md` 第八节。
+  留出集已烧过一轮、泛化缺口量成 **8.3pt**；负样本扩到 11 条（`promise_false_positive_rate` 分辨率 0.091/档），
+  于是把闸门漏掉的那一条（`hold2-n06`）逼了出来。`must_not` 也还不支持「人名.field:X」作用域——见 `eval/results/BASELINE.md` 第十节。
 
 ### 技术栈与规模
 
 Python 3.13 venv · FastAPI · SQLite(WAL) · jieba FTS5 · numpy 向量 · APScheduler · 单文件 SPA 前端。
-`app/` 下 **32 个 Python 文件** + 单文件 SPA；另有 `tests/` 8 个、`eval/` 3 个。23 张表，28 个 API 路由，16 个 Agent 工具。
+`app/` 下 **32 个 Python 文件** + 单文件 SPA；另有 `tests/` 8 个、`eval/` 3 个。23 张表，31 个 API 路由，16 个 Agent 工具。
 模型走 DashScope OpenAI 兼容接口，按任务分级：qwen-turbo(轻) / qwen-plus(中) / deepseek-v4-pro(思考) / qwen3.8-max(重) / qwen3-vl-plus(视觉) / text-embedding-v4(向量)。
 
 ## 快速开始
@@ -163,12 +163,12 @@ app/
   store/
     schema.sql   20+ 表；双时态字段、applied_patch、merge_log、tombstone
     db.py        WAL、外键、busy_timeout、user_version 迁移、savepoint
-    blob.py      SHA256 内容寻址存储，原子写（tmp+fsync+os.replace）
-    repo.py      全部 CRUD；upsert_field 同毫秒冲突自增；账本排除 pending/void
+    blob.py      SHA256 内容寻址存储，原子写（tmp+fsync+os.replace）；delete()
+    repo.py      全部 CRUD；upsert_field 同毫秒冲突自增；账本排除 pending/void；两级删除 archive/restore/purge + verify_purged
   memory/
-    extract.py       LLM 抽取 → 结构化 patch；两处代码级兜底：evidence 必须逐字连续、客套不算承诺
+    extract.py       LLM 抽取 → 结构化 patch；三处代码级兜底：evidence 必须逐字连续、客套不算承诺、角色词/亲属称谓不建档（并把家属信息收拢到本人）
     disambiguate.py  四路召回 + 加权打分 + 三档决策；别名精确命中基线 0.9
-    apply.py         幂等写入（savepoint/patch + 内容指纹 + applied_patch 表）；合并/拆分
+    apply.py         幂等写入（savepoint/patch + 内容指纹 + applied_patch 表）；合并/拆分；落库层再拦一次角色词
     retrieve.py      混合检索：SQL + FTS5 + 向量 + 时间衰减与重要性融合
     compile_card.py  dossier card 预编译（≤900 字符，控上下文预算）
     fts.py / vector.py  jieba 分词（带正则兜底）/ numpy 内存余弦索引
@@ -195,14 +195,24 @@ eval/            L1 抽取层评测：cases/{tune,holdout}.jsonl 分集 + metric
 - 「客套不算承诺」不能只写进提示词：实测模型仍会低置信地猜出「以后常见面」（0.4 分），
   指标上从「误写」降成「待确认」，问题并没消失。改由 `extract.py:_is_pleasantry()` 在代码里拦掉，
   并用 `_CONCRETE`（把…给…/周X/号/数词+量词）反向豁免，避免误杀「下次见面把合同签了」这类真承诺。
+- **客套闸门不能用动词白名单**。曾用「触发词 + 动词表（吃饭|聚|聊|见面…）」判定，结果「回头再说吧」「改天请你搓一顿」照漏——
+  白名单把「枚举动词」当成了必要条件，是**错的抽象**。改成反向判定：**命中客套触发词 且 全句无具体动作/时间 → 客套**。
+  另外，闸门要同时判 `content` 与 `evidence`：`content` 是模型自由发挥的字段（会把「回头我加你微信」改写成「加你微信」从而躲过闸门），
+  `evidence` 才是被强制成原文连续片段的字段。
+- **角色词/亲属称谓不是人**（FR-ID-01），但闸门只拦 `people[]` 不够：`apply.py` 的 relations 分支在
+  `get_person_by_name(to)` 落空时会 `create_person(to)`，于是「前台」会从关系这条路过闸变成档案。
+  所以闸门要**下沉到落库层**（最后一道闸门）。同时**不做**「没有明确参照人就塞给本批唯一那个人」的兜底——
+  那是 FR-MEM-06 禁止的「把他人特征归档到当前人物名下」；只有指名道姓的 `X的<亲属>` 才做归属，且家属信息要收拢到本人、用原文逐字片段。
 - evidence 与 confidence 是**正交**的两个信号：`sanitize()` 只清理**伪造的凭证**（不在原文里就清空），
   **不顺手改置信度**——偷偷调分会掩盖模型自身的校准误差，让 confidence 这个指标失去意义。
 - 往提示词加约束要同时给「正向配重」：只加否定式规则（不算/不是/不要）会让模型过度收敛，
   把该记的事一起减掉（`extract-r07` 的 `facts` 曾被整条清空），而这类回归**不会触发任何门槛告警**。
+- 相对日期（「这周五」「下周五」）**不能让模型自己算**：LLM 的星期运算不可靠。要把「今天是 2026-09-30（周三）」连同
+  「本周/下周以哪天为界」一起喂进去，否则提醒会建在错的日子上（FR-TIM-02）。
 
 ## 相关文档
 
-- 评测基线：`eval/results/BASELINE.md`——tune/holdout 分工与 **7.7pt 泛化缺口**、k=3 结果、两处失败归因、四轮迭代过程、烧留出集协议与已知边界
+- 评测基线：`eval/results/BASELINE.md`——tune/holdout 分工与 **8.3pt 泛化缺口**、k=3 结果、三处失败归因、六轮迭代过程、烧留出集协议、P5 两级删除与已知边界
 - 评测设计：`eval/README.md`（L1~L5 分层、指标定义、门槛）
 - PRD：`/Users/emdoor/WorkBuddy/2026-09-29-16-25-48/home-PRD.md`（13 模块 / 60+ 需求 / 20 验收用例，已剥离商业模式）
 

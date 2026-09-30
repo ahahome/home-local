@@ -14,6 +14,7 @@ from typing import Any
 
 from app.config import get_settings, tz
 from app.memory import disambiguate
+from app.memory.extract import is_role_person
 from app.store import repo
 from app.store.db import savepoint
 from app.util import (clamp, new_id, normalize_value, now_ms, patch_fingerprint,
@@ -54,6 +55,13 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
 
     for p in extraction.get("people", []):
         name = p["canonical_name"]
+        # ---- FR-ID-01：角色词不建档（落库层是最后一道闸门） ----
+        # sanitize() 已经拦过一道，这里再拦一道：apply 可能被直接调用
+        # （例如待确认面板重放 patch），不能因为「上游应该过滤了」就放行。
+        if is_role_person(name) or is_role_person(p.get("name")):
+            outcomes.append(Outcome("person", "skipped",
+                                    f"{name} 是角色词/亲属称谓，不建档（FR-ID-01）"))
+            continue
         # ---- 身份消歧（forced 命中的跳过：用户已确认身份） ----
         if name in forced:
             person_id = forced[name]
@@ -206,6 +214,12 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
 
         # ---- 关系边 ----
         for r in p["relations"]:
+            # FR-ID-01 旁路：不解这一条，「前台」「王芳的老公」还是会因为出现在
+            # relation.to 里被 create_person 建出来，闸门等于白设。
+            if is_role_person(r.get("to")):
+                outcomes.append(Outcome("relation", "skipped",
+                                        f"{r.get('to')} 是角色词，不建档也不建边（FR-ID-01）"))
+                continue
             try:
                 with savepoint(conn, f"sp_{new_id()[:8]}"):
                     target = repo.get_person_by_name(conn, r["to"])

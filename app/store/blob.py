@@ -39,3 +39,15 @@ def exists(h: str) -> bool:
 
 def uri(h: str) -> str:
     return f"blob://{h}"
+
+
+def delete(h: str) -> bool:
+    """删除一个 blob（彻底清除人物痕迹时用）。返回是否真的删掉了。
+
+    只删「没有任何 evidence 行再引用」的 blob——由调用方判独占性，见 repo._purge_evidence。
+    """
+    p = _path_for(h)
+    if not p.exists():
+        return False
+    p.unlink()
+    return True

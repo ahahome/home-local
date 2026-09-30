@@ -3,7 +3,7 @@
 这一层是纯函数，不调 LLM、不碰数据库——正是它把「逐字截取」从 prompt 的
 君子协定变成代码保证，所以必须被单测钉住。
 """
-from app.memory.extract import sanitize
+from app.memory.extract import _with_weekday, is_role_person, sanitize
 from app.util import flatten_for_match
 
 import pytest
@@ -173,3 +173,132 @@ def test_pleasantry_gate_only_touches_promises():
     got = sanitize({"people": [p], "my_notes": []})["people"][0]
     assert got["promises"] == []
     assert len(got["fields"]) == 1 and len(got["facts"]) == 1 and len(got["ledger"]) == 1
+
+
+@pytest.mark.parametrize("text", [
+    "那个事回头再说吧",
+    "改天请你搓一顿",
+    "哪天得空喝一杯",
+    "你有空再说",
+    "改天我请你吃一顿饭",
+])
+def test_pleasantry_gate_covers_forms_outside_the_old_verb_whitelist(text):
+    """回归：旧版要求「触发词 + 动词白名单（吃饭|聚|聊|见面|喝|约…）」，
+    于是「回头再说吧」（说）、「请你搓一顿」（搓）都漏掉了——那两条只是
+    「模型这次听话」才过的，不是代码兜住的。白名单已去掉，改判「无具体动作/时间」。"""
+    assert _promises(text) == []
+
+
+@pytest.mark.parametrize("text", [
+    "回头我把钱转你",
+    "下周有空的话把资料发我",
+    "哪天你有空我们把合同签了",
+])
+def test_concrete_action_still_survives_after_dropping_the_whitelist(text):
+    """去掉白名单后仍然不能误杀：「把…」是明确的可执行动作。"""
+    got = _promises(text)
+    assert len(got) == 1 and got[0]["content"] == text
+
+
+# ---------- 相对日期必须由代码给出星期几（缺陷 F） ----------
+
+@pytest.mark.parametrize("day,expect", [
+    ("2026-09-30", "2026-09-30（周三）"),
+    ("2026-10-01", "2026-10-01（周四）"),
+    ("2026-10-02", "2026-10-02（周五）"),
+    ("2026-10-05", "2026-10-05（周一）"),
+])
+def test_today_carries_weekday(day, expect):
+    """LLM 的星期运算不可靠（实测「这周五」被算成周六），所以星期几由代码算好喂给它，
+    而不是让模型自己推——这一行决定的是承诺提醒建在哪一天（FR-TIM-02）。"""
+    assert _with_weekday(day) == expect
+
+
+@pytest.mark.parametrize("bad", ["", "不是日期", "昨天", "2026/09/30"])
+def test_non_iso_today_is_returned_untouched(bad):
+    assert _with_weekday(bad) == bad
+
+
+# ---------- 角色词不建档（缺陷 E / FR-ID-01） ----------
+
+@pytest.mark.parametrize("name", [
+    "王芳的老公", "李娜的儿子", "我的对象", "我对象", "那个客户", "前台", "有个人", "她的同事",
+])
+def test_role_words_are_not_person_names(name):
+    assert is_role_person(name)
+
+
+@pytest.mark.parametrize("name", ["张老师", "老王", "陈工", "王芳", "陆建国", "小张", "王志强"])
+def test_ordinary_names_are_not_role_words(name):
+    """「老师」是角色词，但「张老师」是称呼/名字——纯角色词只做全等匹配，别误伤。"""
+    assert not is_role_person(name)
+
+
+_FAMILY_SRC = "王芳她老公是苏州一家医院的主任医师。"
+
+
+def _family_patch():
+    """hold-n13 上模型的真实输出：把「王芳的老公」也建成一个人物。"""
+    return {
+        "people": [
+            {"name": "王芳", "canonical_name": "王芳",
+             "fields": [{"field": "family", "value": "已婚，配偶为苏州某医院主任医师",
+                         "confidence": 0.85, "evidence": _FAMILY_SRC}],
+             "aliases": [], "facts": [],
+             "relations": [{"to": "王芳的老公", "kind": "family", "confidence": 0.9,
+                            "evidence": _FAMILY_SRC}],
+             "promises": [], "ledger": [], "value_read": None},
+            {"name": "王芳的老公", "canonical_name": "王芳的老公",
+             "fields": [{"field": "title", "value": "主任医师", "confidence": 0.9,
+                         "evidence": _FAMILY_SRC}],
+             "aliases": [{"alias": "她老公", "confidence": 0.9}],
+             "relations": [{"to": "王芳", "kind": "family", "confidence": 0.9,
+                            "evidence": _FAMILY_SRC}],
+             "facts": [{"text": "王芳的老公是苏州一家医院的主任医师。", "confidence": 0.9,
+                        "evidence": _FAMILY_SRC}],
+             "promises": [], "ledger": [], "value_read": None},
+        ],
+        "my_notes": [],
+    }
+
+
+def test_family_role_person_is_not_created_and_info_moves_to_referent():
+    """FR-ID-01 + 不丢信息：不为「王芳的老公」建档，但家属信息要落到王芳名下。"""
+    got = sanitize(_family_patch(), source=_FAMILY_SRC)
+    assert [p["canonical_name"] for p in got["people"]] == ["王芳"]
+    texts = " ".join(f["text"] for f in got["people"][0]["facts"])
+    assert "主任医师" in texts, "家属信息不能因为不建档就丢掉"
+
+
+def test_relations_and_aliases_pointing_at_role_words_are_filtered():
+    """apply.py 在 relations[].to 找不到人时会 create_person —— 不过滤等于绕开闸门又建一个人。"""
+    got = sanitize(_family_patch(), source=_FAMILY_SRC)
+    wang = got["people"][0]
+    assert wang["relations"] == []
+    assert all(not is_role_person(a["alias"]) for a in wang["aliases"])
+
+
+def test_bare_role_word_is_dropped_and_not_pushed_onto_the_sole_person():
+    """「前台」没有明确参照人 → 直接丢弃；不能塞给本批唯一的那个人，
+    那恰恰是 FR-MEM-06 禁止的「把他人特征归档到当前人物名下」。"""
+    src = "前台说王总今天不在，让我明天再来。"
+    raw = {"people": [
+        {"name": "王总", "canonical_name": "王总", "fields": [], "aliases": [],
+         "relations": [], "facts": [], "promises": [], "ledger": [], "value_read": None},
+        {"name": "前台", "canonical_name": "前台", "fields": [],
+         "aliases": [], "relations": [], "facts": [],
+         "promises": [], "ledger": [], "value_read": None},
+    ], "my_notes": []}
+    got = sanitize(raw, source=src)
+    assert [p["canonical_name"] for p in got["people"]] == ["王总"]
+    assert got["people"][0]["facts"] == [], "角色词的信息不许挪到王总头上"
+
+
+def test_family_info_is_not_duplicated_when_evidence_repeats():
+    """本人 facts 里已有同一条时不再重复追加（evidence 去重）。"""
+    raw = _family_patch()
+    raw["people"][0]["facts"] = [{"text": "王芳的老公是苏州一家医院的主任医师。",
+                                  "confidence": 0.9, "evidence": _FAMILY_SRC}]
+    got = sanitize(raw, source=_FAMILY_SRC)
+    texts = [f["text"] for f in got["people"][0]["facts"]]
+    assert texts.count("王芳的老公是苏州一家医院的主任医师。") == 1

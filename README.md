@@ -98,7 +98,8 @@ home 是一个**完全跑在你自己机器上**的「关系维护 Agent」。�
 | 人物合并/拆分 | 「陆/老陆」合并后成功拆分还原 |
 | 每日 journal | 本地时区 23:50 生成，跨天不错位 |
 | Deep Research | 并行子 Agent 出报告，附来源链接 |
-| 单元测试 | **24/24 通过**（消歧、幂等写入、账本去重、聊天记录解析 5 种格式） |
+| 单元测试 | **81 通过 + 1 xfail**（消歧 / 幂等写入 / 账本 / 聊天记录解析 / 抽取后处理 / 评测器自测 / 7 条不变量） |
+| **抽取质量评测** | L1 抽取层 32 条用例；修完 A/B/C 三类缺陷后连续 3 次 **32/32**，凭证逐字率 0.9459→**1.0**、承诺误判率 0.25→**0**（详见 `eval/results/BASELINE.md`） |
 
 ### ⚠️ 未做 / 未做满
 
@@ -116,7 +117,7 @@ home 是一个**完全跑在你自己机器上**的「关系维护 Agent」。�
 ### 技术栈与规模
 
 Python 3.13 venv · FastAPI · SQLite(WAL) · jieba FTS5 · numpy 向量 · APScheduler · 单文件 SPA 前端。
-共 **32 个 Python 文件 + 1 个 SPA**，23 张表，28 个 API 路由，16 个 Agent 工具。
+`app/` 下 **32 个 Python 文件** + 单文件 SPA；另有 `tests/` 8 个、`eval/` 3 个。23 张表，28 个 API 路由，16 个 Agent 工具。
 模型走 DashScope OpenAI 兼容接口，按任务分级：qwen-turbo(轻) / qwen-plus(中) / deepseek-v4-pro(思考) / qwen3.8-max(重) / qwen3-vl-plus(视觉) / text-embedding-v4(向量)。
 
 ## 快速开始
@@ -171,14 +172,15 @@ app/
     fts.py / vector.py  jieba 分词（带正则兜底）/ numpy 内存余弦索引
   agent/
     prompts.py   系统提示：七原则 + 三种回答形态 + 「严禁模拟工具」硬规则
-    tools.py     15 个 OpenAI function tools，全部返回回执
+    tools.py     16 个 OpenAI function tools，全部返回回执
     harness.py   工具循环、上下文预算、时间间隔感知、写后抽取、交互链路
     research.py  Deep Research：提案 → 并行子 Agent → 审校 → 带来源报告
   ingest/        截图(vision) / 文档 / 网页(Bing) / 聊天记录解析 / CSV·vCard 导入 / 路由归一化
   jobs/          APScheduler：提醒(1min)、journal(23:50)、周反思(周日)
   api/           FastAPI，各模块路由
 web/             单文件 SPA
-tests/           12 个单元测试（消歧 / 幂等写入 / 账本）
+tests/           单元测试（消歧 / 幂等写入 / 账本 / 聊天记录 / 抽取后处理 / 评测器自测 / 不变量）
+eval/            L1 抽取层评测：cases 用例集 + metrics.py(纯计算,无 LLM) + run.py(缓存/门槛/结果归档)
 ```
 
 ## 设计取舍备忘（踩过的坑）

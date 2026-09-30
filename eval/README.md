@@ -22,15 +22,17 @@
 
 **对 tune 调参、用 holdout 验收，两个数字分开报。** 混成一个数，就等于给自己发奖状。
 
-- 两者的差 = **泛化缺口**（当前 1.0000 − 0.9231 = 7.7 个百分点），
+- 两者的差 = **泛化缺口**（当前 0.9773 − 0.9667 ≈ 1.1 个百分点；建立之初是 7.7pt，
+  历史峰值 8.3pt——缺口收窄是因为 tune 里掺进了两批烧下来的硬骨头，调参集本身变难了），
   也就是「tune 全绿」里有多少是对着答案改出来的。
 - **holdout 会被烧掉**：一旦照着它的失败去改提示词，它就退化成 tune。
-  所以每一轮修完，必须把旧 holdout 并入 tune、**新建 holdout v2**。协议见 `results/BASELINE.md` 第六节。
-- **已经烧过一次**（2026-09-30）：v1 的 26 条并入 `tune.jsonl`，每条带 `from-holdout-v1` 标签便于溯源
-  （tune 因此 32 → **58** 条）；当前 `holdout.jsonl` 是**按 PRD 重出的 v2**（30 条）。
+  所以每一轮修完，必须把旧 holdout 并入 tune、**新建 holdout v(k+1)**。协议见 `results/BASELINE.md` 第九节。
+- **已经烧过两次**（2026-09-30 / 2026-10-01）：v1 的 26 条（`from-holdout-v1`）与 v2 的 30 条
+  （`from-holdout-v2`）先后并入 `tune.jsonl`（tune 因此 32 → 58 → **88** 条）；
+  当前 `holdout.jsonl` 是**按 PRD 重出的 v3**（30 条，其中 12 条 negative-promise）。
   用法例溯源自检：
   ```bash
-  .venv/bin/python -c "import json;print(sum(1 for l in open('eval/cases/tune.jsonl',encoding='utf-8') if 'from-holdout-v1' in l))"
+  .venv/bin/python -c "import json;print(sum(1 for l in open('eval/cases/tune.jsonl',encoding='utf-8') if 'from-holdout' in l))"
   ```
 
 ## 每集采样 k 次（`--repeat`）
@@ -148,9 +150,10 @@ L5 不变量层不设门槛——**必须 100%**。
   （`sanitize()` 只做类型归一化，不校验字段名）。要不要加白名单需先定字段表。
 - **L3 检索层**没做，`retrieve.hybrid_search` 目前的排序质量无量化依据。
 - **L4 端到端**没做，Agent 工具调用是否越权、多轮上下文是否正确，目前没有回归。
-- **负样本仍偏少**：v1 只有 5 条 `negative-promise`（误判率分辨率 0.2 一档，一个数字由 5 条撑着）→
-  **v2 已加到 11 条**（分辨率 0.091）。目标 20 条以上，且要覆盖**闸门词表里还没有的说法**
-  （例如「找时间一起…」「改天顺道…」——这类新触发词正是测「词表是不是又在枚举」的地方）。
+- **负样本仍偏少**：v1 只有 5 条 `negative-promise`（误判率分辨率 0.2 一档）→ v2 加到 11 条 →
+  **v3 现为 12 条**（分辨率 0.083）。目标 20 条以上，且要覆盖**闸门词表里还没有的说法**
+  （v3 已放「改日」「我妈」「回头请你喝两杯」这类探针——本轮全过，但过的是模型而不是词表，
+  缺口仍在，见 `results/BASELINE.md` 第四节）。
 - **无 LLM-as-judge**：`value_read` 的质量、回复是否得体这类主观项还没评。若引入 judge，
   必须先做人工双盲校准（抽 20 条算 Cohen's κ，≥0.6 才能信它的分数）。
 - **P5 删除语义：已实现（两级）**。

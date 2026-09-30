@@ -3,22 +3,26 @@
 输出统一为带 confidence 与 evidence 的 patch 结构，交由 apply.py 分档落库。
 
 SL1 评测暴露的缺陷，处理方式不一样——记在这里免得后人以为都靠 prompt：
-- A 承诺误判：SYSTEM 第 5 条给正/反例降概率，_is_pleasantry() 在代码里兜底拦截。
+- A 承诺误判：SYSTEM 第 5 条给正/反例降概率，_promise_is_pleasantry() 在代码里兜底拦截。
   （只改 prompt 不够：实测仍会低置信地猜出「以后常见面」。）
   判定方式刻意【不用动词白名单】——白名单会漏（「回头再说吧」「请你搓一顿」），
   改用「命中客套触发词 且 全句无具体动作/时间」。
+  闸门的【输入】也不能只判 content：模型会改写措辞（「回头我加你微信」→「加你微信」），
+  触发词被改没了就漏（hold2-n06），所以用 _locate_span() 把 content 摁回原文、
+  找到它所在的那句一起判；摁不回去（改写太多）才退化为只判 content。
 - B evidence 拼接：_evidence() 强制 evidence 必须是原文中的连续片段。纯代码保证。
 - C 字段归位（薪资误入账本、城市误入 company）：只靠 SYSTEM 的归位规则，没有代码兜底。
   归位是语义问题，硬规则容易误伤，所以留在 prompt 层，靠评测监控。
 - E 角色词建档（「王芳的老公」被建成独立人物，违反 FR-ID-01）：is_role_person() 在代码里拦掉，
   并把该亲属的信息收拢到本人名下（家属信息），避免「不建档」变成「丢信息」。
-- F 相对日期算错（「这周五」算成周六）：根因是喂给模型的时间信息缺了「星期几」，
-  由 _with_weekday() 补上，不让模型自己推星期。
+- F 相对日期算错：第一层是缺「星期几」（_with_weekday 补上）；第二层是缺「本周/下周的边界」
+  ——星期几给了，模型仍把「下周五」算成最近的周五（hold2-p02），由 _week_bounds()
+  把周界与锚点日期一起喂进去。凡是靠推算的字段，把结果当权威值喂给它，不让它心算。
 """
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from app.llm import get_llm
@@ -33,8 +37,9 @@ SYSTEM = """你是一个信息抽取器。从文本中抽取关于「人」的�
 2. 每条事实必须带 evidence：从原文【逐字、连续】截取的依据片段。不要改写；
    不要用「；」把不相邻的两处原文拼成一条；如果找不到一整段连续的原文，就把 evidence 留空。
 3. confidence 校准：明确陈述=0.9以上；合理推断=0.6~0.8；猜测=0.6以下。涉及金钱从严，不确定给 0.75 以下。
-4. 相对日期（"下周三""这周五""前两天"）基于给出的今天日期换算成 YYYY-MM-DD。
-   给出的今天日期已注明星期几，那是权威值，直接据此推算，不要自己重算星期。无法确定填 null。
+4. 相对日期（"下周三""这周五""下个月5号""前两天"）基于给出的今天日期换算成 YYYY-MM-DD。
+   给出的今天日期已注明星期几，并给出了本月/下个月、本周/下周的范围和「本周五/下周五」的锚点，
+   这些是权威值，直接据此推算，不要自己重算月份、星期或周界。无法确定填 null。
 5. 承诺 = 具体事项 + 可执行动作（通常还带时间）。下列一律不算承诺，无论它出现在单句、
    多轮对话还是聊天记录片段里：「改天吃饭」「回头联系」「以后常见面」「以后常联系」
    「有机会聚聚」「保持联系」「有空一起…」。这些是社交客套，只是寒暄。
@@ -96,7 +101,7 @@ _EV_SPLIT = re.compile(r"[，。！？；：、\n\r]+")
 # 那两条只是「模型这次听话」才过的，不是代码兜住的。
 # 白名单天生会漏；反过来判「命中触发词 且 全句没有具体动作/时间」更稳。
 _PLEASANTRY = re.compile(
-    r"改天|哪天|有空|得空|抽空|择日|有机会|回头|下次|以后|日后|有时间"
+    r"改天|哪天|有空|得空|抽空|择日|有机会|回头|下次|以后|日后|有时间|找个?时间"
     r"|保持联系|经常联系|常联系|常常联系|多联系|再联系"
 )
 # 反向豁免：带具体动作/时间的不是客套——「下次见面把合同签了」「以后每周五发报表」是真承诺。
@@ -159,6 +164,42 @@ def _is_pleasantry(content: str) -> bool:
     return not _CONCRETE.search(text)
 
 
+def _locate_span(content: str, source: str, src_flat: str) -> str:
+    """把 content 摁回原文，返回包含它的那个标点片段；摁不回去返回空串。
+
+    为什么需要：模型抽承诺时会改写措辞（「回头我加你微信」→ content=「加你微信」），
+    改写会把客套触发词弄丢——只判 content 就漏（hold2-n06，3 次全漏）。
+    content 通常是原文某个片段的子串（或逐字保留），摁回去就能让闸门
+    看到被改掉的触发词。改写太多摁不回去时返回空，由调用方退化为只判 content。
+    """
+    if not source or not src_flat:
+        return ""
+    key = flatten_for_match(content)
+    if not key or key not in src_flat:
+        return ""
+    for seg in _EV_SPLIT.split(source):
+        seg = seg.strip()
+        if seg and key in flatten_for_match(seg):
+            return seg
+    return source
+
+
+def _promise_is_pleasantry(content: str, span: str) -> bool:
+    """判客套：content 与它所在的原句（span）一起看。
+
+    触发词在【任一】版本里出现、且【所有】版本都没有具体动作/时间 → 客套。
+    不对称是刻意的：触发词可能被改写弄丢（所以任一命中就要查），
+    但「具体」只要在一个版本里出现就当真承诺放行（宁可放过，不误杀）。
+    span 为空时等价于 _is_pleasantry(content)。
+    """
+    texts = [t for t in (content, span) if t]
+    if not texts:
+        return False
+    if not any(_PLEASANTRY.search(t) for t in texts):
+        return False
+    return not any(_CONCRETE.search(t) for t in texts)
+
+
 def is_role_person(name: str) -> bool:
     """这个名字是角色词/亲属称谓，还是真人名（FR-ID-01）。
 
@@ -186,6 +227,34 @@ def _with_weekday(today: str) -> str:
     except ValueError:
         return _s(today)
     return f"{d.strftime('%Y-%m-%d')}（{_WEEKDAY_CN[d.weekday()]}）"
+
+
+def _week_bounds(today: str) -> str:
+    """给出「本月/下个月」「本周/下周」的日期范围与锚点；解析失败返回空串。
+
+    为什么需要：只给「今天星期几」还不够——模型不知道「这周/下周」以哪天为界，
+    实测今天周三时把「下周五」算成了最近的周五（hold2-p02，3 次全错）。
+    而只给周界又会带出新问题：周界里全是下个月的日期（如本周 09-28~10-04），
+    模型会把「现在」锚到 10 月，于是「下个月 5 号」被算成 11-05（hold-p11）。
+    所以月界和周界都要作为权威值直接给它，让它「从给定值里选」，
+    而不是自己推算（FR-TIM-02：提醒建在哪一天全看这个）。
+    """
+    s = _s(today)[:10]
+    try:
+        d = datetime.strptime(s, "%Y-%m-%d")
+    except ValueError:
+        return ""
+    mon = d - timedelta(days=d.weekday())
+    nmon = mon + timedelta(days=7)
+    nmonth = (d.replace(day=28) + timedelta(days=8)).replace(day=1)  # 下个月 1 号
+    f = lambda x: x.strftime("%Y-%m-%d")  # noqa: E731
+    return (
+        f"本月是 {d.strftime('%Y-%m')}，下个月是 {nmonth.strftime('%Y-%m')}。"
+        f"本周（周一到周日）是 {f(mon)} 至 {f(mon + timedelta(days=6))}；"
+        f"下周是 {f(nmon)} 至 {f(nmon + timedelta(days=6))}。"
+        f"「这/本周X」指本周的星期X（如本周五={f(mon + timedelta(days=4))}），"
+        f"「下周X」指下周的星期X（如下周五={f(nmon + timedelta(days=4))}）。"
+    )
 
 
 def _inherit_family_facts(ref: dict, pseudo: dict) -> None:
@@ -315,8 +384,11 @@ def sanitize(obj: Any, source: str = "") -> dict:
             if not isinstance(pr, dict) or not _s(pr.get("content")):
                 continue
             content = _s(pr["content"])
-            if _is_pleasantry(content):
-                continue  # 客套不算承诺，直接丢掉（缺陷 A 的代码兜底）
+            # 客套不算承诺（缺陷 A 的代码兜底）。闸门要连 content 所在的原句一起判：
+            # 模型改写措辞会把触发词弄丢（「回头我加你微信」→「加你微信」，hold2-n06）。
+            span = _locate_span(content, source, src_flat) if source else ""
+            if _promise_is_pleasantry(content, span):
+                continue
             person["promises"].append({
                 "who": pr.get("who") if pr.get("who") in ("me", "them") else "me",
                 "content": content, "due": _s(pr.get("due")) or None,
@@ -361,6 +433,6 @@ def extract_from_text(text: str, known_names: list[str], today: str) -> dict:
     names = "、".join(known_names) if known_names else "（暂无）"
     messages = [
         {"role": "system", "content": SYSTEM},
-        {"role": "user", "content": f"今天是 {_with_weekday(today)}。已知人物：{names}\n\n待抽取文本：\n{text}"},
+        {"role": "user", "content": f"今天是 {_with_weekday(today)}。{_week_bounds(today)}已知人物：{names}\n\n待抽取文本：\n{text}"},
     ]
     return sanitize(llm.chat_json(messages, tier="mid", max_tokens=4000), source=text)

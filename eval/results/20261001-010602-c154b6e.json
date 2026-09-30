@@ -1,0 +1,231 @@
+{
+ "meta": {
+  "model": "qwen-plus",
+  "prompt_hash": "5491fc256036",
+  "git_sha": "c154b6e",
+  "ran_at": "2026-10-01T01:06:02",
+  "elapsed_s": 12.7,
+  "repeat": 3,
+  "tag": null,
+  "no_cache": true,
+  "gated_splits": [
+   "holdout"
+  ]
+ },
+ "splits": {
+  "probe-r2": {
+   "cases_file": "probe-r2.jsonl",
+   "summary": {
+    "cases": 5,
+    "passed": 5,
+    "pass_rate": 1.0,
+    "field_recall": null,
+    "promise_recall": 1.0,
+    "evidence_hit_rate": null,
+    "promise_false_positive_rate": 0.0,
+    "negative_promise_cases": 1,
+    "repeat": 3,
+    "flaky": 0,
+    "flaky_ids": [],
+    "cache_hits": 0
+   },
+   "details": [
+    {
+     "id": "hold-p11",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 1,
+      "promise_hit": 1,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 3,
+     "runs_passed": 3,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold2-p02",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 1,
+      "promise_hit": 1,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 3,
+     "runs_passed": 3,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold2-p03",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 1,
+      "promise_hit": 1,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 3,
+     "runs_passed": 3,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold2-p08",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 1,
+      "promise_hit": 1,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 3,
+     "runs_passed": 3,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold2-n06",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 3,
+     "runs_passed": 3,
+     "failure_rate": 0.0
+    }
+   ],
+   "raw": {
+    "hold-p11": {
+     "people": [
+      {
+       "name": "老陆",
+       "canonical_name": "老陆",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [],
+       "promises": [
+        {
+         "who": "me",
+         "content": "把设备清单发他",
+         "due": "2026-10-05",
+         "confidence": 0.9
+        }
+       ],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold2-p02": {
+     "people": [
+      {
+       "name": "老孙",
+       "canonical_name": "老孙",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [],
+       "promises": [
+        {
+         "who": "them",
+         "content": "把样品寄到我公司",
+         "due": "2026-10-09",
+         "confidence": 0.9
+        }
+       ],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold2-p03": {
+     "people": [
+      {
+       "name": "李娜",
+       "canonical_name": "李娜",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [],
+       "promises": [
+        {
+         "who": "me",
+         "content": "把房租转给她",
+         "due": "2026-10-15",
+         "confidence": 0.9
+        }
+       ],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold2-p08": {
+     "people": [
+      {
+       "name": "老周",
+       "canonical_name": "老周",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [],
+       "promises": [
+        {
+         "who": "them",
+         "content": "把货发过来",
+         "due": "2026-10-15",
+         "confidence": 0.9
+        }
+       ],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold2-n06": {
+     "people": [
+      {
+       "name": "李娜",
+       "canonical_name": "李娜",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    }
+   }
+  }
+ }
+}

@@ -3,7 +3,7 @@
 这一层是纯函数，不调 LLM、不碰数据库——正是它把「逐字截取」从 prompt 的
 君子协定变成代码保证，所以必须被单测钉住。
 """
-from app.memory.extract import _with_weekday, is_role_person, sanitize
+from app.memory.extract import _locate_span, _week_bounds, _with_weekday, is_role_person, sanitize
 from app.util import flatten_for_match
 
 import pytest
@@ -200,6 +200,56 @@ def test_concrete_action_still_survives_after_dropping_the_whitelist(text):
     assert len(got) == 1 and got[0]["content"] == text
 
 
+# ---------- 客套闸门要连原句一起判（hold2-n06：模型改写 content 弄丢触发词） ----------
+
+def _promises_with_source(source, *contents):
+    p = {
+        "name": "李娜", "canonical_name": "李娜", "fields": [], "aliases": [], "relations": [],
+        "facts": [], "ledger": [], "value_read": None,
+        "promises": [{"who": "them", "content": c, "due": None, "confidence": 0.4}
+                     for c in contents],
+    }
+    return sanitize({"people": [p], "my_notes": []}, source=source)["people"][0]["promises"]
+
+
+def test_pleasantry_gate_uses_source_span_when_content_is_rewritten():
+    """hold2-n06 的修法：模型把「回头我加你微信」改写成 content=「加你微信」，
+    触发词「回头」被改没了，只判 content 就漏（实测 3 次全漏）。把 content 摁回
+    原文找到它所在的那句一起判——span 里有触发词、全句无具体动作 → 客套，拦掉。"""
+    assert _promises_with_source("李娜：回头我加你微信", "加你微信") == []
+
+
+@pytest.mark.parametrize("source,content", [
+    ("改天一起吃饭吧", "一起吃饭"),
+    ("李娜：回头我加你微信", "加你微信"),
+    ("哪天得空喝一杯", "喝一杯"),
+    ("找个时间我们聊聊", "我们聊聊"),
+])
+def test_pleasantry_forms_caught_via_source_span(source, content):
+    """词形变体 + 模型改写，经原句定位后都应被拦（含新触发词「找时间」）。"""
+    assert _promises_with_source(source, content) == []
+
+
+def test_locate_span_ignores_speaker_prefix():
+    """「李娜：回头我加你微信」要定位到「回头我加你微信」这句，而不是说话人前缀。"""
+    source = "李娜：回头我加你微信"
+    assert _locate_span("加你微信", source, flatten_for_match(source)) == "回头我加你微信"
+
+
+def test_paraphrased_real_promise_survives_when_not_locatable():
+    """摁不回去（改写太多）时退化为只判 content，不能因此误杀真承诺：
+    content「给老陆转账五百元」摁不回原文（原文是「转五百就行」），
+    content 自身带「五百元」（数词+单位）→ 放行。"""
+    got = _promises_with_source("老陆:上次那顿饭我付的，你回头给我转五百就行", "给老陆转账五百元")
+    assert len(got) == 1 and got[0]["content"] == "给老陆转账五百元"
+
+
+def test_source_span_does_not_kill_concrete_promise():
+    """摁回原句也不能误杀：原句里「把合同签了」是具体动作 → 放行。"""
+    got = _promises_with_source("下次见面把合同签了", "把合同签了")
+    assert len(got) == 1
+
+
 # ---------- 相对日期必须由代码给出星期几（缺陷 F） ----------
 
 @pytest.mark.parametrize("day,expect", [
@@ -217,6 +267,45 @@ def test_today_carries_weekday(day, expect):
 @pytest.mark.parametrize("bad", ["", "不是日期", "昨天", "2026/09/30"])
 def test_non_iso_today_is_returned_untouched(bad):
     assert _with_weekday(bad) == bad
+
+
+# ---------- 本周/下周的边界与锚点由代码给出（hold2-p02） ----------
+
+def test_week_bounds_gives_ranges_and_anchors():
+    """星期几给了还不够——「这周/下周」以哪天为界也得给（周一起算），
+    否则模型按「最近的周五」理解，「下周五」会错成本周五。"""
+    s = _week_bounds("2026-09-30")  # 周三
+    assert "2026-09-28" in s and "2026-10-04" in s   # 本周一 ~ 本周日
+    assert "2026-10-05" in s and "2026-10-11" in s   # 下周一 ~ 下周日
+    assert "本周五=2026-10-02" in s
+    assert "下周五=2026-10-09" in s
+
+
+def test_week_bounds_on_sunday():
+    """周日属于本周（周一起算）：本周一 = 六天前，不是明天。"""
+    s = _week_bounds("2026-10-04")  # 周日
+    assert "2026-09-28" in s and "2026-10-04" in s
+    assert "本周五=2026-10-02" in s
+    assert "下周五=2026-10-09" in s
+
+
+def test_week_bounds_gives_month_anchor():
+    """只给周界会把「现在」锚歪：周界里全是下个月的日期（本周 09-28~10-04），
+    模型实测把「下个月 5 号」算成 11-05（hold-p11 回归）。月界必须一并给。"""
+    s = _week_bounds("2026-09-30")
+    assert "本月是 2026-09" in s and "下个月是 2026-10" in s
+
+
+def test_week_bounds_month_anchor_at_year_end():
+    """跨年：12 月的下个月是次年 01 月，不是 13 月。"""
+    s = _week_bounds("2026-12-30")
+    assert "本月是 2026-12" in s and "下个月是 2027-01" in s
+
+
+@pytest.mark.parametrize("bad", ["", "不是日期", "昨天", "2026/09/30"])
+def test_week_bounds_bad_input_returns_empty(bad):
+    """解析失败返回空串——拼进 prompt 时等于没这句，不硬塞错误信息。"""
+    assert _week_bounds(bad) == ""
 
 
 # ---------- 角色词不建档（缺陷 E / FR-ID-01） ----------

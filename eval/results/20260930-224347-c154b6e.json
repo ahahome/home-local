@@ -1,0 +1,111 @@
+{
+ "meta": {
+  "model": "qwen-plus",
+  "prompt_hash": "59c7d50ece6c",
+  "git_sha": "c154b6e",
+  "ran_at": "2026-09-30T22:43:47",
+  "elapsed_s": 6.2,
+  "repeat": 3,
+  "tag": null,
+  "no_cache": true,
+  "gated_splits": [
+   "holdout"
+  ]
+ },
+ "splits": {
+  "probe-n06-p02": {
+   "cases_file": "probe-n06-p02.jsonl",
+   "summary": {
+    "cases": 2,
+    "passed": 2,
+    "pass_rate": 1.0,
+    "field_recall": null,
+    "promise_recall": 1.0,
+    "evidence_hit_rate": null,
+    "promise_false_positive_rate": 0.0,
+    "negative_promise_cases": 1,
+    "repeat": 3,
+    "flaky": 0,
+    "flaky_ids": [],
+    "cache_hits": 0
+   },
+   "details": [
+    {
+     "id": "hold2-p02",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 1,
+      "promise_hit": 1,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 3,
+     "runs_passed": 3,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold2-n06",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 3,
+     "runs_passed": 3,
+     "failure_rate": 0.0
+    }
+   ],
+   "raw": {
+    "hold2-p02": {
+     "people": [
+      {
+       "name": "老孙",
+       "canonical_name": "老孙",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [],
+       "promises": [
+        {
+         "who": "them",
+         "content": "把样品寄到我公司",
+         "due": "2026-10-09",
+         "confidence": 0.9
+        }
+       ],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold2-n06": {
+     "people": [
+      {
+       "name": "李娜",
+       "canonical_name": "李娜",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    }
+   }
+  }
+ }
+}

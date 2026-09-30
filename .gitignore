@@ -4,5 +4,6 @@ __pycache__/
 *.pyc
 data/
 .pytest_cache/
+.pytest-tmp/
 .DS_Store
 eval/.cache/

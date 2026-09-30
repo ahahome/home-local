@@ -151,3 +151,48 @@ def test_aggregate_computes_rates_and_negative_rate():
 def test_aggregate_handles_empty_denominator():
     agg = metrics.aggregate([], [])
     assert agg["evidence_hit_rate"] is None and agg["pass_rate"] is None
+
+
+# ---------- 同字段多值：不再由字典覆盖顺序决定结果 ----------
+
+def test_duplicate_field_values_fail_whatever_the_order():
+    """城市给了两个取值（杭州 / 滨江）：换顺序都必须失败，否则用例会时过时不过。"""
+    case = {"id": "x", "input": "老陆在杭州，公司在滨江", "expect": {"people": [
+        {"canonical_name": "老陆", "fields": [{"field": "city", "contains": "杭州"}]}]}}
+    hz_first = {"people": [_person(canonical_name="老陆", fields=[
+        {"field": "city", "value": "杭州", "evidence": "老陆在杭州"},
+        {"field": "city", "value": "滨江", "evidence": "公司在滨江"}])]}
+    bj_first = {"people": [_person(canonical_name="老陆", fields=[
+        {"field": "city", "value": "滨江", "evidence": "公司在滨江"},
+        {"field": "city", "value": "杭州", "evidence": "老陆在杭州"}])]}
+    ra, rb = metrics.check_case(case, hz_first), metrics.check_case(case, bj_first)
+    assert not ra["passed"] and not rb["passed"]
+    assert any("多个取值" in f for f in ra["failures"])
+    assert any("多个取值" in f for f in rb["failures"])
+
+
+def test_duplicate_field_with_identical_value_is_not_flagged():
+    case = {"id": "x", "input": "老陆在杭州", "expect": {"people": [
+        {"canonical_name": "老陆", "fields": [{"field": "city", "contains": "杭州"}]}]}}
+    got = {"people": [_person(canonical_name="老陆", fields=[
+        {"field": "city", "value": "杭州", "evidence": "老陆在杭州"},
+        {"field": "city", "value": "杭州", "evidence": "老陆在杭州"}])]}
+    assert metrics.check_case(case, got)["passed"]
+
+
+def test_field_hit_when_any_of_multiple_values_matches():
+    case = {"id": "x", "input": "老陆在杭州", "expect": {"people": [
+        {"canonical_name": "老陆", "fields": [{"field": "city", "contains": "杭州"}]}]}}
+    got = {"people": [_person(canonical_name="老陆", fields=[
+        {"field": "title", "value": "总监", "evidence": "老陆"},
+        {"field": "city", "value": "杭州", "evidence": "老陆在杭州"}])]}
+    assert metrics.check_case(case, got)["passed"]
+
+
+def test_field_mismatch_reports_all_candidate_values():
+    case = {"id": "x", "input": "老陆", "expect": {"people": [
+        {"canonical_name": "老陆", "fields": [{"field": "city", "contains": "杭州"}]}]}}
+    got = {"people": [_person(canonical_name="老陆", fields=[
+        {"field": "city", "value": "上海", "evidence": "老陆"}])]}
+    res = metrics.check_case(case, got)
+    assert not res["passed"] and "不满足" in res["failures"][0]

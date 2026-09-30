@@ -10,17 +10,16 @@
 """
 from __future__ import annotations
 
-import re
-
-from app.util import normalize_value
-
-_WS = re.compile(r"[\s\u3000]+")
-_PUNCT = re.compile(r"[，。！？；：、（）()\[\]【】《》\"'‘’“”,.!?;:~`·—\-]+")
+from app.util import flatten_for_match
 
 
 def _flat(s) -> str:
-    """去空白与标点后归一化：用于 evidence 子串校验与包含匹配。"""
-    return _PUNCT.sub("", _WS.sub("", normalize_value(str(s or ""))))
+    """去空白与标点后归一化：用于 evidence 子串校验与包含匹配。
+
+    与抽取器共用 app.util.flatten_for_match，避免两边规则漂移——
+    否则会出现「评测说 evidence 不在原文，但抽取器认为在」这种自相矛盾。
+    """
+    return flatten_for_match(s)
 
 
 def _contains(hay: str, needle: str) -> bool:
@@ -54,30 +53,67 @@ def find_person(people: list[dict], expect: dict) -> dict | None:
     return None
 
 
+def _field_groups(p: dict) -> dict[str, list[dict]]:
+    """按字段名分组，保留该字段的全部取值（一次抽取里同一字段可能给多条）。"""
+    groups: dict[str, list[dict]] = {}
+    for f in p.get("fields") or []:
+        groups.setdefault((f.get("field") or "").strip().lower(), []).append(f)
+    return groups
+
+
 def _fields_of(p: dict) -> dict[str, dict]:
-    return {(f.get("field") or "").strip().lower(): f for f in p.get("fields") or []}
+    return {k: v[-1] for k, v in _field_groups(p).items()}
+
+
+def _spec_ok(f: dict, spec: dict) -> bool:
+    value = f.get("value")
+    if spec.get("contains") is not None and not _contains(value, spec["contains"]):
+        return False
+    if spec.get("equals") is not None and _flat(value) != _flat(spec["equals"]):
+        return False
+    if spec.get("any_of") is not None and not any(_contains(value, opt) for opt in spec["any_of"]):
+        return False
+    return True
 
 
 def _match_field(p: dict, spec) -> str | None:
-    """返回 None 表示通过，否则返回失败原因。"""
-    fields = _fields_of(p)
+    """返回 None 表示通过，否则返回失败原因。
+
+    同一字段在一次抽取里出现多条时，只要【任一】取值满足要求就算命中——
+    不靠「后写覆盖前写」的顺序巧合来定评测结果（那会让同一条用例时过时不过）。
+    同字段多值本身是缺陷，由 _dup_field_failures 单独判失败。
+    """
     if isinstance(spec, str):
         for f in p.get("fields") or []:
             if _contains(f.get("value"), spec):
                 return None
         return f"字段缺失：任何字段值都不含「{spec}」"
     key = (spec.get("field") or "").strip().lower()
-    f = fields.get(key)
-    if f is None:
-        return f"字段缺失：{key}（实得 {sorted(fields)}）"
-    value = f.get("value")
-    if spec.get("contains") is not None and not _contains(value, spec["contains"]):
-        return f"字段 {key}={value!r} 不含「{spec['contains']}」"
-    if spec.get("equals") is not None and _flat(value) != _flat(spec["equals"]):
-        return f"字段 {key}={value!r} 不等于「{spec['equals']}」"
-    if spec.get("any_of") is not None and not any(_contains(value, opt) for opt in spec["any_of"]):
-        return f"字段 {key}={value!r} 不匹配任一写法 {spec['any_of']}"
-    return None
+    candidates = _field_groups(p).get(key)
+    if not candidates:
+        return f"字段缺失：{key}（实得 {sorted(_fields_of(p))}）"
+    if any(_spec_ok(f, spec) for f in candidates):
+        return None
+    got = [f.get("value") for f in candidates]
+    shown = "、".join(f"{k}={v}" for k, v in spec.items())
+    return f"字段 {key} 取值 {got!r} 不满足（期望 {shown}）"
+
+
+def _dup_field_failures(people: list[dict]) -> list[str]:
+    """同一个人、同一字段出现多个【不同】取值 → 判失败。
+
+    这是真实缺陷：一次抽取给出两条 city（杭州 / 滨江），落到 apply 层就由写入顺序
+    决定谁生效，结果不可预期。宁可显式判失败，也不要让评测结论依赖字典覆盖顺序。
+    """
+    bad: list[str] = []
+    for p in people:
+        who = p.get("canonical_name") or p.get("name")
+        for key, group in _field_groups(p).items():
+            vals = {_flat(f.get("value")) for f in group}
+            if key and len(vals) > 1:
+                bad.append(f"{who} 的字段 {key} 一次给了多个取值 "
+                           f"{[f.get('value') for f in group]}（落库时谁生效不可预期）")
+    return bad
 
 
 def _match_fact(p: dict, spec) -> str | None:
@@ -229,6 +265,8 @@ def check_case(case: dict, got: dict) -> dict:
             err = _match_ledger(p, spec)
             if err:
                 failures.append(f"{who}：{err}")
+
+    failures.extend(_dup_field_failures(people))
 
     for spec in case.get("must_not") or []:
         err = _check_must_not(people, spec)

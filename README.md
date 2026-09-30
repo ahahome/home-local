@@ -109,7 +109,9 @@ home 是一个**完全跑在你自己机器上**的「关系维护 Agent」。�
 - **Projects**：未实现。
 - **云浏览器代操作**：未实现，且与 P6「代笔不代发」有边界冲突，需要先设计权限模型。
 - **IM 直连**：无自动同步通道，靠导出文件/截图中转。
-- **评测体系**：81 条 FR 尚未落成验收测试；抽取质量（如把客套话「以后常见面」误判为承诺）缺抽样评测。
+- **评测体系**：L1 抽取层已建成（32 条用例 + 门槛 + 基线文档），L2/L5 免费层就绪；
+  **L3 检索层、L4 端到端层仍未做**，81 条 FR 也尚未逐条落成验收测试。
+  当前 32 条是对着提示词改过的**调参集**，还缺留出集——见 `eval/results/BASELINE.md` 第七、八节。
 
 ### 技术栈与规模
 
@@ -134,10 +136,20 @@ source .venv/bin/activate
 ## 测试
 
 ```bash
-.venv/bin/python -m pytest tests/ -q --basetemp=/tmp/home-pytest-tmp
+# 单元测试（不需要网络 / API key）
+.venv/bin/python -m pytest tests/ -q --basetemp=.pytest-tmp
+
+# 抽取质量评测（调真实 API，结果归档到 eval/results/）
+.venv/bin/python eval/run.py              # 全量；命中缓存不重复花钱
+.venv/bin/python eval/run.py --no-cache   # 强制重跑
+.venv/bin/python eval/run.py --gate       # 低于门槛时退出码非 0（给 CI 用）
 ```
 
-（沙箱环境下 pytest 默认 tmp 目录会报 PermissionError，需显式 `--basetemp`。）
+沙箱环境下 pytest 默认 tmp 目录会报 `PermissionError: EEXIST`，需显式 `--basetemp` 指到项目内
+（`.pytest-tmp/` 已在 `.gitignore`）。
+
+⚠️ 评测的 `--no-cache` 不是可选项：缓存存的是 **sanitize 之后**的结果，而缓存键只含提示词 hash。
+**只改抽取后处理代码、不改提示词时，缓存会让旧代码的结果「假装」还在**——必须 `--no-cache` 才是有效测量。
 
 ## 架构
 
@@ -151,7 +163,7 @@ app/
     blob.py      SHA256 内容寻址存储，原子写（tmp+fsync+os.replace）
     repo.py      全部 CRUD；upsert_field 同毫秒冲突自增；账本排除 pending/void
   memory/
-    extract.py       LLM 抽取 → 结构化 patch（confidence + evidence，金额归一化到分）
+    extract.py       LLM 抽取 → 结构化 patch；两处代码级兜底：evidence 必须逐字连续、客套不算承诺
     disambiguate.py  四路召回 + 加权打分 + 三档决策；别名精确命中基线 0.9
     apply.py         幂等写入（savepoint/patch + 内容指纹 + applied_patch 表）；合并/拆分
     retrieve.py      混合检索：SQL + FTS5 + 向量 + 时间衰减与重要性融合
@@ -176,11 +188,20 @@ tests/           12 个单元测试（消歧 / 幂等写入 / 账本）
 - `upsert_field` 同毫秒两写会撞 `valid_from` 主键，冲突时 +1ms。
 - 模型可能「角色扮演」调用工具（输出"正在调用天眼查API"），系统提示里必须有「严禁模拟工具」硬约束。
 - DuckDuckGo 在代理下 502，网页检索走 Bing；其真实 DOM 结构是 `<h2 ...><a target=_blank href=...>`，正则要宽松。
+- 「客套不算承诺」不能只写进提示词：实测模型仍会低置信地猜出「以后常见面」（0.4 分），
+  指标上从「误写」降成「待确认」，问题并没消失。改由 `extract.py:_is_pleasantry()` 在代码里拦掉，
+  并用 `_CONCRETE`（把…给…/周X/号/数词+量词）反向豁免，避免误杀「下次见面把合同签了」这类真承诺。
+- evidence 与 confidence 是**正交**的两个信号：`sanitize()` 只清理**伪造的凭证**（不在原文里就清空），
+  **不顺手改置信度**——偷偷调分会掩盖模型自身的校准误差，让 confidence 这个指标失去意义。
+- 往提示词加约束要同时给「正向配重」：只加否定式规则（不算/不是/不要）会让模型过度收敛，
+  把该记的事一起减掉（`extract-r07` 的 `facts` 曾被整条清空），而这类回归**不会触发任何门槛告警**。
+
+## 相关文档
+
+- 评测基线：`eval/results/BASELINE.md`——修复前后数字、四轮迭代过程、方法论发现与已知边界
+- 评测设计：`eval/README.md`（L1~L5 分层、指标定义、门槛）
+- PRD：`/Users/emdoor/WorkBuddy/2026-09-29-16-25-48/home-PRD.md`（13 模块 / 60+ 需求 / 20 验收用例，已剥离商业模式）
 
 ## 安全提示
 
 ⚠️ 开发期间用于验证的 DashScope API key 曾以明文出现在对话中，**建议尽快到阿里云控制台轮换/作废该 key**，并把新 key 只写入本地 `.env`（已在 `.gitignore` 中，不要提交）。
-
-## 相关文档
-
-- PRD：`/Users/emdoor/WorkBuddy/2026-09-29-16-25-48/home-PRD.md`（13 模块 / 60+ 需求 / 20 验收用例，已剥离商业模式）

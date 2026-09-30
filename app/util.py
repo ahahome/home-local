@@ -53,6 +53,21 @@ def normalize_value(s: str) -> str:
     return s.lower()
 
 
+_MATCH_PUNCT = re.compile(r"[，。！？；：、（）()\[\]【】《》\"'‘’“”,.!?;:~`·—\-]+")
+_MATCH_WS = re.compile(r"[\s\u3000]+")
+
+
+def flatten_for_match(s) -> str:
+    """去空白与标点后归一化，用于判断「某片段是否出现在原文中」。
+
+    抽取器与评测器共用同一实现，避免两边规则漂移导致
+    「评测说 evidence 不在原文，但代码认为在」这种自相矛盾。
+    """
+    if s is None:
+        return ""
+    return _MATCH_PUNCT.sub("", _MATCH_WS.sub("", normalize_value(str(s))))
+
+
 def patch_fingerprint(person_id: str, field: str, value: str, source_msg_id: str) -> str:
     return sha256_text(f"{person_id}|{field}|{normalize_value(value)}|{source_msg_id}")
 

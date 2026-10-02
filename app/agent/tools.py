@@ -106,14 +106,112 @@ TOOLS = [
 ]
 
 
-def _resolve_person_id(conn, name: str | None) -> str | None:
-    if not name:
+for _tool in TOOLS:
+    if _tool['function']['name'] in {'get_person', 'save_person_fact', 'create_promise', 'list_open_promises',
+                                    'record_transfer', 'ledger_summary', 'save_skill', 'create_reminder'}:
+        _tool['function']['parameters']['properties']['person_id'] = {
+            'type': 'string', 'description': '已知人物 ID；有同名人物时必须使用检索返回的 ID'}
+
+
+def _resolve_person_id(conn, name: str | None, person_id: str | None = None) -> str | None:
+    if not name and not person_id:
         return None
-    p = repo.get_person_by_name(conn, name)
-    return p["id"] if p else None
+    from app.memory.writes import resolve_person
+    return resolve_person(conn, name, person_id=person_id)
 
 
-def execute_tool(conn, name: str, args: dict) -> dict:
+def execute_tool(conn, name: str, args: dict, source_text: str | None = None,
+                 source_msg_id: str | None = None) -> dict:
+    from app.memory.writes import AmbiguousPerson
+    try:
+        if name in {"save_person_fact", "record_transfer", "create_promise", "note"}:
+            return _shared_write(conn, name, args, source_text, source_msg_id)
+        return _execute_tool(conn, name, args)
+    except AmbiguousPerson as e:
+        return {"ok": False, "needs_confirmation": True, "error": str(e), "candidates": e.candidates}
+    except (ValueError, KeyError, TypeError) as e:
+        return {"ok": False, "error": str(e)}
+
+
+def _shared_write(conn, name, args, source_text, source_msg_id):
+    from app.memory.apply import apply_extraction, _date_ms
+    from app.memory.writes import resolve_person, promise_key, matching_promise
+    from app.config import get_settings
+    from app.util import new_id, normalize_value, sha256_text
+    source_id = source_msg_id or new_id()
+    forced = {}
+    for key in ("due_date", "occurred_date", "valid_from"):
+        if args.get(key) and not _date_ms(args[key]):
+            raise ValueError("日期格式应为 YYYY-MM-DD")
+    source = source_text if source_text is not None else args.get("evidence", "手动记录")
+    confidence = 0.95
+    if source_text is not None:
+        value = str(args.get("value") or args.get("content") or args.get("text") or "")
+        if not value or value not in source:
+            confidence = 0.7
+    if name == "record_transfer":
+        import re
+        cents = int(round(float(args["amount_yuan"]) * 100))
+        if cents <= 0 or args["direction"] not in {"in", "out"}:
+            raise ValueError("金额必须为正，方向必须为 in 或 out")
+        if source_text is not None:
+            amount = float(args["amount_yuan"])
+            mentioned = any(abs(float(v) - amount) < .005 for v in re.findall(r"\d+(?:\.\d+)?", source))
+            confidence = .95 if mentioned and re.search(r"转|给|收|付|借|还|礼金|随礼|报销", source) else .7
+    if name == "note":
+        obj = {"people": [], "my_notes": [{"text": args["text"], "kind": "semantic", "confidence": confidence}]}
+    elif name == "create_promise" and not args.get("person") and not args.get('person_id'):
+        due = args.get("due_date") or None
+        if due and not _date_ms(due):
+            raise ValueError("日期格式应为 YYYY-MM-DD")
+        fp = promise_key(None, args["who"], args["content"], due)
+        if repo.has_patch(conn, fp) or matching_promise(conn, None, args['who'], args['content'], due, _date_ms(due)):
+            return {"ok": True, "receipt": {"type": "promise", "duplicate": True}}
+        eid = repo.add_evidence(conn, "text", source_ref=source_id, excerpt=source)
+        if confidence < get_settings().confidence_auto:
+            pending = repo.add_pending(conn, "promise", {"person_id": None, "who": args["who"],
+                "content": args["content"], "due": due, "confidence": confidence,
+                "fingerprint": fp, "source_msg_id": source_id, "evidence_id": eid}, "承诺待确认")
+            conn.commit()
+            return {"ok": True, "receipt": {"type": "promise", "status": "pending", "pending_id": pending}}
+        pid = repo.add_promise(conn, args["who"], args["content"], None, _date_ms(due), eid)
+        repo.mark_patch(conn, fp, None, "promise", normalize_value(args["content"]), source_id)
+        if due:
+            repo.add_reminder(conn, _date_ms(due), args["content"], None, pid)
+        conn.commit()
+        return {"ok": True, "receipt": {"type": "promise", "id": pid, "status": "ok"}}
+    else:
+        person = args.get("person")
+        if not person and not args.get('person_id'):
+            raise ValueError("请指定对应人物")
+        pid = resolve_person(conn, person, person_id=args.get('person_id'), create=True)
+        person = person or repo.get_person(conn, pid)['display_name']
+        forced[person] = pid
+        p = {"name": person, "canonical_name": person, "fields": [], "aliases": [],
+             "relations": [], "facts": [], "promises": [], "ledger": []}
+        if name == "save_person_fact":
+            p["fields"] = [{"field": args["field"], "value": args["value"],
+                "confidence": confidence, "evidence": source, "valid_from": args.get("valid_from")}]
+        elif name == "record_transfer":
+            day = args.get("occurred_date") or None
+            if day and not _date_ms(day):
+                raise ValueError("日期格式应为 YYYY-MM-DD")
+            p["ledger"] = [{"direction": args["direction"], "amount_cents": cents,
+                "note": args.get("note", ""), "occurred": day, "confidence": confidence}]
+        else:
+            day = args.get("due_date") or None
+            if day and not _date_ms(day):
+                raise ValueError("日期格式应为 YYYY-MM-DD")
+            p["promises"] = [{"who": args["who"], "content": args["content"],
+                "due": day, "confidence": confidence}]
+        obj = {"people": [p], "my_notes": []}
+    result = apply_extraction(conn, obj, source_id, source, forced=forced)
+    return {"ok": not any(o["status"] == "failed" for o in result["outcomes"]),
+            **result, "receipt": {"type": name, "outcomes": result["outcomes"],
+                                  "pending_ids": result["pending_ids"]}}
+
+
+def _execute_tool(conn, name: str, args: dict) -> dict:
     from app.config import tz
     from datetime import datetime
 
@@ -122,7 +220,7 @@ def execute_tool(conn, name: str, args: dict) -> dict:
         return {"ok": True, "results": hits}
 
     if name == "get_person":
-        pid = _resolve_person_id(conn, args["name"])
+        pid = _resolve_person_id(conn, args.get("name"), args.get('person_id'))
         if not pid:
             return {"ok": False, "error": f"没有找到「{args['name']}」的档案"}
         card = compile_card.build_card(conn, pid)
@@ -130,42 +228,14 @@ def execute_tool(conn, name: str, args: dict) -> dict:
         return {"ok": True, "card": card, "person_id": pid,
                 "importance": p["importance"], "status": p["status"]}
 
-    if name == "save_person_fact":
-        pid = _resolve_person_id(conn, args["person"])
-        if not pid:
-            pid = repo.create_person(conn, args["person"], status="active")
-        eid = repo.add_evidence(conn, "text", excerpt=args.get("evidence", ""))
-        repo.upsert_field(conn, pid, args["field"], args["value"], 1.0, eid)
-        repo.touch_person(conn, pid)
-        conn.commit()
-        return {"ok": True, "receipt": {"type": "field", "person_id": pid,
-                                        "field": args["field"], "value": args["value"]}}
-
     if name == "query_memory":
         results = retrieve.hybrid_search(conn, args["query"], args.get("top_k", 8))
         for r in results:
             r["when"] = ms_to_local_str(r["ts"])
         return {"ok": True, "results": results}
 
-    if name == "create_promise":
-        pid = _resolve_person_id(conn, args.get("person"))
-        due_ms = None
-        if args.get("due_date"):
-            try:
-                due_ms = int(datetime.strptime(args["due_date"], "%Y-%m-%d")
-                             .replace(hour=9, tzinfo=tz()).timestamp() * 1000)
-            except ValueError:
-                return {"ok": False, "error": "due_date 格式应为 YYYY-MM-DD"}
-        pmid = repo.add_promise(conn, args["who"], args["content"], pid, due_ms)
-        rid = None
-        if due_ms:
-            who_txt = "我答应" if args["who"] == "me" else f"{args.get('person') or '对方'} 答应"
-            rid = repo.add_reminder(conn, due_ms, f"{who_txt}：{args['content']}", pid, pmid)
-        conn.commit()
-        return {"ok": True, "receipt": {"type": "promise", "id": pmid, "reminder_id": rid}}
-
     if name == "list_open_promises":
-        pid = _resolve_person_id(conn, args.get("person"))
+        pid = _resolve_person_id(conn, args.get("person"), args.get("person_id"))
         rows = repo.open_promises(conn, pid)
         return {"ok": True, "promises": [
             {"id": r["id"], "who": r["who"], "content": r["content"],
@@ -173,30 +243,17 @@ def execute_tool(conn, name: str, args: dict) -> dict:
              "due": ms_to_local_str(r["due_at"])[:10] if r["due_at"] else None} for r in rows]}
 
     if name == "complete_promise":
+        row = conn.execute("SELECT * FROM promise WHERE id=?", (args["promise_id"],)).fetchone()
+        if not row:
+            raise ValueError("承诺不存在")
         repo.set_promise_status(conn, args["promise_id"], "done")
+        conn.execute("UPDATE reminder SET status='cancelled' WHERE promise_id=? AND status='pending'",
+                     (args["promise_id"],))
         conn.commit()
         return {"ok": True, "receipt": {"type": "promise_done", "id": args["promise_id"]}}
 
-    if name == "record_transfer":
-        pid = _resolve_person_id(conn, args.get("person"))
-        cents = int(round(float(args["amount_yuan"]) * 100))
-        occurred = now_ms()
-        if args.get("occurred_date"):
-            try:
-                occurred = int(datetime.strptime(args["occurred_date"], "%Y-%m-%d")
-                               .replace(hour=12, tzinfo=tz()).timestamp() * 1000)
-            except ValueError:
-                pass
-        from app.util import sha256_text
-        dh = sha256_text(f"ledger|{pid}|{args['direction']}|{cents}|{args.get('occurred_date') or 'today'}")
-        lid, created = repo.add_ledger(conn, args["direction"], cents, pid,
-                                       args.get("note"), occurred, "confirmed", dh)
-        conn.commit()
-        return {"ok": True, "receipt": {"type": "ledger", "id": lid, "duplicate": not created,
-                                        "amount_yuan": args["amount_yuan"]}}
-
     if name == "ledger_summary":
-        pid = _resolve_person_id(conn, args.get("person"))
+        pid = _resolve_person_id(conn, args.get("person"), args.get("person_id"))
         totals = repo.ledger_totals(conn, pid)
         entries = repo.ledger_entries(conn, pid, include_pending=False)
         return {"ok": True,
@@ -207,7 +264,7 @@ def execute_tool(conn, name: str, args: dict) -> dict:
                              "when": ms_to_local_str(e["occurred_at"])[:10]} for e in entries[:20]]}
 
     if name == "save_skill":
-        pid = _resolve_person_id(conn, args.get("person"))
+        pid = _resolve_person_id(conn, args.get("person"), args.get("person_id"))
         sid, created = repo.save_skill(conn, args["name"], args["body"], pid,
                                        args.get("trigger_hint"), args.get("style_notes"))
         conn.commit()
@@ -229,10 +286,9 @@ def execute_tool(conn, name: str, args: dict) -> dict:
 
     if name == "deep_research":
         from app.agent import research as research_mod
-        result = research_mod.run_research(conn, args["topic"])
+        result = research_mod.prepare_research(conn, args["topic"])
         return {"ok": True, "receipt": {"type": "research", "id": result["id"]},
-                "summary": result["summary"], "report_md": result["report_md"],
-                "sources": result["sources"], "thin": result.get("thin", False)}
+                **result, "message": "已生成研究提案，请在研究面板确认后开始"}
 
     if name == "create_reminder":
         try:
@@ -240,7 +296,7 @@ def execute_tool(conn, name: str, args: dict) -> dict:
                           .replace(hour=9, tzinfo=tz()).timestamp() * 1000)
         except ValueError:
             return {"ok": False, "error": "fire_date 格式应为 YYYY-MM-DD"}
-        pid = _resolve_person_id(conn, args.get("person"))
+        pid = _resolve_person_id(conn, args.get("person"), args.get("person_id"))
         rid = repo.add_reminder(conn, fire_ms, args["text"], pid)
         conn.commit()
         return {"ok": True, "receipt": {"type": "reminder", "id": rid,
@@ -251,11 +307,6 @@ def execute_tool(conn, name: str, args: dict) -> dict:
         return {"ok": True, "quiet": [
             {**p, "last_interaction": ms_to_local_str(p["last_interaction"])[:10]
              if p["last_interaction"] else "从未"} for p in people]}
-
-    if name == "note":
-        mid = repo.add_memory(conn, "semantic", args["text"], None, 1.0)
-        conn.commit()
-        return {"ok": True, "receipt": {"type": "note", "id": mid}}
 
     return {"ok": False, "error": f"未知工具 {name}"}
 

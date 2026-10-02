@@ -1,12 +1,6 @@
 """LLM 客户端：封装 chat / vision / embed，含模型分层、重试、JSON 解析。
 
-模型分层（可用性已实测）：
-  mini  = qwen-turbo        便宜：标题、日志、轻量归纳
-  mid   = qwen-plus         主力：抽取、harness 工具循环（工具调用稳定）
-  think = deepseek-v4-pro   分析：消歧复核、决策
-  pro   = qwen3.8-max       深度：Deep Research 合成
-  vision= qwen3-vl-plus     截图转写
-  embed = text-embedding-v4 1024 维
+具体模型从 Settings 读取。非流式调用显式传 stream=False，兼容默认返回 SSE 的网关。
 """
 from __future__ import annotations
 
@@ -30,7 +24,7 @@ class LLM:
         if not s.llm_api_key:
             raise LLMError("HOME_LLM_API_KEY 未配置")
         self.s = s
-        self.client = OpenAI(base_url=s.llm_base_url, api_key=s.llm_api_key, timeout=120.0)
+        self.client = OpenAI(base_url=s.llm_base_url, api_key=s.llm_api_key, timeout=120.0, max_retries=0)
 
     def _model(self, tier: str) -> str:
         return {
@@ -48,6 +42,8 @@ class LLM:
                 return fn()
             except Exception as e:  # noqa: BLE001
                 msg = str(e)
+                if getattr(e, "status_code", None) in {400, 401, 403, 404, 422}:
+                    raise LLMError(f"{what}: 请求配置或权限错误 — {msg}") from e
                 if "AccessDenied" in msg or "Access denied" in msg:
                     raise LLMError(f"{what}: 模型无权限访问 — {msg}") from e
                 if attempt == 3:
@@ -70,6 +66,7 @@ class LLM:
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
+            stream=False,
         )
         if tools:
             kwargs["tools"] = tools
@@ -107,6 +104,36 @@ class LLM:
                 conv.append({"role": "user", "content": "上面的输出不是合法 JSON。请只输出一个合法的 JSON（不要代码围栏、不要解释）。"})
         raise LLMError(f"chat_json 解析失败: {last_err}")
 
+    def chat_stream(self, messages, tier="mid", tools=None, max_tokens=3000, on_delta=None):
+        kwargs = {"model": self._model(tier), "messages": messages,
+                  "max_tokens": max_tokens, "temperature": 0.3, "stream": True}
+        if tools:
+            kwargs.update(tools=tools, tool_choice="auto")
+        content, calls = [], {}
+        with self.client.chat.completions.create(**kwargs) as stream:
+            for chunk in stream:
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                if delta.content:
+                    content.append(delta.content)
+                    if on_delta:
+                        on_delta(delta.content)
+                for tc in delta.tool_calls or []:
+                    call = calls.setdefault(tc.index, {"id": "", "type": "function",
+                        "function": {"name": "", "arguments": ""}})
+                    if tc.id:
+                        call["id"] = tc.id
+                    if tc.function:
+                        if tc.function.name:
+                            call["function"]["name"] += tc.function.name
+                        if tc.function.arguments:
+                            call["function"]["arguments"] += tc.function.arguments
+        result = {"role": "assistant", "content": "".join(content)}
+        if calls:
+            result["tool_calls"] = [calls[k] for k in sorted(calls)]
+        return result
+
     # ---------- 视觉 ----------
     def vision(self, prompt: str, images: list[bytes], max_tokens: int = 3000) -> str:
         content: list[dict] = [{"type": "text", "text": prompt}]
@@ -119,6 +146,7 @@ class LLM:
                 model=self.s.model_vision,
                 messages=[{"role": "user", "content": content}],
                 max_tokens=max_tokens,
+                stream=False,
             )
             return resp.choices[0].message.content or ""
 
@@ -128,6 +156,8 @@ class LLM:
     def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
+        if not self.s.model_embed:
+            raise LLMError("向量模型未配置，当前仅使用结构化与全文检索")
 
         def call():
             resp = self.client.embeddings.create(model=self.s.model_embed, input=texts)

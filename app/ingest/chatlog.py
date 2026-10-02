@@ -315,7 +315,7 @@ def import_chatlog(conn, filename: str, data: bytes, me: str | None = None,
     jid, created = repo.create_job(conn, "chatlog", payload=filename,
                                    idempotency_key=sha256_bytes(data))
     if not created:
-        return {"job_id": jid, "status": "done", "duplicate": True,
+        return {"job_id": jid, "status": repo.get_job(conn, jid)["status"], "duplicate": True,
                 "message": "相同聊天记录文件已导入过，未重复处理"}
     conn.commit()
     repo.update_job(conn, jid, "parsing")
@@ -362,7 +362,7 @@ def import_chatlog(conn, filename: str, data: bytes, me: str | None = None,
 
         n_ok = sum(1 for o in outcomes if o["status"] == "ok")
         n_pending = sum(1 for o in outcomes if o["status"] == "pending")
-        status = "partial" if (n_pending or truncated) else "done"
+        status = "partial" if (n_pending or truncated or any(o["status"] == "failed" for o in outcomes)) else "done"
         repo.update_job(conn, jid, status, result=json.dumps(
             {"ok": n_ok, "pending": n_pending, "messages": len(parsed["messages"]),
              "chunks_total": total, "chunks_used": len(used)}, ensure_ascii=False))

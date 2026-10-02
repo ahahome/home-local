@@ -83,6 +83,12 @@ def parse_json_loose(raw: str):
         raise ValueError("empty")
     s = raw.strip()
     s = _FENCE.sub("", s).strip()
+    # Valid JSON may contain Chinese quotation marks and colons inside strings.
+    # Never rewrite it before trying the standard parser.
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError:
+        pass
 
     # 截取最外层的 {} 或 []
     start = None
@@ -126,11 +132,36 @@ def parse_json_loose(raw: str):
     else:
         s2 = s[start:end + 1]
 
-    # 全角引号转半角（字符串外的全角引号会破坏解析）
-    s2 = s2.replace("“", '"').replace("”", '"').replace("：", ":")
-    # 尾逗号
-    s2 = re.sub(r",(\s*[}\]])", r"\1", s2)
-    return json.loads(s2)
+    try:
+        return json.loads(s2)
+    except json.JSONDecodeError:
+        pass
+    repaired = []
+    delimiter = None
+    escaped = False
+    for i, ch in enumerate(s2):
+        if delimiter:
+            if escaped:
+                repaired.append(ch)
+                escaped = False
+            elif ch == '\\':
+                repaired.append(ch)
+                escaped = True
+            elif ch == delimiter:
+                repaired.append('"')
+                delimiter = None
+            else:
+                repaired.append('\\"' if delimiter == '”' and ch == '"' else ch)
+        elif ch in ('"', '“'):
+            delimiter = '”' if ch == '“' else '"'
+            repaired.append('"')
+        elif ch == '：':
+            repaired.append(':')
+        elif ch == ',' and s2[i + 1:].lstrip().startswith(('}', ']')):
+            continue
+        else:
+            repaired.append(ch)
+    return json.loads(''.join(repaired))
 
 
 def clamp(text: str, max_chars: int) -> str:

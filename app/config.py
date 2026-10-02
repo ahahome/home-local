@@ -13,15 +13,15 @@ ROOT = Path(__file__).resolve().parent.parent
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=str(ROOT / ".env"), env_prefix="HOME_", extra="ignore")
 
-    llm_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    llm_base_url: str = "https://token-hub.ailyn.com.cn/v1"
     llm_api_key: str = ""
 
-    model_mini: str = "qwen-turbo"      # 便宜：标题生成、日志、轻量任务
-    model_mid: str = "qwen-plus"        # 主力：抽取、harness 工具循环
+    model_mini: str = "qwen3.7-flash"   # 日志、轻量归纳
+    model_mid: str = "deepseek-v4-flash"  # 抽取、工具调用
     model_think: str = "deepseek-v4-pro"  # 分析：消歧复核、决策
     model_pro: str = "qwen3.8-max"      # 深度：Deep Research 合成
-    model_vision: str = "qwen3-vl-plus"  # 截图转写
-    model_embed: str = "text-embedding-v4"
+    model_vision: str = "qwen3.8-max"    # 截图转写
+    model_embed: str = ""              # 配置可用的 embedding 模型后启用
 
     data_dir: str = "./data"
     db_path: str = "./data/home.db"

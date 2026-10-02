@@ -3,6 +3,7 @@ fastapi
 uvicorn[standard]
 pydantic
 pydantic-settings
+tzdata
 httpx
 jieba
 numpy

@@ -4,7 +4,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.staticfiles import StaticFiles
+from contextlib import asynccontextmanager
+from typing import Literal
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -17,14 +20,24 @@ from app.store.db import get_conn
 from app.util import ms_to_local_str, normalize_value, now_ms
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-app = FastAPI(title="home", version="0.1.0")
-
-
-@app.on_event("startup")
-def _startup():
+@asynccontextmanager
+async def lifespan(app):
     get_conn()
     from app.jobs.scheduler import start_scheduler
-    start_scheduler()
+    from app.jobs.tasks import recover
+    scheduler = start_scheduler()
+    recover()
+    try:
+        yield
+    finally:
+        if scheduler:
+            scheduler.shutdown(wait=False)
+
+
+app = FastAPI(title="home", version="0.2.0", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=str(ROOT / "web")), name="static")
+from app.api.workspace import router
+app.include_router(router)
 
 
 # ---------------- 页面 ----------------
@@ -38,12 +51,17 @@ def index():
 
 class NewConv(BaseModel):
     title: str = "新对话"
+    project_id: str | None = None
 
 
 @app.post("/api/conversations")
 def create_conv(body: NewConv):
     conn = get_conn()
+    if body.project_id and not conn.execute("SELECT 1 FROM project WHERE id=?", (body.project_id,)).fetchone():
+        raise HTTPException(400, "项目不存在")
     cid = repo.create_conversation(conn, body.title)
+    if body.project_id:
+        conn.execute("UPDATE conversation SET project_id=? WHERE id=?", (body.project_id, cid))
     conn.commit()
     return {"id": cid, "title": body.title}
 
@@ -61,8 +79,9 @@ def list_msgs(cid: str):
     conn = get_conn()
     return {"messages": [
         {"id": m["id"], "role": m["role"], "content": m["content"],
-         "created_at": ms_to_local_str(m["created_at"])}
-        for m in repo.list_messages(conn, cid) if m["role"] in ("user", "assistant")]}
+         "created_at": ms_to_local_str(m["created_at"]),
+         "metadata": json.loads(m["tool_calls"]) if m["tool_calls"] and m["tool_calls"].startswith("{") else None}
+        for m in repo.list_messages(conn, cid) if m["role"] in ("user", "assistant") and not (m["role"] == "assistant" and m["tool_calls"] and m["tool_calls"].startswith("["))]}
 
 
 class ChatIn(BaseModel):
@@ -80,8 +99,8 @@ def send_msg(cid: str, body: ChatIn):
 # ---------------- 摄入 ----------------
 
 @app.post("/api/ingest/file")
-async def ingest_file(file: UploadFile = File(...)):
-    data = await file.read()
+def ingest_file(file: UploadFile = File(...)):
+    data = file.file.read()
     if not data:
         raise HTTPException(400, "空文件")
     conn = get_conn()
@@ -96,9 +115,9 @@ class UrlIn(BaseModel):
 
 
 @app.post("/api/ingest/chatlog")
-async def ingest_chatlog(file: UploadFile = File(...), me: str = ""):
+def ingest_chatlog(file: UploadFile = File(...), me: str = Form("")):
     """导入微信/QQ 导出聊天记录（.txt）。me 可显式指定「我」在记录里的名字。"""
-    data = await file.read()
+    data = file.file.read()
     if not data:
         raise HTTPException(400, "空文件")
     conn = get_conn()
@@ -146,6 +165,7 @@ def list_persons():
                     "status": p["status"], "importance": round(p["importance"], 3),
                     "aliases": repo.aliases_of(conn, p["id"]),
                     "field_count": len(fields),
+                    "summary": ' · '.join(str(fields[k]['value']) for k in ('company','title','city') if k in fields and fields[k]['value']),
                     "value_read": p["value_read"]})
     return {"persons": out}
 
@@ -176,7 +196,7 @@ def person_detail(pid: str):
         "card": compile_card.build_card(conn, pid),
         "aliases": repo.aliases_of(conn, pid),
         "fields": {k: {"value": v["value"], "confidence": v["confidence"],
-                       "since": ms_to_local_str(v["valid_from"])[:10]} for k, v in fields.items()},
+                       "valid_from": v["valid_from"], "since": ms_to_local_str(v["valid_from"])[:10]} for k, v in fields.items()},
         "interactions": [{"ts": ms_to_local_str(i["ts"]), "channel": i["channel"],
                           "content": i["content"][:200]} for i in repo.recent_interactions(conn, pid, 10)],
         "open_promises": [{"id": r["id"], "who": r["who"], "content": r["content"],
@@ -188,21 +208,6 @@ def person_detail(pid: str):
                                 "when": ms_to_local_str(e["occurred_at"])[:10]}
                                for e in repo.ledger_entries(conn, pid)]},
     }
-
-
-class FieldIn(BaseModel):
-    field: str
-    value: str
-
-
-@app.post("/api/persons/{pid}/fields")
-def edit_field(pid: str, body: FieldIn):
-    conn = get_conn()
-    if not repo.get_person(conn, pid):
-        raise HTTPException(404, "人物不存在")
-    repo.upsert_field(conn, pid, body.field, body.value, 1.0, None)
-    conn.commit()
-    return {"ok": True}
 
 
 @app.delete("/api/persons/{pid}")
@@ -283,77 +288,31 @@ def split(body: SplitIn):
 @app.get("/api/pending")
 def list_pending():
     conn = get_conn()
-    return {"pending": [
-        {"id": p["id"], "kind": p["kind"], "reason": p["reason"],
-         "payload": json.loads(p["payload"]), "created_at": ms_to_local_str(p["created_at"])}
-        for p in repo.list_pending(conn)]}
+    items = []
+    for p in repo.list_pending(conn):
+        payload = json.loads(p['payload'])
+        for candidate in payload.get('candidates', []):
+            fields = repo.current_fields(conn, candidate['person_id'])
+            candidate['hint'] = ' · '.join(str(fields[k]['value']) for k in ('company','title','city') if k in fields and fields[k]['value'])
+        person = repo.get_person(conn, payload.get('person_id')) if payload.get('person_id') else None
+        items.append({'id': p['id'], 'kind': p['kind'], 'payload': payload,
+                      'person_name': person['display_name'] if person else payload.get('mention'),
+                      'reason': p['reason'], 'created_at': ms_to_local_str(p['created_at'])})
+    return {'pending': items}
 
 
 class ResolveIn(BaseModel):
-    action: str                 # confirm | discard
+    action: Literal["confirm", "discard"]
     person_id: str | None = None  # person_identity 确认时选定的对象，"new" 表示新建
 
 
 @app.post("/api/pending/{pid}/resolve")
 def resolve_pending(pid: str, body: ResolveIn):
-    conn = get_conn()
-    item = repo.get_pending(conn, pid)
-    if not item or item["resolved_at"]:
-        raise HTTPException(404, "待确认项不存在或已处理")
-    payload = json.loads(item["payload"])
-
-    if body.action == "discard":
-        repo.resolve_pending(conn, pid, "discarded")
-        conn.commit()
-        return {"ok": True, "resolution": "discarded"}
-
-    kind = item["kind"]
-    if kind == "person_identity":
-        if body.person_id and body.person_id != "new":
-            target = body.person_id
-            if not repo.get_person(conn, target):
-                raise HTTPException(404, "选定的人物不存在")
-        else:
-            target = repo.create_person(conn, payload["canonical_name"], status="active")
-        repo.add_alias(conn, target, payload["mention"], payload.get("channel", "chat"), 0.95)
-        patch = payload.get("patch")
-        if patch:
-            # 已确认身份 → 强制绑定，重放该人的 patch（绕过二次消歧）
-            apply_mod.apply_extraction(conn, {"people": [patch], "my_notes": []},
-                                       payload["source_msg_id"], payload["mention"],
-                                       channel=payload.get("channel", "chat"),
-                                       forced={patch["canonical_name"]: target})
-        repo.resolve_pending(conn, pid, f"bound:{target}")
-    elif kind == "field":
-        repo.upsert_field(conn, payload["person_id"], payload["field"], payload["value"],
-                          payload["confidence"], payload.get("evidence_id"))
-        repo.mark_patch(conn, payload["fingerprint"], payload["person_id"], payload["field"],
-                        normalize_value(payload["value"]), payload["source_msg_id"])
-        repo.resolve_pending(conn, pid, "confirmed")
-    elif kind == "ledger":
-        from datetime import datetime
-        from app.config import tz
-        occurred = now_ms()
-        if payload.get("occurred"):
-            try:
-                occurred = int(datetime.strptime(payload["occurred"], "%Y-%m-%d")
-                               .replace(hour=12, tzinfo=tz()).timestamp() * 1000)
-            except ValueError:
-                pass
-        repo.add_ledger(conn, payload["direction"], payload["amount_cents"], payload["person_id"],
-                        payload["note"], occurred, "confirmed", payload["dedupe_hash"],
-                        payload.get("evidence_id"))
-        repo.resolve_pending(conn, pid, "confirmed")
-    elif kind == "promise":
-        from app.memory.apply import _date_ms
-        pmid = repo.add_promise(conn, payload["who"], payload["content"], payload["person_id"],
-                                _date_ms(payload.get("due")), payload.get("evidence_id"))
-        repo.resolve_pending(conn, pid, f"confirmed:{pmid}")
-    else:
-        raise HTTPException(400, f"未知的待确认类型 {kind}")
-
-    conn.commit()
-    return {"ok": True, "resolution": "confirmed"}
+    from app.memory.pending import resolve
+    try:
+        return resolve(get_conn(), pid, body.action, body.person_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 # ---------------- 星图 / 提醒 / 通知 / 日志 / 技能 / 研究 ----------------
@@ -436,4 +395,6 @@ def research_detail(rid: str):
         raise HTTPException(404, "研究不存在")
     return {"id": r["id"], "topic": r["topic"], "status": r["status"],
             "report_md": r["report_md"],
+            "proposal": json.loads(r["proposal"]) if r["proposal"] else None,
+            "draft": json.loads(r["draft"]) if r["draft"] else [],
             "sources": json.loads(r["sources"]) if r["sources"] else []}

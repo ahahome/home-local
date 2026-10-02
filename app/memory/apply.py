@@ -14,7 +14,9 @@ from typing import Any
 
 from app.config import get_settings, tz
 from app.memory import disambiguate
-from app.memory.extract import is_role_person
+from app.memory.writes import (ledger_key, promise_key, resolve_person, AmbiguousPerson, discard_key,
+                              matching_promise, explicit_transfer_direction)
+from app.memory.extract import is_role_person, is_task_note
 from app.store import repo
 from app.store.db import savepoint
 from app.util import (clamp, new_id, normalize_value, now_ms, patch_fingerprint,
@@ -38,7 +40,8 @@ class Outcome(dict):
 
 
 def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerpt: str,
-                     channel: str = "chat", forced: dict[str, str] | None = None) -> dict:
+                     channel: str = "chat", forced: dict[str, str] | None = None,
+                     evidence_id: str | None = None, commit: bool = True) -> dict:
     """把 extract 的结构化结果落库。返回 {outcomes, person_ids, pending_ids}。
 
     forced: {canonical_name: person_id}，用于「用户已确认身份」的重放——绕过二次消歧。
@@ -48,13 +51,41 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
     outcomes: list[dict] = []
     person_ids: list[str] = []
     pending_ids: list[str] = []
+    def rejected(kind, fp):
+        return repo.has_patch(conn, discard_key(kind, fp, source_msg_id))
 
     # 本批次共用一个证据（截图时为 blob 证据，文本为 text 证据）
-    evidence_id = repo.add_evidence(conn, "text", source_ref=source_msg_id,
-                                    excerpt=clamp(evidence_excerpt, 500))
+    evidence_id = evidence_id or repo.add_evidence(conn, "text", source_ref=source_msg_id,
+                                                  excerpt=clamp(evidence_excerpt, 4000))
+    conn.execute("UPDATE evidence SET excerpt=? WHERE id=? AND length(COALESCE(excerpt,''))<?",
+                 (clamp(evidence_excerpt, 4000), evidence_id, min(len(evidence_excerpt), 4000)))
+
+    def memory_gate(item, pid, fp, kind):
+        if rejected('memory', fp):
+            outcomes.append(Outcome('fact' if pid else 'note', 'skipped', '这条来源的信息已被丢弃'))
+            return False
+        confidence = item.get("confidence", 0.5)
+        if item.get('_source_verified') is False:
+            confidence = min(confidence, .7)
+        if confidence >= s.confidence_auto:
+            return True
+        if confidence >= s.confidence_confirm:
+            pending_ids.append(repo.add_pending(conn, "memory", {
+                "person_id": pid, "text": item["text"], "kind": kind,
+                "confidence": confidence, "evidence_id": evidence_id,
+                "fingerprint": fp, "source_msg_id": source_msg_id,
+            }, "记忆置信度不足，请确认"))
+            outcomes.append(Outcome("fact" if pid else "note", "pending", item["text"]))
+        else:
+            outcomes.append(Outcome("fact" if pid else "note", "skipped", item["text"] + "（置信度过低）"))
+        return False
 
     for p in extraction.get("people", []):
         name = p["canonical_name"]
+        identity_fp = sha256_text('identity|' + name)
+        if rejected('person_identity', identity_fp):
+            outcomes.append(Outcome('person', 'skipped', f'{name} 的这条身份信息已被丢弃'))
+            continue
         # ---- FR-ID-01：角色词不建档（落库层是最后一道闸门） ----
         # sanitize() 已经拦过一道，这里再拦一道：apply 可能被直接调用
         # （例如待确认面板重放 patch），不能因为「上游应该过滤了」就放行。
@@ -74,7 +105,8 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
                     "candidates": [{"person_id": c.person_id, "display_name": c.display_name,
                                     "score": round(c.score, 3)} for c in res.candidates[:3]],
                     "patch": p, "source_msg_id": source_msg_id, "channel": channel,
-                    "evidence_id": evidence_id,
+                    "evidence_id": evidence_id, "source_text": evidence_excerpt,
+                    "fingerprint": identity_fp,
                 }, reason=f"身份不确定（最高分 {res.score:.2f} 且存在并列候选）")
                 pending_ids.append(pid_pending)
                 outcomes.append(Outcome("person", "pending", f"{name} 待确认身份"))
@@ -91,25 +123,30 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
 
         # ---- 字段（双时态 upsert + 置信度分档 + 指纹幂等） ----
         for f in p["fields"]:
+            confidence = min(f['confidence'], .7) if f.get('_source_verified') is False else f['confidence']
             fp = patch_fingerprint(person_id, f["field"], f["value"], source_msg_id)
+            if rejected('field', fp):
+                outcomes.append(Outcome('field', 'skipped', f"{f['field']}：这条来源的信息已被丢弃"))
+                continue
             if repo.has_patch(conn, fp):
                 outcomes.append(Outcome("field", "duplicate", f"{f['field']}={f['value']}"))
                 continue
             try:
                 with savepoint(conn, f"sp_{new_id()[:8]}"):
-                    if f["confidence"] >= s.confidence_auto:
+                    if confidence >= s.confidence_auto:
                         repo.upsert_field(conn, person_id, f["field"], f["value"],
-                                          f["confidence"], evidence_id)
+                                          f["confidence"], evidence_id, _date_ms(f.get("valid_from")))
                         repo.mark_patch(conn, fp, person_id, f["field"],
                                         normalize_value(f["value"]), source_msg_id)
                         outcomes.append(Outcome("field", "ok", f"{f['field']}={f['value']}"))
-                    elif f["confidence"] >= s.confidence_confirm:
+                    elif confidence >= s.confidence_confirm:
                         pid2 = repo.add_pending(conn, "field", {
                             "person_id": person_id, "field": f["field"], "value": f["value"],
                             "confidence": f["confidence"], "evidence": f["evidence"],
                             "evidence_id": evidence_id, "source_msg_id": source_msg_id,
                             "fingerprint": fp,
-                        }, reason="置信度不足，待确认")
+                            "valid_from": f.get("valid_from"),
+                        }, reason="原文凭证无法核验，待确认" if f.get('_source_verified') is False else "置信度不足，待确认")
                         pending_ids.append(pid2)
                         outcomes.append(Outcome("field", "pending", f"{f['field']}={f['value']}"))
                     else:
@@ -129,6 +166,8 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
             if repo.has_patch(conn, fp):
                 outcomes.append(Outcome("fact", "duplicate", clamp(fa["text"], 30)))
                 continue
+            if not memory_gate(fa, person_id, fp, "episodic"):
+                continue
             try:
                 with savepoint(conn, f"sp_{new_id()[:8]}"):
                     mid = repo.add_memory(conn, "episodic", fa["text"], person_id,
@@ -142,13 +181,17 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
 
         # ---- 承诺 ----
         for pr in p["promises"]:
-            fp = sha256_text(f"promise|{person_id}|{normalize_value(pr['content'])}|{pr.get('due')}")
-            if repo.has_patch(conn, fp):
+            fp = promise_key(person_id, pr["who"], pr["content"], pr.get("due"))
+            if rejected('promise', fp):
+                outcomes.append(Outcome('promise', 'skipped', '这条来源的承诺已被丢弃'))
+                continue
+            if repo.has_patch(conn, fp) or matching_promise(conn, person_id, pr['who'], pr['content'],
+                                                          pr.get('due'), _date_ms(pr.get('due'))):
                 outcomes.append(Outcome("promise", "duplicate", clamp(pr["content"], 30)))
                 continue
             try:
                 with savepoint(conn, f"sp_{new_id()[:8]}"):
-                    if pr["confidence"] >= s.confidence_confirm:
+                    if pr["confidence"] >= s.confidence_auto:
                         due_ms = _date_ms(pr.get("due"))
                         pmid = repo.add_promise(conn, pr["who"], pr["content"], person_id,
                                                 due_ms, evidence_id)
@@ -171,8 +214,17 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
 
         # ---- 账本（去重窗口 + 待确认不计入总额） ----
         for le in p["ledger"]:
+            # Extraction and tools can disagree; an explicit quoted transfer direction wins.
+            le = dict(le)
+            direction = explicit_transfer_direction(evidence_excerpt,
+                [p['name'], name, *repo.aliases_of(conn, person_id)], le['amount_cents'])
+            if direction:
+                le['direction'] = direction
             occurred_ms = _date_ms(le.get("occurred")) or now_ms()
-            dh = sha256_text(f"ledger|{person_id}|{le['direction']}|{le['amount_cents']}|{le.get('occurred')}")
+            dh = ledger_key(person_id, le["direction"], le["amount_cents"], le.get("occurred"))
+            if rejected('ledger', dh):
+                outcomes.append(Outcome('ledger', 'skipped', '这条来源的账目已被丢弃'))
+                continue
             try:
                 with savepoint(conn, f"sp_{new_id()[:8]}"):
                     # 窗口外的相似历史 → 必须走确认（FR-LED-02）
@@ -184,6 +236,7 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
                             "person_id": person_id, **le, "evidence_id": evidence_id,
                             "source_msg_id": source_msg_id, "dedupe_hash": dh,
                             "similar_ids": [r["id"] for r in similar],
+                            "dedupe_hash": dh, "source_msg_id": source_msg_id,
                         }, reason="与历史转账相似，需确认是否重复")
                         pending_ids.append(pid2)
                         outcomes.append(Outcome("ledger", "pending",
@@ -197,8 +250,15 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
                         outcomes.append(Outcome("ledger", "duplicate",
                                                 f"{le['direction']} {le['amount_cents']/100:.2f}"))
                     else:
-                        repo.mark_patch(conn, sha256_text("ledgerpatch|" + dh), person_id,
-                                        "ledger", str(le["amount_cents"]), source_msg_id)
+                        if status == "pending":
+                            pending_ids.append(repo.add_pending(conn, "ledger", {
+                                "person_id": person_id, **le, "ledger_id": lid,
+                                "evidence_id": evidence_id, "source_msg_id": source_msg_id,
+                                "dedupe_hash": dh,
+                            }, "账目待确认，不计入总额"))
+                        else:
+                            repo.mark_patch(conn, sha256_text("ledgerpatch|" + dh), person_id,
+                                            "ledger", str(le["amount_cents"]), source_msg_id)
                         outcomes.append(Outcome("ledger", "ok" if status == "confirmed" else "pending",
                                                 f"{le['direction']} {le['amount_cents']/100:.2f}"))
             except Exception as e:  # noqa: BLE001
@@ -214,24 +274,37 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
 
         # ---- 关系边 ----
         for r in p["relations"]:
+            relation_fp = sha256_text(f"relation|{person_id}|{r.get('to')}|{r.get('kind')}")
+            if rejected('relation', relation_fp):
+                outcomes.append(Outcome('relation', 'skipped', '这条来源的关系已被丢弃'))
+                continue
             # FR-ID-01 旁路：不解这一条，「前台」「王芳的老公」还是会因为出现在
             # relation.to 里被 create_person 建出来，闸门等于白设。
             if is_role_person(r.get("to")):
                 outcomes.append(Outcome("relation", "skipped",
                                         f"{r.get('to')} 是角色词，不建档也不建边（FR-ID-01）"))
                 continue
+            if r["confidence"] < s.confidence_auto or r.get('_source_verified') is False:
+                pending_ids.append(repo.add_pending(conn, "relation", {
+                    "person_id": person_id, **r, "evidence_id": evidence_id,
+                    "fingerprint": relation_fp, "source_msg_id": source_msg_id,
+                }, "关系待确认"))
+                outcomes.append(Outcome("relation", "pending", f"{name} → {r['to']}"))
+                continue
             try:
                 with savepoint(conn, f"sp_{new_id()[:8]}"):
-                    target = repo.get_person_by_name(conn, r["to"])
-                    if target is None:
-                        tid = repo.create_person(conn, r["to"], status="active")
-                        _index_person_name(conn, tid, r["to"])
-                    else:
-                        tid = target["id"]
+                    tid = resolve_person(conn, r["to"], create=True)
                     if tid != person_id:
                         repo.upsert_edge(conn, person_id, tid, r["kind"],
                                          strength=max(0.3, r["confidence"]), evidence_id=evidence_id)
                         outcomes.append(Outcome("relation", "ok", f"{name} -{r['kind']}-> {r['to']}"))
+            except AmbiguousPerson as e:
+                pending_ids.append(repo.add_pending(conn, "relation", {
+                    "person_id": person_id, **r, "candidates": e.candidates,
+                    "evidence_id": evidence_id,
+                    "fingerprint": relation_fp, "source_msg_id": source_msg_id,
+                }, str(e)))
+                outcomes.append(Outcome("relation", "pending", str(e)))
             except Exception as e:  # noqa: BLE001
                 outcomes.append(Outcome("relation", "failed", str(e)))
 
@@ -239,8 +312,13 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
 
     # ---- 用户自己的目标/偏好（FR-MEM-05 的写入侧） ----
     for n in extraction.get("my_notes", []):
+        if is_task_note(n['text'], evidence_excerpt):
+            outcomes.append(Outcome('note', 'skipped', '当前操作指令不作为个人记忆保存'))
+            continue
         fp = sha256_text(f"mynote|{normalize_value(n['text'])}")
         if repo.has_patch(conn, fp):
+            continue
+        if not memory_gate(n, None, fp, n["kind"]):
             continue
         try:
             with savepoint(conn, f"sp_{new_id()[:8]}"):
@@ -251,7 +329,8 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
         except Exception as e:  # noqa: BLE001
             outcomes.append(Outcome("note", "failed", str(e)))
 
-    conn.commit()
+    if commit:
+        conn.commit()
     return {"outcomes": outcomes, "person_ids": person_ids, "pending_ids": pending_ids}
 
 

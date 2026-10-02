@@ -12,6 +12,7 @@ _UA = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKi
 
 def fetch_and_clean(url: str, max_chars: int = 15000) -> dict:
     resp = httpx.get(url, headers=_UA, timeout=20.0, follow_redirects=True)
+    resp.raise_for_status()
     html = resp.text
     title = ""
     m = re.search(r"<title[^>]*>(.*?)</title>", html, re.S | re.I)

@@ -47,7 +47,8 @@ SYSTEM = """你是一个信息抽取器。从文本中抽取关于「人」的�
           「那个事回头再说吧」「改天请你搓一顿」「哪天得空喝一杯」（没有具体事项和时间的寒暄）
    - 算：  「我答应下周三之前把报价单发给他」「9/8 之前给你确认」「明天上午把合同扫描件发他邮箱」
    判断依据是【有没有具体的、可执行的事】，不是用词——不要因为对话轮次变多、语气变正式就放宽标准。
-6. 关于"用户自己"的目标、偏好、状态，不要放进 people，放进 my_notes。
+6. 关于"用户自己"的真实目标、偏好、状态，不要放进 people，放进 my_notes。
+   查询、起草、总结、分析等当前操作指令不是个人事实；不要把「用户要求查询/起草…」记入 my_notes。
 7. 只输出一个 JSON 对象。不要解释、不要 markdown 代码围栏。
 
 字段归位规则（这三类是最常见的放错位置）：
@@ -68,6 +69,9 @@ SYSTEM = """你是一个信息抽取器。从文本中抽取关于「人」的�
 同一字段只给一条值：
 - 一次抽取里，同一个 field 只出现一次。如果同时出现城市和更细的区/街道
   （如「杭州」与「滨江」「钱江新城」「浦东」），city 只取城市层级（杭州），区/街道不要再单独给一条 city。
+- 明确的历史公司、职位、城市等信息也抽成对应 fields，valid_from 填原文明确日期；
+  不要仅放进 facts 而遗漏字段。例如「2024-02-01时林舟常住合肥，这是过去的情况」
+  → city=合肥，valid_from=2024-02-01；不要误当今天的新城市。
 
 输出结构（没有的项给空数组/空对象）：
 {
@@ -75,7 +79,7 @@ SYSTEM = """你是一个信息抽取器。从文本中抽取关于「人」的�
     {
       "name": "原文中的称呼",
       "canonical_name": "判断出的规范名（真名或最常用称呼），不确定就同 name",
-      "fields": [{"field":"company|title|city|birthday|phone|email|trait.特点|need.需求","value":"...","confidence":0.9,"evidence":"原文片段"}],
+      "fields": [{"field":"company|title|city|birthday|phone|email|trait.特点|need.需求","value":"...","confidence":0.9,"evidence":"原文片段","valid_from":"明确历史生效日期 YYYY-MM-DD，否则 null"}],
       "aliases": [{"alias":"此人的其他称呼","confidence":0.8}],
       "relations": [{"to":"另一个人名","kind":"colleague|family|referred_by|friend|know","confidence":0.7,"evidence":"原文片段"}],
       "facts": [{"text":"客观发生的事，一句话，含时间与人物","confidence":0.9,"evidence":"原文片段"}],
@@ -128,7 +132,7 @@ _KIN = ("老公|老婆|丈夫|妻子|媳妇|太太|先生|对象|男友|女友|�
 _ROLE_ONLY = ("我对象|我的对象|那个客户|这个客户|客户|前台|老板|领导|同事|朋友|同学|室友|"
               "房东|司机|师傅|老师|医生|护士|邻居|甲方|乙方|供应商|下属|助理|秘书|"
               "快递员|外卖员|有个人|一个人|某人")
-_ROLE_PERSON = re.compile(rf"^(?:.+的(?:{_KIN}|{_ROLE_ONLY})|(?:{_ROLE_ONLY}))$")
+_ROLE_PERSON = re.compile(rf"^(?:.+的(?:{_KIN}|{_ROLE_ONLY})|(?:{_ROLE_ONLY}|{_KIN}))$")
 # 「王芳的老公」→ base=王芳。用来把家属信息收拢回本人名下。
 _KIN_OF = re.compile(rf"^(?P<base>.+?)的(?:{_KIN})$")
 
@@ -363,6 +367,7 @@ def sanitize(obj: Any, source: str = "") -> dict:
                     "field": _s(f["field"]), "value": _s(f["value"]),
                     "confidence": _f(f.get("confidence")),
                     "evidence": _evidence(f.get("evidence"), src_flat),
+                    "valid_from": _s(f.get("valid_from")) or None,
                 })
         for a in p.get("aliases") or []:
             if isinstance(a, dict) and _s(a.get("alias")):
@@ -417,15 +422,28 @@ def sanitize(obj: Any, source: str = "") -> dict:
         built.append(person)
 
     out["people"] = _drop_role_persons(built)
+    if source:
+        for person in out['people']:
+            for key in ('fields', 'facts', 'relations'):
+                for item in person[key]:
+                    # Preserve the model's confidence; the write gate separately checks provenance.
+                    item['_source_verified'] = bool(item.get('evidence'))
 
     for n in obj.get("my_notes") or []:
-        if isinstance(n, dict) and _s(n.get("text")):
+        if isinstance(n, dict) and _s(n.get("text")) and not is_task_note(_s(n['text']), source):
             out["my_notes"].append({
                 "text": _s(n["text"]),
                 "kind": n.get("kind") if n.get("kind") in ("semantic", "episodic") else "semantic",
                 "confidence": _f(n.get("confidence"), 0.9),
             })
     return out
+
+
+def is_task_note(text: str, source: str) -> bool:
+    """Reject a summary of a current command, while preserving stated preferences/facts."""
+    directive = re.match(r'^\s*(?:请|帮我|帮忙|麻烦|能否|可以|查询|检索|起草|生成|总结|分析|列出|查一下|整理)', source)
+    command_summary = re.match(r'^(?:用户|我)(?:要求|请求|让|希望).{0,40}?(?:查询|检索|查找|起草|总结|生成|分析|回答|整理|对比|比较|列出)', text)
+    return bool(directive and command_summary)
 
 
 def extract_from_text(text: str, known_names: list[str], today: str) -> dict:

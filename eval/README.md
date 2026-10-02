@@ -1,14 +1,16 @@
 # 评测集
 
+当前实现的验收结果见 [主 README](../README.md)、[交付说明](../docs/DELIVERY.md) 与 [模拟验收](../docs/MOCK_QA.md)。最新完整网关 holdout 为 28/30，字段召回 0.75；简单合成样本的 82/82 字段匹配另行报告。下文的历史泛化缺口和「本轮全过」描述来自原评测框架建立阶段，不应作为当前模型分数。
+
 四层判定，成本不同。**免费层跑在每次提交上；花钱层只在改 prompt / 改抽取逻辑时跑。**
 
 | 层 | 位置 | 花钱 | 覆盖什么 |
 |----|------|------|---------|
 | **L1 抽取** | `eval/run.py` + `eval/cases/tune.jsonl` `holdout.jsonl` | 是 | 从文本抽人物/字段/事实/承诺/账本对不对 |
-| **L2 落库** | `tests/test_invariants.py` | 否 | 三档置信度、幂等、待确认不进汇总、删除不复活 |
+| **L2 落库** | `tests/test_invariants.py`、`test_workflows.py`、`test_corrections.py` | 否 | 置信度、幂等、待确认、跨入口写入、历史与纠错 |
 | **L3 检索** | 待补 | 否 | Recall@5 / MRR（需要 (query, 相关 id) 标注） |
 | **L5 不变量** | `tests/test_invariants.py` | 否 | 七原则：违反即失败，没有「大部分情况对」 |
-| L4 端到端 | 待补 | 最贵 | 多轮脚本 → 库状态 + 工具轨迹（PRD 里 AC-06~14、AC-17~20 属于这层） |
+| L4 任务链路 | `tests/test_workflows.py`、`scripts/mock_e2e.py` | 真实链路需要 API | 对话、媒体、群聊、重试与最终库状态；完整多轮语义量化仍待补 |
 
 评估器本身的比对逻辑在 `eval/metrics.py`，由 `tests/test_eval_metrics.py` 覆盖。
 **理由：评估器写错了比被测代码错了更危险**——指标会假绿，问题被掩盖。
@@ -51,7 +53,7 @@
 ## 怎么跑
 
 ```bash
-cd /Users/emdoor/Documents/projects/integrate/home
+# 在项目根目录执行；下面为 macOS/Linux 命令，Windows 入口见主 README。
 
 # 免费层（不调 LLM，秒级）
 .venv/bin/python -m pytest tests/ -q --basetemp=.pytest-tmp
@@ -149,7 +151,7 @@ L5 不变量层不设门槛——**必须 100%**。
 - **字段名无白名单**：模型可以自造 `family` 这类 schema 外的字段并原样落库
   （`sanitize()` 只做类型归一化，不校验字段名）。要不要加白名单需先定字段表。
 - **L3 检索层**没做，`retrieve.hybrid_search` 目前的排序质量无量化依据。
-- **L4 端到端**没做，Agent 工具调用是否越权、多轮上下文是否正确，目前没有回归。
+- **L4 已覆盖部分任务链路**：跨入口和状态回归在 `test_workflows.py`，真实对话、图片、群聊与幂等验收在 `scripts/mock_e2e.py`。这些不能替代对多轮上下文、复杂语义归属和工具行为的独立量化。
 - **负样本仍偏少**：v1 只有 5 条 `negative-promise`（误判率分辨率 0.2 一档）→ v2 加到 11 条 →
   **v3 现为 12 条**（分辨率 0.083）。目标 20 条以上，且要覆盖**闸门词表里还没有的说法**
   （v3 已放「改日」「我妈」「回头请你喝两杯」这类探针——本轮全过，但过的是模型而不是词表，

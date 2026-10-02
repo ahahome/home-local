@@ -42,21 +42,31 @@ def generate_journal(day: str | None = None) -> str | None:
 
     interactions = [i for i in repo.interactions_since(conn, start) if i["ts"] < end]
     episodic = [m for m in repo.memories_since(conn, start, kinds=["episodic"]) if m["ts"] < end]
-    if not interactions and not episodic:
+    promises = conn.execute("SELECT pr.*,p.display_name FROM promise pr LEFT JOIN person p ON p.id=pr.person_id "
+        "WHERE pr.created_at>=? AND pr.created_at<? AND (pr.person_id IS NULL OR "
+        "(p.deleted_at IS NULL AND p.status!='merged'))", (start, end)).fetchall()
+    ledger = [l for l in repo.ledger_entries(conn, include_pending=False) if start <= l['created_at'] < end]
+    if not interactions and not episodic and not promises and not ledger:
         return None
 
     lines = []
     for i in interactions[:30]:
         names = repo.interaction_person_names(conn, i["id"])
         who = f"（涉及：{'、'.join(names)}）" if names else ""
-        lines.append(f"- [{ms_to_local_str(i['ts'])}] {who}{clamp(i['content'], 80)}")
+        lines.append(f"- [{ms_to_local_str(i['ts'])}] {who}{clamp(i['content'], 1200)}")
     for m in episodic[:30]:
-        lines.append(f"- 记忆：{clamp(m['text'], 80)}")
+        lines.append(f"- 记忆：{clamp(m['text'], 300)}")
+    lines.insert(0, '【当日已确认账目与已记录承诺】\n' + '\n'.join(
+        f"- {p['display_name'] or '自己'}：{'我答应' if p['who']=='me' else '对方答应'} {p['content']}；"
+        f"到期 {ms_to_local_str(p['due_at'])[:10] if p['due_at'] else '未定'}；状态 {p['status']}" for p in promises) + '\n' +
+        '\n'.join(f"- {l['display_name'] or '自己'}：{'收到' if l['direction']=='in' else '付出'} "
+                  f"{l['amount_cents']/100:.2f}元；{l['note'] or ''}" for l in ledger))
 
     text = get_llm().chat([
         {"role": "system", "content": "把下面这一天发生的事整理成一段简洁的中文日志。"
-         "分三块：今天联系了谁、发生了什么、有哪些承诺/金钱往来。客观记录，不要评论。"},
-        {"role": "user", "content": "\n".join(lines)[:6000]},
+         "分三块：今天联系了谁、发生了什么、有哪些承诺/金钱往来。优先准确保留结构化承诺的日期和已确认账目。"
+         "客观记录，不要评论或补写。省略号是系统截取标记，不能据此断言对话发生了中断。"},
+        {"role": "user", "content": "\n".join(lines)[:18000]},
     ], tier="mini", max_tokens=800)["content"]
 
     repo.upsert_journal(conn, day, text)
@@ -102,8 +112,8 @@ def start_scheduler():
 
     sch = BackgroundScheduler(timezone=get_settings().timezone)
     sch.add_job(fire_due_reminders, "interval", minutes=1, id="reminders", replace_existing=True)
-    sch.add_job(generate_journal, CronTrigger(hour=23, minute=50), id="journal", replace_existing=True)
-    sch.add_job(reflect_weekly, CronTrigger(day_of_week="sun", hour=23, minute=0),
+    sch.add_job(generate_journal, CronTrigger(hour=23, minute=50, timezone=get_settings().timezone), id="journal", replace_existing=True)
+    sch.add_job(reflect_weekly, CronTrigger(day_of_week="sun", hour=23, minute=0, timezone=get_settings().timezone),
                 id="reflect", replace_existing=True)
     sch.start()
     return sch

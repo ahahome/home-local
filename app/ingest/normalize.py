@@ -34,7 +34,7 @@ def ingest_file(conn, filename: str, data: bytes, source_msg_id: str | None = No
     jid, created = repo.create_job(conn, kind, payload=filename,
                                    idempotency_key=sha256_bytes(data))
     if not created:
-        return {"job_id": jid, "status": "done", "duplicate": True,
+        return {"job_id": jid, "status": repo.get_job(conn, jid)["status"], "duplicate": True,
                 "message": "相同文件已摄入过，未重复处理"}
     conn.commit()
     repo.update_job(conn, jid, "parsing")
@@ -55,12 +55,13 @@ def ingest_file(conn, filename: str, data: bytes, source_msg_id: str | None = No
                                         source_ref=filename, excerpt=clamp(text, 300))
         extraction = extract.extract_from_text(text, _known_names(conn), today_local())
         applied = apply_mod.apply_extraction(conn, extraction, source_msg_id or jid,
-                                             text, channel=channel)
+                                             text, channel=channel, evidence_id=evidence_id)
         iid, _ = repo.insert_interaction(conn, now_ms(), channel, clamp(text, 4000),
                                          filename, _link_person_ids(conn, applied))
         n_ok = sum(1 for o in applied["outcomes"] if o["status"] == "ok")
         n_pending = sum(1 for o in applied["outcomes"] if o["status"] == "pending")
-        status = "done" if n_pending == 0 else "partial"
+        n_failed = sum(o["status"] == "failed" for o in applied["outcomes"])
+        status = "partial" if n_pending or n_failed else "done"
         repo.update_job(conn, jid, status,
                         result=json.dumps({"ok": n_ok, "pending": n_pending,
                                            "interaction_id": iid, "evidence_id": evidence_id},
@@ -78,7 +79,7 @@ def ingest_url(conn, url: str, source_msg_id: str | None = None) -> dict:
     jid, created = repo.create_job(conn, "webpage", payload=url,
                                    idempotency_key=sha256_bytes(url.encode()))
     if not created:
-        return {"job_id": jid, "status": "done", "duplicate": True,
+        return {"job_id": jid, "status": repo.get_job(conn, jid)["status"], "duplicate": True,
                 "message": "相同 URL 已摄入过，未重复处理"}
     conn.commit()
     repo.update_job(conn, jid, "parsing")
@@ -89,14 +90,15 @@ def ingest_url(conn, url: str, source_msg_id: str | None = None) -> dict:
         evidence_id = repo.add_evidence(conn, "url", source_ref=url, excerpt=clamp(text, 300))
         extraction = extract.extract_from_text(text, _known_names(conn), today_local())
         applied = apply_mod.apply_extraction(conn, extraction, source_msg_id or jid,
-                                             text, channel="web")
+                                             text, channel="web", evidence_id=evidence_id)
         iid, _ = repo.insert_interaction(conn, now_ms(), "web", clamp(text, 4000), url,
                                          _link_person_ids(conn, applied))
-        repo.update_job(conn, jid, "done",
+        status = "partial" if any(o["status"] in {"failed", "pending"} for o in applied["outcomes"]) else "done"
+        repo.update_job(conn, jid, status,
                         result=json.dumps({"title": page["title"], "interaction_id": iid,
                                            "evidence_id": evidence_id}, ensure_ascii=False))
         conn.commit()
-        return {"job_id": jid, "status": "done", "title": page["title"],
+        return {"job_id": jid, "status": status, "title": page["title"],
                 "interaction_id": iid, **applied}
     except Exception as e:  # noqa: BLE001
         repo.update_job(conn, jid, "failed", error=str(e))

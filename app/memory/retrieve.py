@@ -26,6 +26,12 @@ def _fetch_items(conn, keys: list[tuple[str, str]]) -> dict[tuple[str, str], dic
                 }
         elif owner_type == "interaction":
             r = conn.execute("SELECT * FROM interaction WHERE id=?", (oid,)).fetchone()
+            hidden = conn.execute(
+                "SELECT 1 FROM interaction_person ip JOIN person p ON p.id=ip.person_id "
+                "WHERE ip.interaction_id=? AND (p.deleted_at IS NOT NULL OR p.status='merged') LIMIT 1",
+                (oid,)).fetchone()
+            if hidden:
+                continue
             if r:
                 names = repo.interaction_person_names(conn, oid)
                 out[(owner_type, oid)] = {

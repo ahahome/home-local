@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import uuid
 from pathlib import Path
 
 from app.config import get_settings
@@ -20,7 +21,7 @@ def put(data: bytes) -> str:
     if dest.exists():
         return h
     dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_name(dest.name + f".tmp.{os.getpid()}")
+    tmp = dest.with_name(dest.name + f".tmp.{uuid.uuid4().hex}")
     with open(tmp, "wb") as f:
         f.write(data)
         f.flush()

@@ -1,0 +1,1174 @@
+{
+ "meta": {
+  "model": "deepseek-v4-flash",
+  "prompt_hash": "8cc76954f03f",
+  "git_sha": "813f1ff",
+  "ran_at": "2026-10-01T12:33:05",
+  "elapsed_s": 99.0,
+  "repeat": 1,
+  "tag": null,
+  "no_cache": true,
+  "gated_splits": [
+   "holdout"
+  ]
+ },
+ "splits": {
+  "holdout": {
+   "cases_file": "holdout.jsonl",
+   "summary": {
+    "cases": 30,
+    "passed": 28,
+    "pass_rate": 0.9333,
+    "field_recall": 0.75,
+    "promise_recall": 1.0,
+    "evidence_hit_rate": 1.0,
+    "promise_false_positive_rate": 0.0,
+    "negative_promise_cases": 12,
+    "repeat": 1,
+    "flaky": 0,
+    "flaky_ids": [],
+    "cache_hits": 0
+   },
+   "details": [
+    {
+     "id": "hold3-p01",
+     "passed": false,
+     "failures": [
+      "陈静：字段缺失：company（实得 ['city', 'phone', 'title']）"
+     ],
+     "people_found": 1,
+     "stats": {
+      "field_total": 4,
+      "field_hit": 3,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 4,
+      "evidence_hit": 4
+     },
+     "runs_total": 1,
+     "runs_passed": 0,
+     "failure_rate": 1.0
+    },
+    {
+     "id": "hold3-p02",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 1,
+      "promise_hit": 1,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-p03",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 1,
+      "promise_hit": 1,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-p04",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 1,
+      "evidence_hit": 1
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-p05",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 1,
+      "evidence_hit": 1
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-p06",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 1,
+      "evidence_hit": 1
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-p07",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 1,
+      "promise_hit": 1,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-p08",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 1,
+      "promise_hit": 1,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-p09",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-p10",
+     "passed": true,
+     "failures": [],
+     "people_found": 2,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 2,
+      "evidence_hit": 2
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-p11",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 2,
+      "evidence_hit": 2
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-n01",
+     "passed": true,
+     "failures": [],
+     "people_found": 0,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-n02",
+     "passed": true,
+     "failures": [],
+     "people_found": 0,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-n03",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-n04",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-n05",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-n06",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-n07",
+     "passed": true,
+     "failures": [],
+     "people_found": 0,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-n08",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 1,
+      "evidence_hit": 1
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-n09",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 1,
+      "evidence_hit": 1
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-n10",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 1,
+      "evidence_hit": 1
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-n11",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-n12",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-n13",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 1,
+      "evidence_hit": 1
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-n14",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 1,
+      "evidence_hit": 1
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-n15",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 1,
+      "evidence_hit": 1
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-n16",
+     "passed": false,
+     "failures": [
+      "不该出现任何人物，却抽到了：['妈妈']"
+     ],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 1,
+      "evidence_hit": 1
+     },
+     "runs_total": 1,
+     "runs_passed": 0,
+     "failure_rate": 1.0
+    },
+    {
+     "id": "hold3-n17",
+     "passed": true,
+     "failures": [],
+     "people_found": 0,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-n18",
+     "passed": true,
+     "failures": [],
+     "people_found": 0,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 0,
+      "evidence_hit": 0
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    },
+    {
+     "id": "hold3-n19",
+     "passed": true,
+     "failures": [],
+     "people_found": 1,
+     "stats": {
+      "field_total": 0,
+      "field_hit": 0,
+      "promise_expected": 0,
+      "promise_hit": 0,
+      "evidence_total": 1,
+      "evidence_hit": 1
+     },
+     "runs_total": 1,
+     "runs_passed": 1,
+     "failure_rate": 0.0
+    }
+   ],
+   "raw": {
+    "hold3-p01": {
+     "people": [
+      {
+       "name": "陈静",
+       "canonical_name": "陈静",
+       "fields": [
+        {
+         "field": "city",
+         "value": "苏州",
+         "confidence": 0.95,
+         "evidence": "陈静跳槽去苏州的一家医疗器械公司当研发总监了",
+         "valid_from": null,
+         "_source_verified": true
+        },
+        {
+         "field": "title",
+         "value": "研发总监",
+         "confidence": 0.95,
+         "evidence": "陈静跳槽去苏州的一家医疗器械公司当研发总监了",
+         "valid_from": null,
+         "_source_verified": true
+        },
+        {
+         "field": "phone",
+         "value": "13912345678",
+         "confidence": 0.95,
+         "evidence": "电话 13912345678",
+         "valid_from": null,
+         "_source_verified": true
+        }
+       ],
+       "aliases": [],
+       "relations": [],
+       "facts": [
+        {
+         "text": "陈静跳槽去苏州的一家医疗器械公司当研发总监了",
+         "confidence": 0.95,
+         "evidence": "陈静跳槽去苏州的一家医疗器械公司当研发总监了",
+         "_source_verified": true
+        }
+       ],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-p02": {
+     "people": [
+      {
+       "name": "赵磊",
+       "canonical_name": "赵磊",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [],
+       "promises": [
+        {
+         "who": "them",
+         "content": "把图纸发我邮箱",
+         "due": "2026-10-01",
+         "confidence": 0.9
+        }
+       ],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-p03": {
+     "people": [
+      {
+       "name": "孙姐",
+       "canonical_name": "孙姐",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [],
+       "promises": [
+        {
+         "who": "me",
+         "content": "下周一上午把合同带过去给孙姐",
+         "due": "2026-10-05",
+         "confidence": 0.9
+        }
+       ],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-p04": {
+     "people": [
+      {
+       "name": "周涛",
+       "canonical_name": "周涛",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [
+        {
+         "text": "周涛是用户的老同学",
+         "confidence": 0.9,
+         "evidence": "老同学周涛",
+         "_source_verified": true
+        }
+       ],
+       "promises": [],
+       "ledger": [
+        {
+         "direction": "out",
+         "amount_cents": 500000,
+         "note": "应急借款",
+         "occurred": "2026-09-29",
+         "confidence": 0.95
+        }
+       ],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-p05": {
+     "people": [
+      {
+       "name": "林芳",
+       "canonical_name": "林芳",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [
+        {
+         "text": "林芳结婚了",
+         "confidence": 0.95,
+         "evidence": "林芳结婚",
+         "_source_verified": true
+        }
+       ],
+       "promises": [],
+       "ledger": [
+        {
+         "direction": "out",
+         "amount_cents": 120000,
+         "note": "结婚红包",
+         "occurred": null,
+         "confidence": 0.95
+        }
+       ],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-p06": {
+     "people": [
+      {
+       "name": "王强",
+       "canonical_name": "王强",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [
+        {
+         "text": "王强他岳父最近查出糖尿病了",
+         "confidence": 0.95,
+         "evidence": "王强他岳父最近查出糖尿病了",
+         "_source_verified": true
+        }
+       ],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-p07": {
+     "people": [
+      {
+       "name": "吴倩",
+       "canonical_name": "吴倩",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [],
+       "promises": [
+        {
+         "who": "them",
+         "content": "我这周五之前把发票开好给你",
+         "due": "2026-10-02",
+         "confidence": 0.9
+        }
+       ],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-p08": {
+     "people": [
+      {
+       "name": "何军",
+       "canonical_name": "何军",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [],
+       "promises": [
+        {
+         "who": "them",
+         "content": "10月20号之前把尾款结了",
+         "due": "2026-10-20",
+         "confidence": 0.9
+        }
+       ],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-p09": {
+     "people": [
+      {
+       "name": "阿豪",
+       "canonical_name": "黄志豪",
+       "fields": [],
+       "aliases": [
+        {
+         "alias": "阿豪",
+         "confidence": 0.9
+        }
+       ],
+       "relations": [],
+       "facts": [],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-p10": {
+     "people": [
+      {
+       "name": "陈静",
+       "canonical_name": "陈静",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [
+        {
+         "text": "陈静下周一出差去深圳",
+         "confidence": 0.9,
+         "evidence": "我下周一出差去深圳",
+         "_source_verified": true
+        }
+       ],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      },
+      {
+       "name": "赵磊",
+       "canonical_name": "赵磊",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [
+        {
+         "text": "赵磊的父亲下周做手术",
+         "confidence": 0.9,
+         "evidence": "我爸下周做手术",
+         "_source_verified": true
+        }
+       ],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-p11": {
+     "people": [
+      {
+       "name": "老钱",
+       "canonical_name": "老钱",
+       "fields": [
+        {
+         "field": "company",
+         "value": "华为",
+         "confidence": 0.95,
+         "evidence": "前年还在华为",
+         "valid_from": "2024-01-01",
+         "_source_verified": true
+        }
+       ],
+       "aliases": [],
+       "relations": [],
+       "facts": [
+        {
+         "text": "老钱前年（2024年）在华为工作，去年（2025年）出来自己创业做工业软件。",
+         "confidence": 0.95,
+         "evidence": "前年还在华为，去年出来自己创业做工业软件了",
+         "_source_verified": true
+        }
+       ],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-n01": {
+     "people": [],
+     "my_notes": []
+    },
+    "hold3-n02": {
+     "people": [],
+     "my_notes": []
+    },
+    "hold3-n03": {
+     "people": [
+      {
+       "name": "老郭",
+       "canonical_name": "老郭",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-n04": {
+     "people": [
+      {
+       "name": "老白",
+       "canonical_name": "老白",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-n05": {
+     "people": [
+      {
+       "name": "小唐",
+       "canonical_name": "小唐",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-n06": {
+     "people": [
+      {
+       "name": "周姐",
+       "canonical_name": "周姐",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-n07": {
+     "people": [],
+     "my_notes": []
+    },
+    "hold3-n08": {
+     "people": [
+      {
+       "name": "小蔡",
+       "canonical_name": "小蔡",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [
+        {
+         "text": "小蔡表示愿意教做蛋糕",
+         "confidence": 0.9,
+         "evidence": "等有空了教我做那个蛋糕呗",
+         "_source_verified": true
+        }
+       ],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-n09": {
+     "people": [
+      {
+       "name": "小袁",
+       "canonical_name": "小袁",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [
+        {
+         "text": "用户在2026-09-28将资料发给了小袁",
+         "confidence": 0.9,
+         "evidence": "前天我已经把资料发给小袁了。",
+         "_source_verified": true
+        }
+       ],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-n10": {
+     "people": [
+      {
+       "name": "老宋",
+       "canonical_name": "老宋",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [],
+       "promises": [],
+       "ledger": [],
+       "value_read": {
+        "text": "用户认为老宋有能力接这个项目",
+        "confidence": 0.6,
+        "evidence": "要是老宋愿意接这个项目就好了。"
+       }
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-n11": {
+     "people": [
+      {
+       "name": "冯姐",
+       "canonical_name": "冯姐",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-n12": {
+     "people": [
+      {
+       "name": "小严",
+       "canonical_name": "小严",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-n13": {
+     "people": [
+      {
+       "name": "老宋",
+       "canonical_name": "老宋",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [
+        {
+         "text": "他儿子留学一年花费约40多万",
+         "confidence": 0.9,
+         "evidence": "老宋说他儿子留学一年要花40多万",
+         "_source_verified": true
+        }
+       ],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-n14": {
+     "people": [
+      {
+       "name": "袁总",
+       "canonical_name": "袁总",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [
+        {
+         "text": "袁总他们公司刚融了3000万",
+         "confidence": 0.95,
+         "evidence": "袁总他们公司刚融了 3000 万",
+         "_source_verified": true
+        }
+       ],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-n15": {
+     "people": [
+      {
+       "name": "小冯",
+       "canonical_name": "小冯",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [
+        {
+         "text": "他们小区房价涨到6万了",
+         "confidence": 0.9,
+         "evidence": "小冯说他们小区房价涨到 6 万了",
+         "_source_verified": true
+        }
+       ],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-n16": {
+     "people": [
+      {
+       "name": "我妈",
+       "canonical_name": "妈妈",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [
+        {
+         "text": "妈妈最近迷上跳广场舞了",
+         "confidence": 0.95,
+         "evidence": "我妈最近迷上跳广场舞了",
+         "_source_verified": true
+        }
+       ],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    },
+    "hold3-n17": {
+     "people": [],
+     "my_notes": []
+    },
+    "hold3-n18": {
+     "people": [],
+     "my_notes": [
+      {
+       "text": "我最近开始健身了，每周三次。",
+       "kind": "semantic",
+       "confidence": 0.9
+      }
+     ]
+    },
+    "hold3-n19": {
+     "people": [
+      {
+       "name": "王丽",
+       "canonical_name": "王丽",
+       "fields": [],
+       "aliases": [],
+       "relations": [],
+       "facts": [
+        {
+         "text": "王丽的老公是儿科医生",
+         "confidence": 0.95,
+         "evidence": "王丽的老公是儿科医生",
+         "_source_verified": true
+        }
+       ],
+       "promises": [],
+       "ledger": [],
+       "value_read": null
+      }
+     ],
+     "my_notes": []
+    }
+   }
+  }
+ }
+}

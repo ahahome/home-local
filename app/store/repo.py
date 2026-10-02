@@ -37,10 +37,11 @@ def get_person(conn, pid: str):
 
 
 def get_person_by_name(conn, name: str):
-    return conn.execute(
-        "SELECT p.* FROM person p JOIN person_alias a ON a.person_id=p.id "
-        "WHERE a.alias=? AND p.deleted_at IS NULL AND p.status!='merged' LIMIT 1", (name,),
-    ).fetchone()
+    rows = conn.execute(
+        "SELECT DISTINCT p.* FROM person p JOIN person_alias a ON a.person_id=p.id "
+        "WHERE a.alias=? AND p.deleted_at IS NULL AND p.status!='merged' LIMIT 2", (name,),
+    ).fetchall()
+    return rows[0] if len(rows) == 1 else None
 
 
 def all_active_persons(conn) -> list:
@@ -167,6 +168,10 @@ def purge_person(conn, pid: str) -> dict:
     memory_ids = [r["id"] for r in conn.execute(
         "SELECT id FROM memory_item WHERE person_id=?", (pid,)).fetchall()]
     ev_ids = _evidence_ids_of(conn, pid)
+    exclusive_interactions = [r[0] for r in conn.execute(
+        "SELECT interaction_id FROM interaction_person WHERE person_id=? AND NOT EXISTS "
+        "(SELECT 1 FROM interaction_person other WHERE other.interaction_id=interaction_person.interaction_id "
+        "AND other.person_id!=?)", (pid, pid))]
 
     deleted: dict[str, int] = {}
 
@@ -180,6 +185,15 @@ def purge_person(conn, pid: str) -> dict:
         _del("memory_fts", "owner_type='memory' AND owner_id=?", (mid,))
     for table, col in _PURGE_LINKS:
         _del(table, f"{col}=?", (pid,))
+    correction_persons = [r[0] for r in conn.execute(
+        "WITH RECURSIVE ids(id) AS (SELECT ? UNION SELECT p.id FROM person p JOIN ids ON p.merged_into=ids.id "
+        "WHERE p.status='merged') SELECT id FROM ids", (pid,))]
+    for correction_pid in correction_persons:
+        _del("correction_log", "person_id=? OR related_person_id=?", (correction_pid, correction_pid))
+    for iid in exclusive_interactions:
+        _del("memory_fts", "owner_type='interaction' AND owner_id=?", (iid,))
+        _del("vector_item", "owner_type='interaction' AND owner_id=?", (iid,))
+        _del("interaction", "id=?", (iid,))
     _del("relation_edge", "from_person=? OR to_person=?", (pid, pid))
     for mid in memory_ids:
         _del("vector_item", "owner_type='memory' AND owner_id=?", (mid,))
@@ -239,8 +253,9 @@ def _evidence_ids_of(conn, pid: str) -> list[str]:
         "SELECT DISTINCT evidence_id e FROM memory_item WHERE person_id=?",
         "SELECT DISTINCT evidence_id e FROM promise WHERE person_id=?",
         "SELECT DISTINCT evidence_id e FROM ledger_entry WHERE person_id=?",
+        "SELECT DISTINCT evidence_id e FROM relation_edge WHERE from_person=? OR to_person=?",
     ):
-        for r in conn.execute(sql, (pid,)).fetchall():
+        for r in conn.execute(sql, (pid, pid) if "OR to_person" in sql else (pid,)).fetchall():
             if r["e"]:
                 ids.add(r["e"])
     return sorted(ids)
@@ -261,6 +276,8 @@ def _purge_evidence(conn, ev_ids: list[str], deleted: dict[str, int]) -> list[st
             continue
         if conn.execute(
             "SELECT 1 FROM ledger_entry WHERE evidence_id=? LIMIT 1", (eid,)).fetchone():
+            continue
+        if conn.execute("SELECT 1 FROM relation_edge WHERE evidence_id=? LIMIT 1", (eid,)).fetchone():
             continue
         ev = conn.execute("SELECT blob_hash FROM evidence WHERE id=?", (eid,)).fetchone()
         conn.execute("DELETE FROM evidence WHERE id=?", (eid,))
@@ -318,13 +335,34 @@ def upsert_field(conn, person_id: str, field: str, value: str, confidence: float
     cur = conn.execute(
         "SELECT * FROM person_field WHERE person_id=? AND field=? AND valid_to IS NULL",
         (person_id, field)).fetchone()
-    if cur and (cur["value"] or "") == (value or ""):
+    if not valid_from and cur and (cur["value"] or "") == (value or ""):
         # 相同值：只提升置信度/证据，不产生新版本
         if confidence > cur["confidence"]:
             conn.execute(
                 "UPDATE person_field SET confidence=?, evidence_id=COALESCE(?,evidence_id) "
                 "WHERE person_id=? AND field=? AND valid_to IS NULL",
                 (confidence, evidence_id, person_id, field))
+        return
+    if valid_from is not None:
+        existing = conn.execute("SELECT * FROM person_field WHERE person_id=? AND field=? AND valid_from=?",
+                                (person_id, field, vf)).fetchone()
+        if existing:
+            if existing["value"] == value:
+                return
+            vf += 1
+        while conn.execute("SELECT 1 FROM person_field WHERE person_id=? AND field=? AND valid_from=?",
+                           (person_id, field, vf)).fetchone():
+            vf += 1
+        nxt = conn.execute("SELECT MIN(valid_from) t FROM person_field WHERE person_id=? AND field=? AND valid_from>?",
+                           (person_id, field, vf)).fetchone()["t"]
+        prev = conn.execute("SELECT MAX(valid_from) t FROM person_field WHERE person_id=? AND field=? AND valid_from<?",
+                            (person_id, field, vf)).fetchone()["t"]
+        if prev is not None:
+            conn.execute("UPDATE person_field SET valid_to=? WHERE person_id=? AND field=? AND valid_from=? "
+                         "AND (valid_to IS NULL OR valid_to>?)",
+                         (vf, person_id, field, prev, vf))
+        conn.execute("INSERT INTO person_field VALUES(?,?,?,?,?,?,?,?)",
+                     (person_id, field, value, confidence, evidence_id, vf, nxt, now))
         return
     if cur:
         # 防 PK 冲突：新版本的 valid_from 必须严格大于旧版本（同毫秒写入时递增）
@@ -333,6 +371,11 @@ def upsert_field(conn, person_id: str, field: str, value: str, confidence: float
         conn.execute(
             "UPDATE person_field SET valid_to=? WHERE person_id=? AND field=? AND valid_to IS NULL",
             (vf, person_id, field))
+    # A manually removed field has no current row, but still has historical keys.
+    latest = conn.execute("SELECT MAX(valid_from) FROM person_field WHERE person_id=? AND field=?",
+                          (person_id, field)).fetchone()[0]
+    if latest is not None and vf <= latest:
+        vf = latest + 1
     conn.execute(
         "INSERT INTO person_field(person_id,field,value,confidence,evidence_id,valid_from,valid_to,recorded_at)"
         " VALUES(?,?,?,?,?,?,NULL,?)",
@@ -378,7 +421,9 @@ def recent_interactions(conn, person_id: str, limit: int = 5) -> list:
 
 def interactions_since(conn, since_ms: int) -> list:
     return conn.execute(
-        "SELECT * FROM interaction WHERE ts>=? ORDER BY ts", (since_ms,)).fetchall()
+        "SELECT i.* FROM interaction i WHERE ts>=? AND NOT EXISTS (SELECT 1 FROM interaction_person ip "
+        "JOIN person p ON p.id=ip.person_id WHERE ip.interaction_id=i.id AND "
+        "(p.deleted_at IS NOT NULL OR p.status='merged')) ORDER BY ts", (since_ms,)).fetchall()
 
 
 def interaction_person_names(conn, interaction_id: str) -> list[str]:
@@ -426,7 +471,7 @@ def memories_since(conn, since_ms: int, kinds: list[str] | None = None) -> list:
 
 
 def my_profile_memories(conn) -> list:
-    """用户自己的目标/偏好/个人档案 —— FR-MEM-05：每轮全量读取。"""
+    """近期个人记忆；更早的内容保留在库中，可通过全文检索读取。"""
     return conn.execute(
         "SELECT * FROM memory_item WHERE person_id IS NULL AND deleted_at IS NULL "
         "AND kind IN ('semantic','episodic') ORDER BY ts DESC LIMIT 200").fetchall()
@@ -472,6 +517,8 @@ def open_promises(conn, person_id: str | None = None) -> list:
 
 def set_promise_status(conn, pid: str, status: str) -> None:
     conn.execute("UPDATE promise SET status=?, updated_at=? WHERE id=?", (status, now_ms(), pid))
+    if status != "open":
+        conn.execute("UPDATE reminder SET status='cancelled' WHERE promise_id=? AND status='pending'", (pid,))
 
 
 # ---------------- ledger ----------------
@@ -504,6 +551,8 @@ def ledger_totals(conn, person_id: str | None = None) -> dict:
     if person_id:
         where += " AND person_id=?"
         params.append(person_id)
+    else:
+        where += " AND (person_id IS NULL OR person_id IN (SELECT id FROM person WHERE deleted_at IS NULL AND status!='merged'))"
     row = conn.execute(
         f"SELECT COALESCE(SUM(CASE WHEN direction='in' THEN amount_cents ELSE 0 END),0) tin,"
         f" COALESCE(SUM(CASE WHEN direction='out' THEN amount_cents ELSE 0 END),0) tout,"
@@ -511,16 +560,19 @@ def ledger_totals(conn, person_id: str | None = None) -> dict:
     return {"in_cents": row["tin"], "out_cents": row["tout"], "count": row["n"]}
 
 
-def ledger_entries(conn, person_id: str | None = None, include_pending: bool = True) -> list:
+def ledger_entries(conn, person_id: str | None = None, include_pending: bool = True, include_void: bool = False,
+                   limit: int = 100, offset: int = 0) -> list:
     sql = "SELECT l.*, p.display_name FROM ledger_entry l LEFT JOIN person p ON p.id=l.person_id"
-    conds, params = ["l.status!='void'"], []
+    conds, params = (["1=1"] if include_void else ["l.status!='void'"]), []
     if person_id:
         conds.append("l.person_id=?")
         params.append(person_id)
+    else:
+        conds.append("(l.person_id IS NULL OR (p.deleted_at IS NULL AND p.status!='merged'))")
     if not include_pending:
         conds.append("l.status='confirmed'")
-    return conn.execute(sql + " WHERE " + " AND ".join(conds) + " ORDER BY l.occurred_at DESC LIMIT 100",
-                        params).fetchall()
+    return conn.execute(sql + " WHERE " + " AND ".join(conds) + " ORDER BY l.occurred_at DESC,l.id DESC LIMIT ? OFFSET ?",
+                        [*params, limit, offset]).fetchall()
 
 
 # ---------------- skill ----------------
@@ -556,6 +608,11 @@ def list_skills(conn) -> list:
 
 def add_evidence(conn, kind: str, blob_hash: str | None = None, source_ref: str | None = None,
                  excerpt: str | None = None) -> str:
+    if source_ref:
+        existing = conn.execute("SELECT id FROM evidence WHERE kind=? AND source_ref=? AND blob_hash IS ?",
+                                (kind, source_ref, blob_hash)).fetchone()
+        if existing:
+            return existing["id"]
     eid = new_id()
     conn.execute(
         "INSERT INTO evidence(id,kind,blob_hash,source_ref,excerpt,created_at) VALUES(?,?,?,?,?,?)",
@@ -569,6 +626,10 @@ def create_job(conn, kind: str, payload: str, idempotency_key: str | None = None
     if idempotency_key:
         exist = conn.execute("SELECT id FROM ingest_job WHERE idempotency_key=?", (idempotency_key,)).fetchone()
         if exist:
+            job = get_job(conn, exist["id"])
+            if job["status"] in {"failed", "partial"}:
+                conn.execute("UPDATE ingest_job SET status='queued',error=NULL WHERE id=?", (job["id"],))
+                return job["id"], True
             return exist["id"], False
     jid = new_id()
     t = now_ms()
@@ -627,10 +688,21 @@ def mark_patch(conn, fingerprint: str, person_id: str | None, field: str, value_
 
 
 def add_pending(conn, kind: str, payload: dict, reason: str) -> str:
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    existing = conn.execute("SELECT id FROM pending_item WHERE kind=? AND payload=? "
+                            "AND resolved_at IS NULL", (kind, encoded)).fetchone()
+    if existing:
+        return existing["id"]
+    for key in ("fingerprint", "dedupe_hash"):
+        if payload.get(key):
+            existing = conn.execute("SELECT id FROM pending_item WHERE kind=? AND resolved_at IS NULL "
+                "AND json_extract(payload,?)=?", (kind, "$." + key, payload[key])).fetchone()
+            if existing:
+                return existing["id"]
     pid = new_id()
     conn.execute(
         "INSERT INTO pending_item(id,kind,payload,reason,created_at) VALUES(?,?,?,?,?)",
-        (pid, kind, json.dumps(payload, ensure_ascii=False), reason, now_ms()))
+        (pid, kind, encoded, reason, now_ms()))
     return pid
 
 
@@ -701,7 +773,8 @@ def add_message(conn, conversation_id: str, role: str, content: str | None,
 
 def list_messages(conn, conversation_id: str, limit: int = 200) -> list:
     return conn.execute(
-        "SELECT * FROM message WHERE conversation_id=? ORDER BY created_at LIMIT ?",
+        "SELECT * FROM (SELECT rowid ordering, * FROM message WHERE conversation_id=? "
+        "ORDER BY created_at DESC, rowid DESC LIMIT ?) ORDER BY created_at, ordering",
         (conversation_id, limit)).fetchall()
 
 
@@ -724,7 +797,9 @@ def add_reminder(conn, fire_at: int, text: str, person_id: str | None = None,
 
 def due_reminders(conn, now: int) -> list:
     return conn.execute(
-        "SELECT * FROM reminder WHERE status='pending' AND fire_at<=? ORDER BY fire_at LIMIT 50", (now,)).fetchall()
+        "SELECT r.* FROM reminder r LEFT JOIN person p ON p.id=r.person_id WHERE r.status='pending' "
+        "AND r.fire_at<=? AND (r.person_id IS NULL OR (p.id IS NOT NULL AND p.deleted_at IS NULL "
+        "AND p.status!='merged')) ORDER BY r.fire_at LIMIT 50", (now,)).fetchall()
 
 
 def mark_reminder_fired(conn, rid: str) -> None:
@@ -734,7 +809,8 @@ def mark_reminder_fired(conn, rid: str) -> None:
 def upcoming_reminders(conn, limit: int = 50) -> list:
     return conn.execute(
         "SELECT r.*, p.display_name FROM reminder r LEFT JOIN person p ON p.id=r.person_id "
-        "WHERE r.status='pending' ORDER BY r.fire_at LIMIT ?", (limit,)).fetchall()
+        "WHERE r.status='pending' AND (r.person_id IS NULL OR (p.deleted_at IS NULL AND p.status!='merged')) "
+        "ORDER BY r.fire_at LIMIT ?", (limit,)).fetchall()
 
 
 def add_notification(conn, kind: str, text: str) -> str:

@@ -1,13 +1,13 @@
 # 评测集
 
-当前实现的验收结果见 [主 README](../README.md)、[交付说明](../docs/DELIVERY.md) 与 [模拟验收](../docs/MOCK_QA.md)。最新完整网关 holdout 为 28/30，字段召回 0.75；简单合成样本的 82/82 字段匹配另行报告。下文的历史泛化缺口和「本轮全过」描述来自原评测框架建立阶段，不应作为当前模型分数。
+当前实现的验收结果见 [主 README](../README.md)、[交付说明](../docs/DELIVERY.md) 与 [模拟验收](../docs/MOCK_QA.md)。2026-10-03 对已有 30 条 holdout 样本各采样一次、关闭缓存的 [网关复测](results/20261003-130302-a2a33e1.json) 通过 29/30，字段召回 0.75；这不是全新留出集，仍存在公司字段漏抽。此前完整运行是 28/30，简单合成样本的 82/82 字段匹配另行报告。下文的历史泛化缺口和「本轮全过」描述来自原评测框架建立阶段，不应作为当前模型分数。
 
 四层判定，成本不同。**免费层跑在每次提交上；花钱层只在改 prompt / 改抽取逻辑时跑。**
 
 | 层 | 位置 | 花钱 | 覆盖什么 |
 |----|------|------|---------|
 | **L1 抽取** | `eval/run.py` + `eval/cases/tune.jsonl` `holdout.jsonl` | 是 | 从文本抽人物/字段/事实/承诺/账本对不对 |
-| **L2 落库** | `tests/test_invariants.py`、`test_workflows.py`、`test_corrections.py` | 否 | 置信度、幂等、待确认、跨入口写入、历史与纠错 |
+| **L2 落库** | `tests/test_invariants.py`、`test_workflows.py`、`test_corrections.py`、`test_extraction_validation.py` | 否 | 置信度、金额、幂等、方向确认、跨入口写入、历史与纠错 |
 | **L3 检索** | 待补 | 否 | Recall@5 / MRR（需要 (query, 相关 id) 标注） |
 | **L5 不变量** | `tests/test_invariants.py` | 否 | 七原则：违反即失败，没有「大部分情况对」 |
 | L4 任务链路 | `tests/test_workflows.py`、`scripts/mock_e2e.py` | 真实链路需要 API | 对话、媒体、群聊、重试与最终库状态；完整多轮语义量化仍待补 |

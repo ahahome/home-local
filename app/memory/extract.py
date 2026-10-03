@@ -22,10 +22,12 @@ SL1 评测暴露的缺陷，处理方式不一样——记在这里免得后人�
 from __future__ import annotations
 
 import re
+import math
 from datetime import datetime, timedelta
 from typing import Any
 
 from app.llm import get_llm
+from app.money import amount_to_cents
 from app.util import flatten_for_match
 
 SYSTEM = """你是一个信息抽取器。从文本中抽取关于「人」的事实，只输出 JSON。
@@ -53,6 +55,7 @@ SYSTEM = """你是一个信息抽取器。从文本中抽取关于「人」的�
 
 字段归位规则（这三类是最常见的放错位置）：
 - ledger 只记「你和某人之间真实发生的收付款」：转账、借款、还款、份子钱、代付、报销。
+  direction=in 表示用户收到，out 表示用户付出；不能判断时填 null，不得默认支出。
   判断依据是「钱有没有在你和这个人之间移动」。某人的薪资/年薪/奖金/收入、公司规模/营收/
   融资额、房价、报价、商品单价——钱没在这个人和你之间移动，都不是 ledger，应记为 facts 或对应字段。
 - 地点：「搬到/住在/去了/从…来 + 城市名」→ city 字段，不要放进 company。
@@ -141,15 +144,33 @@ _WEEKDAY_CN = ("周一", "周二", "周三", "周四", "周五", "周六", "周�
 
 
 def _f(x: Any, default: float = 0.5) -> float:
+    if x is None:
+        return default
+    if isinstance(x, bool):
+        return 0.0
     try:
         v = float(x)
-    except (TypeError, ValueError):
-        return default
+    except (TypeError, ValueError, OverflowError):
+        return 0.0
+    if not math.isfinite(v):
+        return 0.0
     return max(0.0, min(1.0, v))
 
 
 def _s(x: Any) -> str:
-    return "" if x is None else str(x).strip()
+    if isinstance(x, str):
+        return x.strip()
+    if isinstance(x, (int, float)) and not isinstance(x, bool):
+        try:
+            return str(x) if math.isfinite(x) else ""
+        except OverflowError:
+            return ""
+    return ""
+
+
+def _items(value: Any) -> list:
+    """A malformed collection must not prevent valid sibling records from landing."""
+    return value if isinstance(value, list) else []
 
 
 def _is_pleasantry(content: str) -> bool:
@@ -349,7 +370,7 @@ def sanitize(obj: Any, source: str = "") -> dict:
     if not isinstance(obj, dict):
         return out
     src_flat = flatten_for_match(source) if source else ""
-    for p in obj.get("people") or []:
+    for p in _items(obj.get("people")):
         if not isinstance(p, dict):
             continue
         name = _s(p.get("name"))
@@ -361,7 +382,7 @@ def sanitize(obj: Any, source: str = "") -> dict:
             "fields": [], "aliases": [], "relations": [], "facts": [],
             "promises": [], "ledger": [], "value_read": None,
         }
-        for f in p.get("fields") or []:
+        for f in _items(p.get("fields")):
             if isinstance(f, dict) and _s(f.get("field")) and _s(f.get("value")):
                 person["fields"].append({
                     "field": _s(f["field"]), "value": _s(f["value"]),
@@ -369,23 +390,23 @@ def sanitize(obj: Any, source: str = "") -> dict:
                     "evidence": _evidence(f.get("evidence"), src_flat),
                     "valid_from": _s(f.get("valid_from")) or None,
                 })
-        for a in p.get("aliases") or []:
+        for a in _items(p.get("aliases")):
             if isinstance(a, dict) and _s(a.get("alias")):
                 person["aliases"].append({"alias": _s(a["alias"]), "confidence": _f(a.get("confidence"))})
-        for r in p.get("relations") or []:
+        for r in _items(p.get("relations")):
             if isinstance(r, dict) and _s(r.get("to")):
                 person["relations"].append({
                     "to": _s(r["to"]), "kind": _s(r.get("kind")) or "know",
                     "confidence": _f(r.get("confidence")),
                     "evidence": _evidence(r.get("evidence"), src_flat),
                 })
-        for fa in p.get("facts") or []:
+        for fa in _items(p.get("facts")):
             if isinstance(fa, dict) and _s(fa.get("text")):
                 person["facts"].append({
                     "text": _s(fa["text"]), "confidence": _f(fa.get("confidence"), 0.85),
                     "evidence": _evidence(fa.get("evidence"), src_flat),
                 })
-        for pr in p.get("promises") or []:
+        for pr in _items(p.get("promises")):
             if not isinstance(pr, dict) or not _s(pr.get("content")):
                 continue
             content = _s(pr["content"])
@@ -399,16 +420,14 @@ def sanitize(obj: Any, source: str = "") -> dict:
                 "content": content, "due": _s(pr.get("due")) or None,
                 "confidence": _f(pr.get("confidence"), 0.85),
             })
-        for le in p.get("ledger") or []:
+        for le in _items(p.get("ledger")):
             if isinstance(le, dict) and le.get("amount") is not None:
                 try:
-                    cents = int(round(float(le["amount"]) * 100))
-                except (TypeError, ValueError):
-                    continue
-                if cents <= 0:
+                    cents = amount_to_cents(le["amount"])
+                except ValueError:
                     continue
                 person["ledger"].append({
-                    "direction": le.get("direction") if le.get("direction") in ("in", "out") else "out",
+                    "direction": le.get("direction") if le.get("direction") in ("in", "out") else None,
                     "amount_cents": cents, "note": _s(le.get("note")),
                     "occurred": _s(le.get("occurred")) or None,
                     "confidence": _f(le.get("confidence"), 0.7),
@@ -429,7 +448,7 @@ def sanitize(obj: Any, source: str = "") -> dict:
                     # Preserve the model's confidence; the write gate separately checks provenance.
                     item['_source_verified'] = bool(item.get('evidence'))
 
-    for n in obj.get("my_notes") or []:
+    for n in _items(obj.get("my_notes")):
         if isinstance(n, dict) and _s(n.get("text")) and not is_task_note(_s(n['text']), source):
             out["my_notes"].append({
                 "text": _s(n["text"]),

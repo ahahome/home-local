@@ -216,10 +216,36 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
         for le in p["ledger"]:
             # Extraction and tools can disagree; an explicit quoted transfer direction wins.
             le = dict(le)
+            unknown_key = sha256_text(f"ledger-unknown|{person_id}|{le['amount_cents']}|{le.get('occurred') or ''}|{source_msg_id}")
+            # A manual decision on this source also wins if a later model supplies
+            # a direction that was missing before. Do not revive or reinterpret it.
+            if rejected('ledger', unknown_key):
+                outcomes.append(Outcome('ledger', 'skipped', '这条来源的账目已被丢弃'))
+                continue
+            if repo.has_patch(conn, sha256_text('ledgerpatch|' + unknown_key)):
+                outcomes.append(Outcome('ledger', 'duplicate', '这条来源的账目已确认方向'))
+                continue
+            existing_choice = conn.execute("SELECT id FROM pending_item WHERE kind='ledger' AND resolved_at IS NULL "
+                "AND json_extract(payload,'$.dedupe_hash')=?", (unknown_key,)).fetchone()
+            if existing_choice:
+                pending_ids.append(existing_choice['id'])
+                outcomes.append(Outcome('ledger', 'pending', '这条来源的账目仍需选择收到或付出'))
+                continue
             direction = explicit_transfer_direction(evidence_excerpt,
                 [p['name'], name, *repo.aliases_of(conn, person_id)], le['amount_cents'])
             if direction:
                 le['direction'] = direction
+            if le.get('direction') not in ('in', 'out'):
+                # No ledger row exists until the user chooses a direction. Keep a
+                # source-specific key so confirmation/discard also survives replay.
+                day = le.get('occurred') or today_local()
+                pending_ids.append(repo.add_pending(conn, 'ledger', {
+                    'person_id': person_id, **le, 'direction': None, 'occurred': day,
+                    'evidence_id': evidence_id, 'source_msg_id': source_msg_id,
+                    'dedupe_hash': unknown_key,
+                }, '收支方向不明确，请选择收到或付出'))
+                outcomes.append(Outcome('ledger', 'pending', f"方向待确认 {le['amount_cents']/100:.2f}"))
+                continue
             occurred_ms = _date_ms(le.get("occurred")) or now_ms()
             dh = ledger_key(person_id, le["direction"], le["amount_cents"], le.get("occurred"))
             if rejected('ledger', dh):

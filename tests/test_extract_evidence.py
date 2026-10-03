@@ -90,11 +90,11 @@ def test_amount_becomes_cents_and_bad_amount_dropped():
     assert len(led) == 1 and led[0]["amount_cents"] == 200000
 
 
-def test_unknown_direction_defaults_to_out():
+def test_unknown_direction_requires_confirmation():
     p = {"name": "甲", "canonical_name": "甲", "fields": [], "aliases": [], "relations": [],
          "facts": [], "promises": [], "ledger": [{"amount": 10, "direction": "sideways"}]}
     got = sanitize({"people": [p], "my_notes": []})
-    assert got["people"][0]["ledger"][0]["direction"] == "out"
+    assert got["people"][0]["ledger"][0]["direction"] is None
 
 
 def test_confidence_is_clamped_and_defaulted():

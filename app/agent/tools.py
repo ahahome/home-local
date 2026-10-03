@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 
 from app.memory import compile_card, retrieve
+from app.money import amount_to_cents
 from app.store import repo
 from app.util import ms_to_local_str, now_ms
 
@@ -151,12 +152,16 @@ def _shared_write(conn, name, args, source_text, source_msg_id):
             confidence = 0.7
     if name == "record_transfer":
         import re
-        cents = int(round(float(args["amount_yuan"]) * 100))
-        if cents <= 0 or args["direction"] not in {"in", "out"}:
+        cents = amount_to_cents(args["amount_yuan"])
+        if args["direction"] not in ("in", "out"):
             raise ValueError("金额必须为正，方向必须为 in 或 out")
         if source_text is not None:
-            amount = float(args["amount_yuan"])
-            mentioned = any(abs(float(v) - amount) < .005 for v in re.findall(r"\d+(?:\.\d+)?", source))
+            mentioned = False
+            for value in re.findall(r"\d+(?:\.\d+)?", source):
+                try:
+                    mentioned |= amount_to_cents(value) == cents
+                except ValueError:
+                    pass
             confidence = .95 if mentioned and re.search(r"转|给|收|付|借|还|礼金|随礼|报销", source) else .7
     if name == "note":
         obj = {"people": [], "my_notes": [{"text": args["text"], "kind": "semantic", "confidence": confidence}]}

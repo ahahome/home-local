@@ -2,13 +2,13 @@
 import json
 
 from app.memory import apply as apply_mod
-from app.memory.writes import resolve_person, discard_key
+from app.memory.writes import resolve_person, discard_key, ledger_key
 from app.store import repo
 from app.store.db import savepoint
-from app.util import normalize_value, now_ms
+from app.util import normalize_value, now_ms, sha256_text
 
 
-def resolve(conn, item_id, action, person_id=None):
+def resolve(conn, item_id, action, person_id=None, direction=None):
     if action not in {"confirm", "discard"}:
         raise ValueError("操作必须为 confirm 或 discard")
     item = repo.get_pending(conn, item_id)
@@ -41,13 +41,30 @@ def resolve(conn, item_id, action, person_id=None):
                     repo.upsert_field(conn, p["person_id"], p["field"], p["value"], 1.0,
                                       p.get("evidence_id"), apply_mod._date_ms(p.get("valid_from")))
                 elif kind == "ledger":
+                    selected = p.get('direction')
+                    unknown = selected not in ('in', 'out')
+                    if unknown:
+                        if direction not in ('in', 'out'):
+                            raise ValueError('请选择收到（in）或付出（out）')
+                        selected = direction
+                    elif direction is not None and direction != selected:
+                        raise ValueError('这条账目的方向已经确定，请在账本中修改')
                     if p.get("ledger_id"):
                         conn.execute("UPDATE ledger_entry SET status='confirmed' WHERE id=? AND status='pending'",
                                      (p["ledger_id"],))
                     else:
-                        repo.add_ledger(conn, p["direction"], p["amount_cents"], p.get("person_id"),
+                        dedupe = ledger_key(p.get('person_id'), selected, p['amount_cents'], p.get('occurred')) if unknown else p['dedupe_hash']
+                        lid, _ = repo.add_ledger(conn, selected, p["amount_cents"], p.get("person_id"),
                             p.get("note"), apply_mod._date_ms(p.get("occurred")) or now_ms(),
-                            "confirmed", p["dedupe_hash"], p.get("evidence_id"))
+                            "confirmed", dedupe, p.get("evidence_id"))
+                        if unknown:
+                            row = conn.execute('SELECT status FROM ledger_entry WHERE id=?', (lid,)).fetchone()
+                            if row['status'] == 'void':
+                                raise ValueError('同一笔账目已撤销，不能通过确认重新计入')
+                            conn.execute("UPDATE ledger_entry SET status='confirmed' WHERE id=? AND status='pending'", (lid,))
+                    if unknown:
+                        repo.mark_patch(conn, sha256_text('ledgerpatch|' + p['dedupe_hash']), p.get('person_id'),
+                                        'ledger', str(p['amount_cents']), p.get('source_msg_id', item_id))
                 elif kind == "promise":
                     pid = repo.add_promise(conn, p["who"], p["content"], p.get("person_id"),
                                            apply_mod._date_ms(p.get("due")), p.get("evidence_id"))

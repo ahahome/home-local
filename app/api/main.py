@@ -294,6 +294,10 @@ def list_pending():
         for candidate in payload.get('candidates', []):
             fields = repo.current_fields(conn, candidate['person_id'])
             candidate['hint'] = ' · '.join(str(fields[k]['value']) for k in ('company','title','city') if k in fields and fields[k]['value'])
+        if p['kind'] == 'ledger' and payload.get('evidence_id') and not payload.get('evidence'):
+            evidence = conn.execute('SELECT excerpt FROM evidence WHERE id=?', (payload['evidence_id'],)).fetchone()
+            if evidence:
+                payload['evidence'] = evidence['excerpt']
         person = repo.get_person(conn, payload.get('person_id')) if payload.get('person_id') else None
         items.append({'id': p['id'], 'kind': p['kind'], 'payload': payload,
                       'person_name': person['display_name'] if person else payload.get('mention'),
@@ -304,13 +308,14 @@ def list_pending():
 class ResolveIn(BaseModel):
     action: Literal["confirm", "discard"]
     person_id: str | None = None  # person_identity 确认时选定的对象，"new" 表示新建
+    direction: Literal['in', 'out'] | None = None  # 方向不明的账目必须明确选择
 
 
 @app.post("/api/pending/{pid}/resolve")
 def resolve_pending(pid: str, body: ResolveIn):
     from app.memory.pending import resolve
     try:
-        return resolve(get_conn(), pid, body.action, body.person_id)
+        return resolve(get_conn(), pid, body.action, body.person_id, body.direction)
     except ValueError as e:
         raise HTTPException(400, str(e))
 

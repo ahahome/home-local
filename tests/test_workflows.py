@@ -84,6 +84,37 @@ def test_existing_legacy_promise_and_distinct_same_day_actions(conn):
     assert promise_key(pid,'me','10月21日前给江遥发送验收文件','2026-10-21')==promise_key(pid,'me','给江遥发送验收文件','2026-10-21')
 
 
+@pytest.mark.parametrize('first,second', [
+    ('2026-10-21前给江遥发送验收文件', '发送验收文件'),
+    ('发送验收文件', '给江遥发送验收文件'),
+    ('给小江发送验收文件', '给江遥发送验收文件'),
+])
+def test_promise_recipient_variants_deduplicate_across_extract_and_tool(conn, first, second):
+    pid = repo.create_person(conn, '江遥', status='active')
+    repo.add_alias(conn, pid, '小江', 'manual', 1)
+    apply.apply_extraction(conn, {'people': [person_patch('江遥', promises=[
+        {'who': 'me', 'content': first, 'due': '2026-10-21', 'confidence': .95}])]},
+        'recipient-variant', first)
+    result = tools.execute_tool(conn, 'create_promise', {'person_id': pid, 'who': 'me',
+        'content': second, 'due_date': '2026-10-21'}, source_text=second,
+        source_msg_id='recipient-variant')
+    assert result['ok']
+    assert conn.execute('SELECT COUNT(*) FROM promise').fetchone()[0] == 1
+    assert conn.execute('SELECT COUNT(*) FROM reminder').fetchone()[0] == 1
+
+
+def test_promise_recipient_normalization_preserves_distinct_commitments(conn):
+    for who, content, due in [('me', '给江遥发送验收文件', '2026-10-21'),
+                              ('me', '给陈岚发送验收文件', '2026-10-21'),
+                              ('me', '给江遥发送报价单', '2026-10-21'),
+                              ('me', '发送验收文件', '2026-10-22'),
+                              ('them', '发送验收文件', '2026-10-21')]:
+        apply.apply_extraction(conn, {'people': [person_patch('江遥', promises=[
+            {'who': who, 'content': content, 'due': due, 'confidence': .95}])]},
+            content + due + who, content)
+    assert conn.execute('SELECT COUNT(*) FROM promise').fetchone()[0] == 5
+
+
 def test_direction_override_requires_named_parties_and_exact_amount():
     from app.memory.writes import explicit_transfer_direction
     assert explicit_transfer_direction('江遥给我转了47.23元餐费。',['江遥'],4723)=='in'

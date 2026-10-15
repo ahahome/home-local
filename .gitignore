@@ -7,3 +7,6 @@ data/
 .pytest-tmp/
 .DS_Store
 eval/.cache/
+.playwright-mcp/
+demo/*.db-wal
+demo/*.db-shm

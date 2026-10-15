@@ -58,7 +58,14 @@ def make_turn(item):
 def make_image(filename,lines):
     img=Image.new('RGB',(1000,700),'#f4f7f1')
     draw=ImageDraw.Draw(img)
-    font=ImageFont.truetype('C:/Windows/Fonts/msyh.ttc',30)
+    font_paths=[os.environ.get('HOME_QA_FONT',''),
+                'C:/Windows/Fonts/msyh.ttc',
+                '/System/Library/Fonts/Hiragino Sans GB.ttc',
+                '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc']
+    font_path=next((p for p in font_paths if p and Path(p).is_file()),None)
+    if not font_path:
+        raise RuntimeError('Set HOME_QA_FONT to a Chinese font file for media QA')
+    font=ImageFont.truetype(font_path,30)
     draw.rounded_rectangle((35,35,965,665),radius=20,fill='white',outline='#ccd8c2',width=2)
     for i,line in enumerate(lines):
         draw.text((65,65+i*78),line,font=font,fill='#223627')

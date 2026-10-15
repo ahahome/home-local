@@ -46,7 +46,7 @@ def ledger_key(person_id, direction, cents, day=None):
     return sha256_text(f"ledger|{person_id}|{direction}|{cents}|{day or today_local()}")
 
 
-def promise_key(person_id, who, content, due=None):
+def promise_key(person_id, who, content, due=None, recipient_names=()):
     from app.util import normalize_value
     if due:
         dates = [re.escape(due)]
@@ -56,15 +56,24 @@ def promise_key(person_id, who, content, due=None):
         except ValueError:
             pass
         content = re.sub(r'^(?:在|于)?(?:' + '|'.join(dates) + r')(?:之前|以前|前)?[\s，,：:]*', '', content.strip())
+    if who == 'me' and recipient_names:
+        names = '|'.join(re.escape(name) for name in sorted(set(recipient_names), key=len, reverse=True) if name)
+        if names:
+            content = re.sub(r'^(?:给|向)\s*(?:' + names + r')\s*', '', content.strip())
     return sha256_text(f"promise|{person_id}|{who}|{normalize_value(content)}|{due}")
 
 
 def matching_promise(conn, pid, who, content, due, due_ms):
     """Recognize existing rows too, including keys written before date normalization."""
-    key = promise_key(pid, who, content, due)
+    # The recipient is already stored in person_id; tools can omit it from the action.
+    names = repo.aliases_of(conn, pid) if pid else []
+    person = repo.get_person(conn, pid) if pid else None
+    if person:
+        names = [*names, person['display_name']]
+    key = promise_key(pid, who, content, due, names)
     for row in conn.execute('SELECT id,content FROM promise WHERE person_id IS ? AND who=? AND due_at IS ?',
                             (pid, who, due_ms)):
-        if promise_key(pid, who, row['content'], due) == key:
+        if promise_key(pid, who, row['content'], due, names) == key:
             return row['id']
     return None
 

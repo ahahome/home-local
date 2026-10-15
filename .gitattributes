@@ -1,0 +1,2 @@
+demo/home.db -text
+demo/blobs/** -text

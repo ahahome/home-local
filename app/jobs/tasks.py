@@ -101,6 +101,10 @@ def _run(tid):
         elif t["kind"] == "research":
             from app.agent.research import run_research
             result = run_research(conn, p["topic"], rid=p["research_id"], emit=emit)
+        elif t["kind"] == "followup_prepare":
+            from app.agent.followup import prepare_followup
+            result = {"followup_id": p["followup_id"],
+                      "record": prepare_followup(conn, p["followup_id"], emit=emit)}
         elif t["kind"] == "journal":
             from app.jobs.scheduler import generate_journal
             result = {"text": generate_journal(p.get("day"))}
@@ -115,6 +119,11 @@ def _run(tid):
         conn.commit()
     except Cancelled as e:
         conn.rollback()
+        if not conn.execute("SELECT 1 FROM task WHERE id=?", (tid,)).fetchone():
+            return
+        if t["kind"] == "followup_prepare":
+            from app.agent.followup import mark_prepare_failed
+            mark_prepare_failed(conn, t["payload"]["followup_id"], "cancelled")
         if t["kind"] in {"research", "research_prepare"} and t["payload"].get("research_id"):
             repo.update_research(conn, t["payload"]["research_id"], status="cancelled")
         conn.execute("UPDATE task SET status='cancelled',error=?,updated_at=? WHERE id=?", (str(e), now_ms(), tid))
@@ -122,6 +131,11 @@ def _run(tid):
         event(conn, tid, "cancelled", {"message": str(e)})
     except Exception as e:
         conn.rollback()
+        if not conn.execute("SELECT 1 FROM task WHERE id=?", (tid,)).fetchone():
+            return
+        if t["kind"] == "followup_prepare":
+            from app.agent.followup import mark_prepare_failed
+            mark_prepare_failed(conn, t["payload"]["followup_id"], "failed")
         if t["kind"] in {"research", "research_prepare"} and t["payload"].get("research_id"):
             repo.update_research(conn, t["payload"]["research_id"], status="failed")
         from app.config import get_settings

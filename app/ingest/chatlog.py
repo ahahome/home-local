@@ -310,7 +310,8 @@ def import_chatlog(conn, filename: str, data: bytes, me: str | None = None,
                    max_chunks: int = 20, source_msg_id: str | None = None) -> dict:
     """导入一份聊天记录导出文件：解析 → 按 (对方, 日期) 切块 → 抽取 → 幂等落库。
 
-    返回结果里 updated 的字段都如实反映「做了什么/没做什么」，包含 truncated 与 me_guessed。
+    只有本人身份明确、本人实际发言且对方可唯一绑定的片段计为联系；
+    同片段的其他人物仅为资料提及。返回 truncated 与 me_guessed。
     """
     jid, created = repo.create_job(conn, "chatlog", payload=filename,
                                    idempotency_key=sha256_bytes(data))
@@ -356,9 +357,22 @@ def import_chatlog(conn, filename: str, data: bytes, me: str | None = None,
             outcomes += applied["outcomes"]
             person_ids += applied["person_ids"]
             pending_ids += applied["pending_ids"]
-            repo.insert_interaction(conn, max((m["ts"] or 0) for m in msgs) or now_ms(),
+            participant = None
+            if not parsed["me_guessed"] and any(m["speaker"] == me_name for m in msgs):
+                participant = repo.get_person_by_name(conn, partner)
+            links = {pid: "mentioned" for pid in applied.get("person_ids", [])}
+            contact_msgs = []
+            if participant:
+                contact_msgs = [m for m in msgs if m["speaker"] in {me_name, partner}]
+                if any(m["ts"] is not None for m in contact_msgs):
+                    links[participant["id"]] = "participant"
+                else:
+                    participant = None
+            # A late third-party message must not move this partner's contact time.
+            interaction_msgs = contact_msgs or msgs
+            repo.insert_interaction(conn, max((m["ts"] or 0) for m in interaction_msgs) or now_ms(),
                                     "chatlog", clamp(chunk, 4000), f"{filename}#{day}",
-                                    [(pid, "mentioned") for pid in applied.get("person_ids", [])])
+                                    list(links.items()), kind="contact" if participant else "note")
 
         n_ok = sum(1 for o in outcomes if o["status"] == "ok")
         n_pending = sum(1 for o in outcomes if o["status"] == "pending")

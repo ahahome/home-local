@@ -96,7 +96,7 @@ TOOLS = [
             "required": ["text", "fire_date"]}}},
     {"type": "function", "function": {
         "name": "who_quiet",
-        "description": "找出最近 N 天没有互动、按重要度排序的人（谁最近安静了）。",
+        "description": "找出最近 N 天没有实际联系、按重要度排序的人。资料记录和草稿不算联系。",
         "parameters": {"type": "object", "properties": {
             "days": {"type": "integer", "default": 14}}}}},
     {"type": "function", "function": {

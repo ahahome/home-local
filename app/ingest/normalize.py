@@ -57,7 +57,7 @@ def ingest_file(conn, filename: str, data: bytes, source_msg_id: str | None = No
         applied = apply_mod.apply_extraction(conn, extraction, source_msg_id or jid,
                                              text, channel=channel, evidence_id=evidence_id)
         iid, _ = repo.insert_interaction(conn, now_ms(), channel, clamp(text, 4000),
-                                         filename, _link_person_ids(conn, applied))
+                                         filename, _link_person_ids(conn, applied), kind="note")
         n_ok = sum(1 for o in applied["outcomes"] if o["status"] == "ok")
         n_pending = sum(1 for o in applied["outcomes"] if o["status"] == "pending")
         n_failed = sum(o["status"] == "failed" for o in applied["outcomes"])
@@ -92,7 +92,7 @@ def ingest_url(conn, url: str, source_msg_id: str | None = None) -> dict:
         applied = apply_mod.apply_extraction(conn, extraction, source_msg_id or jid,
                                              text, channel="web", evidence_id=evidence_id)
         iid, _ = repo.insert_interaction(conn, now_ms(), "web", clamp(text, 4000), url,
-                                         _link_person_ids(conn, applied))
+                                         _link_person_ids(conn, applied), kind="note")
         status = "partial" if any(o["status"] in {"failed", "pending"} for o in applied["outcomes"]) else "done"
         repo.update_job(conn, jid, status,
                         result=json.dumps({"title": page["title"], "interaction_id": iid,

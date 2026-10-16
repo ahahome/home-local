@@ -25,7 +25,7 @@ def create_person(conn, name: str, status: str = "unconfirmed", alias_source: st
     pid = new_id()
     t = now_ms()
     conn.execute(
-        "INSERT INTO person(id,display_name,status,created_at,updated_at) VALUES(?,?,?,?,?)",
+        "INSERT INTO person(id,display_name,status,created_at,updated_at,importance) VALUES(?,?,?,?,?,0)",
         (pid, name, status, t, t),
     )
     add_alias(conn, pid, name, alias_source, alias_conf)
@@ -185,6 +185,14 @@ def purge_person(conn, pid: str) -> dict:
         _del("memory_fts", "owner_type='memory' AND owner_id=?", (mid,))
     for table, col in _PURGE_LINKS:
         _del(table, f"{col}=?", (pid,))
+    # Preparation tasks keep complete snapshots in both result and event data.
+    # Resolve them while followups still exist and the purge holds the write lock.
+    followup_tasks = (
+        "SELECT t.id FROM task t WHERE t.kind='followup_prepare' AND ("
+        "t.id IN (SELECT task_id FROM followup WHERE person_id=?) OR "
+        "json_extract(t.payload,'$.followup_id') IN (SELECT id FROM followup WHERE person_id=?))")
+    _del("task_event", f"task_id IN ({followup_tasks})", (pid, pid))
+    _del("task", f"id IN ({followup_tasks})", (pid, pid))
     correction_persons = [r[0] for r in conn.execute(
         "WITH RECURSIVE ids(id) AS (SELECT ? UNION SELECT p.id FROM person p JOIN ids ON p.merged_into=ids.id "
         "WHERE p.status='merged') SELECT id FROM ids", (pid,))]
@@ -296,16 +304,15 @@ def update_value_read(conn, pid: str, value_read: str, evidence: str | None) -> 
 
 
 def recompute_importance(conn, pid: str) -> None:
-    """重要度 = 互动数（log）与最近度的合成，供检索排序用。"""
+    """重要度只由实际参与的联系次数与最近度合成，资料提及不计入。"""
     import math
     cnt = conn.execute(
-        "SELECT COUNT(*) c FROM interaction_person WHERE person_id=?", (pid,)).fetchone()["c"]
-    last = conn.execute(
-        "SELECT MAX(i.ts) m FROM interaction i JOIN interaction_person ip ON ip.interaction_id=i.id "
-        "WHERE ip.person_id=?", (pid,)).fetchone()["m"]
+        "SELECT COUNT(*) c FROM interaction i JOIN interaction_person ip ON ip.interaction_id=i.id "
+        "WHERE ip.person_id=? AND i.kind='contact' AND ip.role='participant'", (pid,)).fetchone()["c"]
+    last = last_contact(conn, pid)
     rec = 0.0
-    if last:
-        days = (now_ms() - last) / 86400000.0
+    if last is not None:
+        days = max(0.0, (now_ms() - last) / 86400000.0)
         rec = math.exp(-days / 30.0)
     imp = min(1.0, 0.5 * math.log1p(cnt) / 3.0 + 0.5 * rec)
     conn.execute("UPDATE person SET importance=? WHERE id=?", (imp, pid))
@@ -391,21 +398,36 @@ def field_history(conn, person_id: str, field: str) -> list:
 # ---------------- interaction ----------------
 
 def insert_interaction(conn, ts: int, channel: str, content: str, source_ref: str | None,
-                       person_ids: list[tuple[str, str]] | None = None) -> tuple[str, bool]:
-    """返回 (id, created)。content_hash 去重：已存在则返回 (existing_id, False)。"""
-    ch = sha256_text(f"{channel}|{content.strip()}")
+                       person_ids: list[tuple[str, str]] | None = None,
+                       kind: str = "note", dedupe_key: str | None = None) -> tuple[str, bool]:
+    """写入资料或实际联系；重复内容不改变原类型、时间或参与人。
+
+    只有 contact 中显式标为 participant 的人物计入联系统计。
+    dedupe_key 标识独立来源事件；缺省沿用 channel + 内容去重。
+    """
+    if kind not in {"note", "contact"}:
+        raise ValueError("互动类型必须为 note 或 contact")
+    if dedupe_key is not None and (not isinstance(dedupe_key, str) or not dedupe_key.strip()):
+        raise ValueError("去重标识不能为空")
+    ch = sha256_text(f"{channel}|{content.strip()}") if dedupe_key is None else \
+        sha256_text(json.dumps(["interaction-source", channel, dedupe_key], ensure_ascii=False))
     exist = conn.execute("SELECT id FROM interaction WHERE content_hash=?", (ch,)).fetchone()
     if exist:
         return exist["id"], False
     iid = new_id()
     conn.execute(
-        "INSERT INTO interaction(id,ts,channel,source_ref,content,content_hash,created_at)"
-        " VALUES(?,?,?,?,?,?,?)",
-        (iid, ts, channel, source_ref, content, ch, now_ms()))
+        "INSERT INTO interaction(id,ts,channel,source_ref,content,content_hash,created_at,kind)"
+        " VALUES(?,?,?,?,?,?,?,?)",
+        (iid, ts, channel, source_ref, content, ch, now_ms(), kind))
+    roles = {}
     for pid, role in (person_ids or []):
+        if roles.get(pid) != "participant":
+            roles[pid] = role
+    for pid, role in roles.items():
         conn.execute(
             "INSERT OR IGNORE INTO interaction_person(interaction_id,person_id,role) VALUES(?,?,?)",
             (iid, pid, role))
+        recompute_importance(conn, pid)
     from app.memory.fts import tokenize  # 延迟导入避免循环
     conn.execute(
         "INSERT INTO memory_fts(tokens,owner_type,owner_id) VALUES(?,?,?)",
@@ -413,10 +435,35 @@ def insert_interaction(conn, ts: int, channel: str, content: str, source_ref: st
     return iid, True
 
 
-def recent_interactions(conn, person_id: str, limit: int = 5) -> list:
+def recent_interactions(conn, person_id: str, limit: int = 5, kind: str | None = None) -> list:
+    """返回人物相关资料与联系；kind 可筛选 note/contact，保留该人的角色。"""
+    if kind is not None and kind not in {"note", "contact"}:
+        raise ValueError("互动类型必须为 note 或 contact")
+    sql = (
+        "SELECT i.*,ip.role AS person_role FROM interaction i "
+        "JOIN interaction_person ip ON ip.interaction_id=i.id WHERE ip.person_id=?")
+    params = [person_id]
+    if kind is not None:
+        sql += " AND i.kind=?"
+        params.append(kind)
+    return conn.execute(sql + " ORDER BY i.ts DESC,i.created_at DESC,i.id DESC LIMIT ?",
+                        (*params, limit)).fetchall()
+
+
+def last_contact(conn, person_id: str) -> int | None:
+    """最近一次有明确 participant 角色的实际联系时间，未知返回 None。"""
     return conn.execute(
-        "SELECT i.* FROM interaction i JOIN interaction_person ip ON ip.interaction_id=i.id "
-        "WHERE ip.person_id=? ORDER BY i.ts DESC LIMIT ?", (person_id, limit)).fetchall()
+        "SELECT MAX(i.ts) FROM interaction i JOIN interaction_person ip ON ip.interaction_id=i.id "
+        "WHERE ip.person_id=? AND i.kind='contact' AND ip.role='participant'", (person_id,)).fetchone()[0]
+
+
+def recent_contacts(conn, person_id: str, limit: int = 5) -> list:
+    """仅返回该人物实际参与的联系，其他人的联系中被提及不计入。"""
+    return conn.execute(
+        "SELECT i.*,ip.role AS person_role FROM interaction i "
+        "JOIN interaction_person ip ON ip.interaction_id=i.id "
+        "WHERE ip.person_id=? AND i.kind='contact' AND ip.role='participant' "
+        "ORDER BY i.ts DESC,i.created_at DESC,i.id DESC LIMIT ?", (person_id, limit)).fetchall()
 
 
 def interactions_since(conn, since_ms: int) -> list:

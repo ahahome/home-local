@@ -34,10 +34,12 @@ async def lifespan(app):
             scheduler.shutdown(wait=False)
 
 
-app = FastAPI(title="home", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="home", version="0.3.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(ROOT / "web")), name="static")
 from app.api.workspace import router
 app.include_router(router)
+from app.api.followups import router as followups_router
+app.include_router(followups_router)
 
 
 # ---------------- 页面 ----------------
@@ -197,7 +199,9 @@ def person_detail(pid: str):
         "aliases": repo.aliases_of(conn, pid),
         "fields": {k: {"value": v["value"], "confidence": v["confidence"],
                        "valid_from": v["valid_from"], "since": ms_to_local_str(v["valid_from"])[:10]} for k, v in fields.items()},
-        "interactions": [{"ts": ms_to_local_str(i["ts"]), "channel": i["channel"],
+        "last_contact": repo.last_contact(conn, pid),
+        "interactions": [{"id": i["id"], "kind": i["kind"], "person_role": i["person_role"],
+                          "ts": ms_to_local_str(i["ts"]), "channel": i["channel"],
                           "content": i["content"][:200]} for i in repo.recent_interactions(conn, pid, 10)],
         "open_promises": [{"id": r["id"], "who": r["who"], "content": r["content"],
                            "due": ms_to_local_str(r["due_at"])[:10] if r["due_at"] else None}

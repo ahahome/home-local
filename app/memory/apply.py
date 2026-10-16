@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Any
 
@@ -41,7 +42,8 @@ class Outcome(dict):
 
 def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerpt: str,
                      channel: str = "chat", forced: dict[str, str] | None = None,
-                     evidence_id: str | None = None, commit: bool = True) -> dict:
+                     evidence_id: str | None = None, commit: bool = True,
+                     index_names: bool = True) -> dict:
     """把 extract 的结构化结果落库。返回 {outcomes, person_ids, pending_ids}。
 
     forced: {canonical_name: person_id}，用于「用户已确认身份」的重放——绕过二次消歧。
@@ -119,7 +121,8 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
                 outcomes.append(Outcome("person", "ok", f"新建人物 {name}"))
         person_ids.append(person_id)
         repo.add_alias(conn, person_id, p["name"], channel, 0.9)
-        _index_person_name(conn, person_id, name)
+        if index_names:
+            _index_person_name(conn, person_id, name)
 
         # ---- 字段（双时态 upsert + 置信度分档 + 指纹幂等） ----
         for f in p["fields"]:
@@ -384,6 +387,13 @@ def _embed_memory(conn, memory_id: str, text: str) -> None:
 
 def merge_persons(conn, survivor_id: str, merged_id: str) -> str:
     """a 存活，b 变墓碑。单事务 + 快照，支持拆分。永不物理删除（P1/P5）。"""
+    with savepoint(conn, f"merge_{new_id()}"):
+        log_id = _merge_persons(conn, survivor_id, merged_id)
+    conn.commit()
+    return log_id
+
+
+def _merge_persons(conn, survivor_id: str, merged_id: str) -> str:
     survivor = repo.get_person(conn, survivor_id)
     merged = repo.get_person(conn, merged_id)
     if not survivor or not merged:
@@ -406,6 +416,14 @@ def merge_persons(conn, survivor_id: str, merged_id: str) -> str:
             "SELECT id FROM ledger_entry WHERE person_id=?", (b,)).fetchall()],
         "interactions": [r["interaction_id"] for r in conn.execute(
             "SELECT interaction_id FROM interaction_person WHERE person_id=?", (b,)).fetchall()],
+        "interaction_roles": {r["interaction_id"]: r["role"] for r in conn.execute(
+            "SELECT interaction_id,role FROM interaction_person WHERE person_id=?", (b,))},
+        "survivor_interaction_roles": {r["interaction_id"]: r["role"] for r in conn.execute(
+            "SELECT interaction_id,role FROM interaction_person WHERE person_id=?", (survivor_id,))},
+        "followups": [r["id"] for r in conn.execute(
+            "SELECT id FROM followup WHERE person_id=?", (b,))],
+        "reminders": [r["id"] for r in conn.execute(
+            "SELECT id FROM reminder WHERE person_id=?", (b,))],
         "edges": [dict(r) for r in conn.execute(
             "SELECT * FROM relation_edge WHERE from_person=? OR to_person=?", (b, b)).fetchall()],
     }
@@ -424,9 +442,13 @@ def merge_persons(conn, survivor_id: str, merged_id: str) -> str:
     conn.execute("UPDATE memory_item SET person_id=? WHERE person_id=?", (survivor_id, b))
     conn.execute("UPDATE promise SET person_id=? WHERE person_id=?", (survivor_id, b))
     conn.execute("UPDATE ledger_entry SET person_id=? WHERE person_id=?", (survivor_id, b))
+    conn.execute("UPDATE followup SET person_id=? WHERE person_id=?", (survivor_id, b))
+    conn.execute("UPDATE reminder SET person_id=? WHERE person_id=?", (survivor_id, b))
     for iid in snapshot["interactions"]:
-        conn.execute("INSERT OR IGNORE INTO interaction_person(interaction_id,person_id,role)"
-                     " VALUES(?,?,'mentioned')", (iid, survivor_id))
+        conn.execute("INSERT INTO interaction_person(interaction_id,person_id,role) VALUES(?,?,?) "
+                     "ON CONFLICT(interaction_id,person_id) DO UPDATE SET role="
+                     "CASE WHEN excluded.role='participant' THEN 'participant' ELSE interaction_person.role END",
+                     (iid, survivor_id, snapshot["interaction_roles"][iid]))
     conn.execute("DELETE FROM interaction_person WHERE person_id=?", (b,))
     for e in snapshot["edges"]:
         other = e["to_person"] if e["from_person"] == b else e["from_person"]
@@ -445,13 +467,87 @@ def merge_persons(conn, survivor_id: str, merged_id: str) -> str:
                  (survivor_id, now, now, b))
     log_id = repo.add_merge_log(conn, survivor_id, b, snapshot)
     repo.recompute_importance(conn, survivor_id)
-    conn.commit()
     return log_id
 
 
 def split_merge(conn, merge_log_id: str) -> None:
     """按快照把合并拆回去（FR-ID-06）。"""
-    import json
+    with savepoint(conn, f"split_{new_id()}"):
+        _split_merge(conn, merge_log_id)
+    conn.commit()
+
+
+def _restore_followup_assets(conn, snap: dict, survivor_id: str, restored_id: str) -> list[dict]:
+    """Followup outcomes identify assets created after the original merge snapshot."""
+    audit = []
+    person = repo.get_person(conn, restored_id)
+    for fid in snap.get("followups", []):
+        followup = conn.execute("SELECT goal FROM followup WHERE id=? AND person_id=?",
+                                (fid, restored_id)).fetchone()
+        if not followup:
+            continue
+        for outcome in conn.execute("SELECT * FROM followup_outcome WHERE followup_id=?", (fid,)).fetchall():
+            source = "followup-outcome:" + outcome["id"]
+            restored = {"followup_id": fid, "outcome_id": outcome["id"],
+                        "source_person_id": survivor_id, "target_person_id": restored_id,
+                        "contact_id": None, "promise_ids": [], "reminder_ids": []}
+            contact_id = outcome["contact_id"]
+            if contact_id not in snap["interactions"] and conn.execute(
+                "SELECT 1 FROM interaction i JOIN interaction_person ip ON ip.interaction_id=i.id "
+                "WHERE i.id=? AND i.kind='contact' AND i.source_ref=? "
+                "AND ip.person_id=? AND ip.role='participant'", (contact_id, source, survivor_id)).fetchone():
+                conn.execute("INSERT INTO interaction_person(interaction_id,person_id,role) VALUES(?,?,'participant') "
+                             "ON CONFLICT(interaction_id,person_id) DO UPDATE SET role='participant'",
+                             (contact_id, restored_id))
+                conn.execute("DELETE FROM interaction_person WHERE interaction_id=? AND person_id=?",
+                             (contact_id, survivor_id))
+                restored["contact_id"] = contact_id
+            if outcome["reminder_id"]:
+                changed = conn.execute("UPDATE reminder SET person_id=?,text=? WHERE id=? AND person_id=?",
+                    (restored_id, "跟进与" + person["display_name"] + "的沟通：" + followup["goal"],
+                     outcome["reminder_id"], survivor_id)).rowcount
+                if changed:
+                    restored["reminder_ids"].append(outcome["reminder_id"])
+
+            promises = conn.execute("SELECT pr.* FROM promise pr JOIN evidence e ON e.id=pr.evidence_id "
+                                   "WHERE pr.person_id=? AND e.source_ref=?", (survivor_id, source)).fetchall()
+            for promise in promises:
+                conn.execute("UPDATE promise SET person_id=? WHERE id=?", (restored_id, promise["id"]))
+                restored["promise_ids"].append(promise["id"])
+                reminders = conn.execute("SELECT id FROM reminder WHERE promise_id=? AND person_id=?",
+                                         (promise["id"], survivor_id)).fetchall()
+                who = "我答应" if promise["who"] == "me" else person["display_name"] + " 答应"
+                conn.execute("UPDATE reminder SET person_id=?,text=? WHERE promise_id=? AND person_id=?",
+                             (restored_id, who + "：" + promise["content"], promise["id"], survivor_id))
+                restored["reminder_ids"].extend(r["id"] for r in reminders)
+
+                due = datetime.fromtimestamp(promise["due_at"] / 1000, tz()).date().isoformat() \
+                    if promise["due_at"] is not None else None
+                old_key = promise_key(survivor_id, promise["who"], promise["content"], due)
+                patch = conn.execute("SELECT * FROM applied_patch WHERE fingerprint=? AND source_msg_id=? "
+                                     "AND person_id=?", (old_key, source, survivor_id)).fetchone()
+                if patch:
+                    conn.execute("INSERT OR IGNORE INTO applied_patch(fingerprint,person_id,field,value_norm,"
+                                 "source_msg_id,applied_at) VALUES(?,?,?,?,?,?)",
+                                 (promise_key(restored_id, promise["who"], promise["content"], due), restored_id,
+                                  patch["field"], patch["value_norm"], source, patch["applied_at"]))
+                    conn.execute("DELETE FROM applied_patch WHERE fingerprint=?", (old_key,))
+                evidence = conn.execute("SELECT excerpt FROM evidence WHERE id=?", (promise["evidence_id"],)).fetchone()
+                try:
+                    proof = json.loads(evidence["excerpt"])
+                except (TypeError, ValueError):
+                    continue
+                if isinstance(proof, dict) and proof.get("outcome_id") == outcome["id"] \
+                        and proof.get("person_id") == survivor_id:
+                    proof["person_id"] = restored_id
+                    conn.execute("UPDATE evidence SET excerpt=? WHERE id=?",
+                                 (json.dumps(proof, ensure_ascii=False, sort_keys=True), promise["evidence_id"]))
+            if restored["contact_id"] or restored["promise_ids"] or restored["reminder_ids"]:
+                audit.append(restored)
+    return audit
+
+
+def _split_merge(conn, merge_log_id: str) -> None:
     log = repo.get_merge_log(conn, merge_log_id)
     if not log or log["undone"]:
         raise ValueError("合并记录不存在或已撤销")
@@ -469,12 +565,30 @@ def split_merge(conn, merge_log_id: str) -> None:
     for table, key in (("memory_item", "memories"), ("promise", "promises"), ("ledger_entry", "ledger")):
         for rid in snap[key]:
             conn.execute(f"UPDATE {table} SET person_id=? WHERE id=?", (b, rid))
+    for fid in snap.get("followups", []):
+        conn.execute("UPDATE followup SET person_id=? WHERE id=? AND person_id=?", (b, fid, survivor_id))
+    for rid in snap.get("reminders", []):
+        conn.execute("UPDATE reminder SET person_id=? WHERE id=? AND person_id=?", (b, rid, survivor_id))
     for alias, source, conf in snap["aliases"]:
         conn.execute("UPDATE OR IGNORE person_alias SET person_id=? WHERE alias=? AND source=?",
                      (b, alias, source))
     for iid in snap["interactions"]:
-        conn.execute("INSERT OR IGNORE INTO interaction_person(interaction_id,person_id,role)"
-                     " VALUES(?,?,'mentioned')", (iid, b))
+        conn.execute("INSERT INTO interaction_person(interaction_id,person_id,role) VALUES(?,?,?) "
+                     "ON CONFLICT(interaction_id,person_id) DO UPDATE SET role=excluded.role",
+                     (iid, b, snap.get("interaction_roles", {}).get(iid, "mentioned")))
+        if "survivor_interaction_roles" in snap:
+            previous = snap["survivor_interaction_roles"].get(iid)
+            if previous is None:
+                conn.execute("DELETE FROM interaction_person WHERE interaction_id=? AND person_id=?",
+                             (iid, survivor_id))
+            else:
+                conn.execute("UPDATE interaction_person SET role=? WHERE interaction_id=? AND person_id=?",
+                             (previous, iid, survivor_id))
+    restored_assets = _restore_followup_assets(conn, snap, survivor_id, b)
+    if restored_assets:
+        snap["restored_followup_assets"] = restored_assets
+        conn.execute("UPDATE merge_log SET snapshot=? WHERE id=?",
+                     (json.dumps(snap, ensure_ascii=False), merge_log_id))
     for e in snap["edges"]:
         conn.execute(
             "INSERT OR IGNORE INTO relation_edge(id,from_person,to_person,kind,strength,evidence_id,created_at)"
@@ -484,4 +598,3 @@ def split_merge(conn, merge_log_id: str) -> None:
     repo.mark_merge_undone(conn, merge_log_id)
     repo.recompute_importance(conn, b)
     repo.recompute_importance(conn, survivor_id)
-    conn.commit()

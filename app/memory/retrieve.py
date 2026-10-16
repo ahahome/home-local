@@ -36,7 +36,7 @@ def _fetch_items(conn, keys: list[tuple[str, str]]) -> dict[tuple[str, str], dic
                 names = repo.interaction_person_names(conn, oid)
                 out[(owner_type, oid)] = {
                     "type": "interaction", "id": oid, "text": r["content"], "ts": r["ts"],
-                    "kind": r["channel"], "person": "、".join(names),
+                    "kind": r["kind"], "channel": r["channel"], "person": "、".join(names),
                 }
     return out
 
@@ -122,15 +122,13 @@ def search_people(conn, query: str, top_k: int = 8) -> list[dict]:
 
 
 def quiet_people(conn, days: int = 14, limit: int = 10) -> list[dict]:
-    """最近 N 天没有互动的人，按重要度排序（首页"谁安静了"）。"""
+    """最近 N 天无实际联系的人；资料记录和第三方提及不刷新联系时间。"""
     cutoff = now_ms() - days * 86400000
     out = []
     for p in repo.all_active_persons(conn):
-        last = conn.execute(
-            "SELECT MAX(i.ts) m FROM interaction i JOIN interaction_person ip"
-            " ON ip.interaction_id=i.id WHERE ip.person_id=?", (p["id"],)).fetchone()["m"]
+        last = repo.last_contact(conn, p["id"])
         if last is None or last < cutoff:
             out.append({"person_id": p["id"], "display_name": p["display_name"],
-                        "last_interaction": last, "importance": p["importance"]})
+                        "last_interaction": last, "last_contact": last, "importance": p["importance"]})
     out.sort(key=lambda x: -x["importance"])
     return out[:limit]

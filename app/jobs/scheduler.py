@@ -51,9 +51,14 @@ def generate_journal(day: str | None = None) -> str | None:
 
     lines = []
     for i in interactions[:30]:
-        names = repo.interaction_person_names(conn, i["id"])
+        participants = [r[0] for r in conn.execute(
+            "SELECT p.display_name FROM interaction_person ip JOIN person p ON p.id=ip.person_id "
+            "WHERE ip.interaction_id=? AND ip.role='participant' AND p.deleted_at IS NULL "
+            "AND p.status!='merged'", (i["id"],))] if i["kind"] == "contact" else []
+        label = "实际沟通" if participants else "资料记录"
+        names = participants or repo.interaction_person_names(conn, i["id"])
         who = f"（涉及：{'、'.join(names)}）" if names else ""
-        lines.append(f"- [{ms_to_local_str(i['ts'])}] {who}{clamp(i['content'], 1200)}")
+        lines.append(f"- [{ms_to_local_str(i['ts'])}] {label}{who}：{clamp(i['content'], 1200)}")
     for m in episodic[:30]:
         lines.append(f"- 记忆：{clamp(m['text'], 300)}")
     lines.insert(0, '【当日已确认账目与已记录承诺】\n' + '\n'.join(
@@ -65,6 +70,7 @@ def generate_journal(day: str | None = None) -> str | None:
     text = get_llm().chat([
         {"role": "system", "content": "把下面这一天发生的事整理成一段简洁的中文日志。"
          "分三块：今天联系了谁、发生了什么、有哪些承诺/金钱往来。优先准确保留结构化承诺的日期和已确认账目。"
+         "只有标注为实际沟通的条目才能归入今天联系了谁，资料记录和记忆不能证明发生了联系。"
          "客观记录，不要评论或补写。省略号是系统截取标记，不能据此断言对话发生了中断。"},
         {"role": "user", "content": "\n".join(lines)[:18000]},
     ], tier="mini", max_tokens=800)["content"]

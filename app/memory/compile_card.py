@@ -26,7 +26,8 @@ def build_card(conn, person_id: str) -> str:
         lines.append(f"价值评估：{p['value_read']}")
 
     for i in repo.recent_interactions(conn, person_id, 3):
-        lines.append(f"互动[{ms_to_local_str(i['ts'])[:10]}]：{clamp(i['content'], 60)}")
+        label = "联系" if i["kind"] == "contact" and i["person_role"] == "participant" else "资料记录"
+        lines.append(f"{label}[{ms_to_local_str(i['ts'])[:10]}]：{clamp(i['content'], 60)}")
 
     for pr in repo.open_promises(conn, person_id)[:5]:
         due = ms_to_local_str(pr["due_at"])[:10] if pr["due_at"] else "无期限"

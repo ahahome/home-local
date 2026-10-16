@@ -128,7 +128,8 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
         pending_ids = applied["pending_ids"]
         linked = [(pid, "mentioned") for pid in applied.get("person_ids", [])]
         if linked:
-            repo.insert_interaction(conn, now_ms(), "chat", clamp(user_text, 4000), user_msg_id, linked)
+            repo.insert_interaction(conn, now_ms(), "chat", clamp(user_text, 4000), user_msg_id,
+                                    linked, kind="note")
             for pid, _role in linked:
                 repo.recompute_importance(conn, pid)
         conn.commit()

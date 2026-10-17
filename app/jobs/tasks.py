@@ -105,6 +105,9 @@ def _run(tid):
             from app.agent.followup import prepare_followup
             result = {"followup_id": p["followup_id"],
                       "record": prepare_followup(conn, p["followup_id"], emit=emit)}
+        elif t["kind"] == "outcome_memory":
+            from app.agent.outcome_memory import run_analysis
+            result = run_analysis(conn, p["outcome_id"], emit=emit)
         elif t["kind"] == "journal":
             from app.jobs.scheduler import generate_journal
             result = {"text": generate_journal(p.get("day"))}

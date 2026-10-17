@@ -193,6 +193,16 @@ def purge_person(conn, pid: str) -> dict:
         "json_extract(t.payload,'$.followup_id') IN (SELECT id FROM followup WHERE person_id=?))")
     _del("task_event", f"task_id IN ({followup_tasks})", (pid, pid))
     _del("task", f"id IN ({followup_tasks})", (pid, pid))
+    memory_outcomes = (
+        "SELECT o.id FROM followup_outcome o JOIN followup f ON f.id=o.followup_id "
+        "WHERE f.person_id=? UNION SELECT outcome_id FROM outcome_memory_analysis WHERE person_id=?")
+    memory_tasks = (
+        "SELECT id FROM task WHERE kind='outcome_memory' AND "
+        f"json_extract(payload,'$.outcome_id') IN ({memory_outcomes})")
+    _del("task_event", f"task_id IN ({memory_tasks})", (pid, pid))
+    _del("task", f"id IN ({memory_tasks})", (pid, pid))
+    _del("pending_item", "kind='outcome_memory' AND (json_extract(payload,'$.person_id')=? OR "
+         f"json_extract(payload,'$.outcome_id') IN ({memory_outcomes}))", (pid, pid, pid))
     correction_persons = [r[0] for r in conn.execute(
         "WITH RECURSIVE ids(id) AS (SELECT ? UNION SELECT p.id FROM person p JOIN ids ON p.merged_into=ids.id "
         "WHERE p.status='merged') SELECT id FROM ids", (pid,))]
@@ -262,8 +272,10 @@ def _evidence_ids_of(conn, pid: str) -> list[str]:
         "SELECT DISTINCT evidence_id e FROM promise WHERE person_id=?",
         "SELECT DISTINCT evidence_id e FROM ledger_entry WHERE person_id=?",
         "SELECT DISTINCT evidence_id e FROM relation_edge WHERE from_person=? OR to_person=?",
+        "SELECT DISTINCT a.evidence_id e FROM outcome_memory_analysis a "
+        "JOIN followup f ON f.id=a.followup_id WHERE a.person_id=? OR f.person_id=?",
     ):
-        for r in conn.execute(sql, (pid, pid) if "OR to_person" in sql else (pid,)).fetchall():
+        for r in conn.execute(sql, (pid, pid) if sql.count('?') == 2 else (pid,)).fetchall():
             if r["e"]:
                 ids.add(r["e"])
     return sorted(ids)
@@ -286,6 +298,8 @@ def _purge_evidence(conn, ev_ids: list[str], deleted: dict[str, int]) -> list[st
             "SELECT 1 FROM ledger_entry WHERE evidence_id=? LIMIT 1", (eid,)).fetchone():
             continue
         if conn.execute("SELECT 1 FROM relation_edge WHERE evidence_id=? LIMIT 1", (eid,)).fetchone():
+            continue
+        if conn.execute("SELECT 1 FROM outcome_memory_analysis WHERE evidence_id=? LIMIT 1", (eid,)).fetchone():
             continue
         ev = conn.execute("SELECT blob_hash FROM evidence WHERE id=?", (eid,)).fetchone()
         conn.execute("DELETE FROM evidence WHERE id=?", (eid,))

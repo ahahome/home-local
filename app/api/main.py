@@ -34,12 +34,14 @@ async def lifespan(app):
             scheduler.shutdown(wait=False)
 
 
-app = FastAPI(title="home", version="0.3.0", lifespan=lifespan)
+app = FastAPI(title="home", version="0.4.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(ROOT / "web")), name="static")
 from app.api.workspace import router
 app.include_router(router)
 from app.api.followups import router as followups_router
 app.include_router(followups_router)
+from app.api.agenda import router as agenda_router
+app.include_router(agenda_router)
 
 
 # ---------------- 页面 ----------------

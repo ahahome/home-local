@@ -184,7 +184,8 @@ def test_migration_keeps_existing_ledger_and_allows_corrections(tmp_path):
     lid, _ = repo.add_ledger(c, 'out', 100, None, '旧账', now_ms(), 'confirmed', 'old')
     c.commit()
     db.migrate(c)
-    assert c.execute('PRAGMA user_version').fetchone()[0] == 6
+    latest = max(int(f.name.split('_')[0]) for f in (root / 'migrations').glob('*.sql'))
+    assert c.execute('PRAGMA user_version').fetchone()[0] == latest
     assert corrections.ledger_row(c, lid)['revision'] == 0
     corrections.change_ledger(c, lid, 0, void=True)
     assert repo.ledger_totals(c)['count'] == 0

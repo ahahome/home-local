@@ -14,6 +14,8 @@ def resolve(conn, item_id, action, person_id=None, direction=None):
     item = repo.get_pending(conn, item_id)
     if not item or item["resolved_at"]:
         raise ValueError("待确认项不存在或已处理")
+    if item["kind"] == "outcome_memory":
+        raise ValueError("请打开记忆更新提案，核对来源与版本后再处理")
     p = json.loads(item["payload"])
     kind = item["kind"]
     with savepoint(conn, "resolve_pending"):

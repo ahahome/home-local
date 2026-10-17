@@ -1,16 +1,22 @@
 # Portable Demo Data
 
 This directory contains the synthetic data used in the local QA workspace,
-exported on 2026-10-15 from `data/qa/mock-replay-20261013-162624/`.
+updated on 2026-10-17 from `data/qa/outcome-memory-v05-20261017/`.
 All people, conversations, commitments, and transfers are fictional.
 
 The committed snapshot includes:
 
 - `home.db`: a standalone SQLite backup, including committed WAL contents.
 - `blobs/`: the three original attachments, stored by SHA-256.
-- 66 people (61 visible), 208 field versions, 342 interactions, 121 memories,
-  69 commitments, 131 ledger entries, 26 confirmation records, 3 projects,
-  and 7 completed tasks.
+- 69 people (64 visible), 216 field versions, 346 interactions, 123 memories,
+  69 commitments, 131 ledger entries, 32 confirmation records, 3 projects,
+  and 14 completed tasks.
+- Three synthetic communication followups with four saved outcomes and four
+  memory analyses, including five confirmed proposals and one discarded proposal.
+  These demonstrate historical field updates, communication preferences, source
+  review, and outcomes with no new information. There are no pending memory-update
+  proposals in this snapshot; select all statuses in the memory proposal view to
+  inspect the processing history.
 
 After installing `requirements.txt`, restore a working copy from the repository
 root:

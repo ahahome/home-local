@@ -34,7 +34,7 @@ async def lifespan(app):
             scheduler.shutdown(wait=False)
 
 
-app = FastAPI(title="home", version="0.5.0", lifespan=lifespan)
+app = FastAPI(title="home", version="0.6.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(ROOT / "web")), name="static")
 from app.api.workspace import router
 app.include_router(router)

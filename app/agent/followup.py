@@ -68,12 +68,51 @@ def _promise_info(row):
             'source_id': 'promise:' + row['id']}
 
 
+def _brief_memory_changes(conn, brief):
+    if not brief or not brief.get('memories'):
+        return []
+    memories = brief['memories']
+    slots = ','.join('?' for _ in memories)
+    rows = {row['id']: row for row in conn.execute(
+        'SELECT m.*,p.deleted_at AS person_deleted_at,p.status AS person_status,'
+        'e.id AS current_evidence_id FROM memory_item m '
+        'LEFT JOIN person p ON p.id=m.person_id '
+        'LEFT JOIN evidence e ON e.id=m.evidence_id '
+        f'WHERE m.id IN ({slots})', [item['id'] for item in memories]).fetchall()}
+    sources = {item['id']: item for item in brief.get('sources', [])}
+    changes = []
+    for item in memories:
+        current = rows.get(item['id'])
+        source_id = item.get('source_id', 'memory:' + item['id'])
+        original_owner = item.get('person_id', brief.get('person', {}).get('id'))
+        if not current or current['deleted_at'] is not None or (
+                current['person_id'] is not None and (
+                    current['person_status'] is None or current['person_deleted_at'] is not None
+                    or current['person_status'] == 'merged')):
+            reason = 'unavailable'
+        elif current['status'] == 'withdrawn':
+            reason = 'withdrawn'
+        elif current['person_id'] != original_owner:
+            reason = 'moved'
+        elif (('revision' in item and current['revision'] != item['revision'])
+              or any(current[key] != item[key] for key in ('text', 'ts', 'kind'))
+              or not current['current_evidence_id']
+              or current['evidence_id'] != sources.get(source_id, {}).get('evidence_id')):
+            reason = 'updated'
+        else:
+            continue
+        changes.append({'id': item['id'], 'source_id': source_id, 'reason': reason,
+                        'text': item['text']})
+    return changes
+
+
 def read_followup(conn, fid):
     row = _row(conn, fid)
     record = dict(row)
     record.pop('request_hash')
     record.pop('origin_person_id')
     record['brief'] = json.loads(row['brief']) if row['brief'] else None
+    record['brief_memory_changes'] = _brief_memory_changes(conn, record['brief'])
     record['draft_source_ids'] = json.loads(row['draft_source_ids'])
     record['person'] = _person_info(conn, _person(conn, row['person_id']))
     record['open_promises'] = [_promise_info(p) for p in repo.open_promises(conn, row['person_id'])]
@@ -168,7 +207,8 @@ def build_brief(conn, person_id):
         sid = 'memory:' + row['id']
         source(sid, 'memory', '已保存背景', row['ts'], row['evidence_id'], row['text'])
         memories.append({'id': row['id'], 'kind': row['kind'], 'text': row['text'],
-                         'ts': row['ts'], 'date': row['ts'], 'source_id': sid})
+                         'ts': row['ts'], 'date': row['ts'], 'source_id': sid,
+                         'revision': row['revision'], 'person_id': row['person_id']})
     promises = []
     for row in repo.open_promises(conn, person_id):
         item = _promise_info(row)
@@ -236,6 +276,8 @@ def prepare_followup(conn, fid, emit=None):
             raise Cancelled('沟通准备已取消或中断')
         if current['status'] != 'preparing':
             return read_followup(conn, fid)
+        if _brief_memory_changes(conn, brief):
+            raise FollowupError('准备期间引用的记忆发生变化，请重试以读取最新资料', 409)
         conn.execute("UPDATE followup SET draft=?,draft_source_ids=?,status='ready',"
                      "prepare_status='done',revision=revision+1,updated_at=? WHERE id=?",
                      (result['draft'].strip(), _json(list(dict.fromkeys(refs))), now_ms(), fid))

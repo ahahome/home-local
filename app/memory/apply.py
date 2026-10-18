@@ -410,6 +410,8 @@ def _merge_persons(conn, survivor_id: str, merged_id: str) -> str:
                    for r in conn.execute("SELECT field,valid_from FROM person_field WHERE person_id=?", (b,)).fetchall()],
         "memories": [r["id"] for r in conn.execute(
             "SELECT id FROM memory_item WHERE person_id=?", (b,)).fetchall()],
+        "memory_assignment_revisions": {r["id"]: r["assignment_revision"] for r in conn.execute(
+            "SELECT id,assignment_revision FROM memory_item WHERE person_id=?", (b,))},
         "promises": [r["id"] for r in conn.execute(
             "SELECT id FROM promise WHERE person_id=?", (b,)).fetchall()],
         "ledger": [r["id"] for r in conn.execute(
@@ -439,7 +441,8 @@ def _merge_persons(conn, survivor_id: str, merged_id: str) -> str:
                      " VALUES(?,?,?,?,?)", (survivor_id, alias, source, conf, now))
     # 其余按 id/键迁移
     conn.execute("UPDATE person_field SET person_id=? WHERE person_id=?", (survivor_id, b))
-    conn.execute("UPDATE memory_item SET person_id=? WHERE person_id=?", (survivor_id, b))
+    conn.execute("UPDATE memory_item SET person_id=?,revision=revision+1,updated_at=? WHERE person_id=?",
+                 (survivor_id, now, b))
     conn.execute("UPDATE promise SET person_id=? WHERE person_id=?", (survivor_id, b))
     conn.execute("UPDATE ledger_entry SET person_id=? WHERE person_id=?", (survivor_id, b))
     conn.execute("UPDATE followup SET person_id=? WHERE person_id=?", (survivor_id, b))
@@ -562,7 +565,13 @@ def _split_merge(conn, merge_log_id: str) -> None:
     for field, valid_from in snap["fields"]:
         conn.execute("UPDATE person_field SET person_id=? WHERE person_id=? AND field=? AND valid_from=?",
                      (b, survivor_id, field, valid_from))
-    for table, key in (("memory_item", "memories"), ("promise", "promises"), ("ledger_entry", "ledger")):
+    # Only automatic ownership changes belong to this snapshot. Later manual assignments win.
+    for mid in snap["memories"]:
+        expected = snap.get("memory_assignment_revisions", {}).get(mid, 0)
+        conn.execute("UPDATE memory_item SET person_id=?,deleted_at=NULL,revision=revision+1,updated_at=? "
+                     "WHERE id=? AND person_id=? AND assignment_revision=?",
+                     (b, now_ms(), mid, survivor_id, expected))
+    for table, key in (("promise", "promises"), ("ledger_entry", "ledger")):
         for rid in snap[key]:
             conn.execute(f"UPDATE {table} SET person_id=? WHERE id=?", (b, rid))
     for fid in snap.get("followups", []):

@@ -103,8 +103,9 @@ def archive_person(conn, pid: str) -> None:
     这样既满足「删除后不得复活」，又给了误删后悔的余地。
     """
     t = now_ms()
-    conn.execute("UPDATE person SET deleted_at=? WHERE id=?", (t, pid))
-    conn.execute("UPDATE memory_item SET deleted_at=? WHERE person_id=?", (t, pid))
+    conn.execute("UPDATE person SET deleted_at=?, updated_at=? WHERE id=? AND deleted_at IS NULL", (t, t, pid))
+    conn.execute("UPDATE memory_item SET deleted_at=?, revision=revision+1, updated_at=? "
+                 "WHERE person_id=? AND deleted_at IS NULL", (t, t, pid))
 
 
 def restore_person(conn, pid: str) -> bool:
@@ -112,8 +113,10 @@ def restore_person(conn, pid: str) -> bool:
     row = conn.execute("SELECT deleted_at, status FROM person WHERE id=?", (pid,)).fetchone()
     if not row or row["deleted_at"] is None or row["status"] == "merged":
         return False
-    conn.execute("UPDATE person SET deleted_at=NULL, updated_at=? WHERE id=?", (now_ms(), pid))
-    conn.execute("UPDATE memory_item SET deleted_at=NULL WHERE person_id=?", (pid,))
+    t = now_ms()
+    conn.execute("UPDATE person SET deleted_at=NULL, updated_at=? WHERE id=?", (t, pid))
+    conn.execute("UPDATE memory_item SET deleted_at=NULL, revision=revision+1, updated_at=? "
+                 "WHERE person_id=? AND deleted_at IS NOT NULL", (t, pid))
     return True
 
 
@@ -269,6 +272,9 @@ def _evidence_ids_of(conn, pid: str) -> list[str]:
     for sql in (
         "SELECT DISTINCT evidence_id e FROM person_field WHERE person_id=?",
         "SELECT DISTINCT evidence_id e FROM memory_item WHERE person_id=?",
+        "SELECT DISTINCT origin_evidence_id e FROM memory_item WHERE person_id=?",
+        "SELECT DISTINCT c.evidence_id e FROM memory_correction c "
+        "JOIN memory_item m ON m.id=c.memory_id WHERE m.person_id=?",
         "SELECT DISTINCT evidence_id e FROM promise WHERE person_id=?",
         "SELECT DISTINCT evidence_id e FROM ledger_entry WHERE person_id=?",
         "SELECT DISTINCT evidence_id e FROM relation_edge WHERE from_person=? OR to_person=?",
@@ -278,30 +284,49 @@ def _evidence_ids_of(conn, pid: str) -> list[str]:
         for r in conn.execute(sql, (pid, pid) if sql.count('?') == 2 else (pid,)).fetchall():
             if r["e"]:
                 ids.add(r["e"])
-    return sorted(ids)
+    return sorted(_evidence_chain(conn, ids))
+
+
+def _evidence_chain(conn, evidence_ids) -> set[str]:
+    """Review evidence can retain an explicit link to original communication evidence."""
+    found: set[str] = set()
+    pending = list(evidence_ids)
+    while pending:
+        eid = pending.pop()
+        if not eid or eid in found:
+            continue
+        found.add(eid)
+        row = conn.execute("SELECT excerpt FROM evidence WHERE id=?", (eid,)).fetchone()
+        if not row:
+            continue
+        try:
+            source = json.loads(row["excerpt"])
+        except (TypeError, ValueError):
+            continue
+        linked = source.get("source_evidence_id") if isinstance(source, dict) else None
+        if isinstance(linked, str) and linked:
+            pending.append(linked)
+    return found
 
 
 def _purge_evidence(conn, ev_ids: list[str], deleted: dict[str, int]) -> list[str]:
     """删掉「只被这个人引用」的 evidence 及其 blob（被别人引用的留着）。"""
     from app.store import blob
     blobs: list[str] = []
+    roots: set[str] = set()
+    for table, column in (("person_field", "evidence_id"), ("memory_item", "evidence_id"),
+                          ("memory_item", "origin_evidence_id"), ("memory_correction", "evidence_id"),
+                          ("promise", "evidence_id"), ("ledger_entry", "evidence_id"),
+                          ("relation_edge", "evidence_id"), ("outcome_memory_analysis", "evidence_id")):
+        roots.update(r[0] for r in conn.execute(
+            f"SELECT DISTINCT {column} FROM {table} WHERE {column} IS NOT NULL"))
+    protected = _evidence_chain(conn, roots)
     for eid in ev_ids:
-        if conn.execute(
-            "SELECT 1 FROM person_field WHERE evidence_id=? LIMIT 1", (eid,)).fetchone():
-            continue
-        if conn.execute(
-            "SELECT 1 FROM memory_item WHERE evidence_id=? LIMIT 1", (eid,)).fetchone():
-            continue
-        if conn.execute("SELECT 1 FROM promise WHERE evidence_id=? LIMIT 1", (eid,)).fetchone():
-            continue
-        if conn.execute(
-            "SELECT 1 FROM ledger_entry WHERE evidence_id=? LIMIT 1", (eid,)).fetchone():
-            continue
-        if conn.execute("SELECT 1 FROM relation_edge WHERE evidence_id=? LIMIT 1", (eid,)).fetchone():
-            continue
-        if conn.execute("SELECT 1 FROM outcome_memory_analysis WHERE evidence_id=? LIMIT 1", (eid,)).fetchone():
+        if eid in protected:
             continue
         ev = conn.execute("SELECT blob_hash FROM evidence WHERE id=?", (eid,)).fetchone()
+        if not ev:
+            continue
         conn.execute("DELETE FROM evidence WHERE id=?", (eid,))
         deleted["evidence"] = deleted.get("evidence", 0) + 1
         h = ev["blob_hash"] if ev else None
@@ -495,14 +520,22 @@ def interaction_person_names(conn, interaction_id: str) -> list[str]:
 
 # ---------------- memory_item ----------------
 
+# All shared consumers use the same final visibility check, including vector hits.
+ACTIVE_MEMORY_WHERE = (
+    "m.status='active' AND m.deleted_at IS NULL AND (m.person_id IS NULL OR EXISTS "
+    "(SELECT 1 FROM person p WHERE p.id=m.person_id AND p.deleted_at IS NULL AND p.status!='merged'))"
+)
+
+
 def add_memory(conn, kind: str, text: str, person_id: str | None = None, confidence: float = 1.0,
                evidence_id: str | None = None, ts: int | None = None) -> str:
     mid = new_id()
     t = ts or now_ms()
+    created = now_ms()
     conn.execute(
-        "INSERT INTO memory_item(id,person_id,kind,text,confidence,evidence_id,ts,created_at)"
-        " VALUES(?,?,?,?,?,?,?,?)",
-        (mid, person_id, kind, text, confidence, evidence_id, t, now_ms()))
+        "INSERT INTO memory_item(id,person_id,kind,text,confidence,evidence_id,ts,created_at,updated_at,origin_evidence_id)"
+        " VALUES(?,?,?,?,?,?,?,?,?,?)",
+        (mid, person_id, kind, text, confidence, evidence_id, t, created, created, evidence_id))
     from app.memory.fts import tokenize
     conn.execute(
         "INSERT INTO memory_fts(tokens,owner_type,owner_id) VALUES(?,?,?)",
@@ -514,28 +547,28 @@ def memories_of(conn, person_id: str, kinds: list[str] | None = None, limit: int
     if kinds:
         ph = ",".join("?" * len(kinds))
         return conn.execute(
-            f"SELECT * FROM memory_item WHERE person_id=? AND deleted_at IS NULL AND kind IN ({ph})"
-            f" ORDER BY ts DESC LIMIT ?", (person_id, *kinds, limit)).fetchall()
+            f"SELECT m.* FROM memory_item m WHERE m.person_id=? AND {ACTIVE_MEMORY_WHERE} AND m.kind IN ({ph})"
+            f" ORDER BY m.ts DESC LIMIT ?", (person_id, *kinds, limit)).fetchall()
     return conn.execute(
-        "SELECT * FROM memory_item WHERE person_id=? AND deleted_at IS NULL ORDER BY ts DESC LIMIT ?",
+        f"SELECT m.* FROM memory_item m WHERE m.person_id=? AND {ACTIVE_MEMORY_WHERE} ORDER BY m.ts DESC LIMIT ?",
         (person_id, limit)).fetchall()
 
 
 def memories_since(conn, since_ms: int, kinds: list[str] | None = None) -> list:
-    base = "SELECT * FROM memory_item WHERE deleted_at IS NULL AND ts>=?"
+    base = f"SELECT m.* FROM memory_item m WHERE {ACTIVE_MEMORY_WHERE} AND m.ts>=?"
     params: list[Any] = [since_ms]
     if kinds:
         ph = ",".join("?" * len(kinds))
-        base += f" AND kind IN ({ph})"
+        base += f" AND m.kind IN ({ph})"
         params += kinds
-    return conn.execute(base + " ORDER BY ts", params).fetchall()
+    return conn.execute(base + " ORDER BY m.ts", params).fetchall()
 
 
 def my_profile_memories(conn) -> list:
     """近期个人记忆；更早的内容保留在库中，可通过全文检索读取。"""
     return conn.execute(
-        "SELECT * FROM memory_item WHERE person_id IS NULL AND deleted_at IS NULL "
-        "AND kind IN ('semantic','episodic') ORDER BY ts DESC LIMIT 200").fetchall()
+        f"SELECT m.* FROM memory_item m WHERE m.person_id IS NULL AND {ACTIVE_MEMORY_WHERE} "
+        "AND m.kind IN ('semantic','episodic') ORDER BY m.ts DESC LIMIT 200").fetchall()
 
 
 # ---------------- relation_edge ----------------

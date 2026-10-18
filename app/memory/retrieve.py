@@ -14,7 +14,8 @@ def _fetch_items(conn, keys: list[tuple[str, str]]) -> dict[tuple[str, str], dic
     out = {}
     for owner_type, oid in keys:
         if owner_type == "memory":
-            r = conn.execute("SELECT * FROM memory_item WHERE id=? AND deleted_at IS NULL", (oid,)).fetchone()
+            r = conn.execute(f"SELECT m.* FROM memory_item m WHERE m.id=? AND {repo.ACTIVE_MEMORY_WHERE}",
+                             (oid,)).fetchone()
             if r:
                 name = ""
                 if r["person_id"]:

@@ -57,9 +57,11 @@ def _json(value):
 
 
 def compact_source(source):
+    from app.agent.memory_sources import model_source_context
+
     value = {key: source[key] for key in (
-        'id', 'type', 'entity_id', 'person', 'text', 'date', 'temporal_status', 'revision',
-        'kind', 'field', 'valid_from', 'valid_to', 'recorded_at', 'people') if key in source}
+        'id', 'type', 'entity_id', 'person', 'text', 'kind', 'field', 'people') if key in source}
+    value.update(model_source_context(source))
     value['text'] = value.get('text', '')[:1600]
     evidence = source.get('evidence')
     if evidence:
@@ -115,6 +117,10 @@ class SourceRegistry:
                 candidate = compact_source(self.preview(source)) if source else None
                 entry = candidate if key == 'sources' else {**item, 'text': item.get('text', '')[:1600]}
                 if key == 'results' and source:
+                    # The model gets the labelled dates in the source projection.
+                    # Raw duplicate timestamps otherwise look like edit times.
+                    entry.pop('ts', None)
+                    entry.pop('when', None)
                     entry.update(source=candidate, source_id=candidate['id'])
                 if len(_json({**output, key: output[key] + [entry], 'truncated': True})) > budget:
                     output['truncated'] = True

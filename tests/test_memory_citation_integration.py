@@ -15,6 +15,23 @@ from app.util import new_id
 from eval.memory_retrieval import evaluate, load_fixture
 
 
+def readonly_intent_double(text, **kwargs):
+    """Isolate citation contracts from classifier model choices, not persistence."""
+    return harness.turn_intent.validate_intent({
+        'intent': 'query', 'record_spans': [], 'reason': 'Citation integration reads existing records.'}, text)
+
+
+def unchanged_review_double(llm, question, draft_answer, sources, *, context=None):
+    """Keep the scripted draft so provenance checks see its intentional bad cases.
+
+    Answer revision has dedicated tests; calling that model here would consume
+    the retrieval script and could erase the invalid citations under test.
+    """
+    return {'answer': draft_answer, 'metadata': {
+        'version': 1, 'status': 'test_double', 'semantic_verified': False,
+        'original_answer': draft_answer, 'changed': False}, 'warnings': []}
+
+
 @pytest.fixture
 def api(conn, monkeypatch):
     from app import llm
@@ -23,6 +40,8 @@ def api(conn, monkeypatch):
     for module in (main, memories, message_sources):
         monkeypatch.setattr(module, 'get_conn', lambda: conn)
     monkeypatch.setattr(harness.extract, 'extract_from_text', lambda *args: {'people': [], 'my_notes': []})
+    monkeypatch.setattr(harness.turn_intent, 'classify_turn', readonly_intent_double)
+    monkeypatch.setattr(harness.answer_review, 'review_answer', unchanged_review_double)
     monkeypatch.setattr(llm, 'get_llm', lambda: (_ for _ in ()).throw(RuntimeError('offline FTS test')))
     monkeypatch.setattr(socket.socket, 'connect', lambda *args: pytest.fail('citation tests must remain offline'))
     client = TestClient(main.app)
@@ -196,9 +215,9 @@ def test_current_and_historical_city_sources_keep_temporal_status_and_only_used_
 
     def answer(read):
         current = next(source for source in read['sources'] if source['type'] == 'field'
-                       and source['temporal_status'] == 'current_field')
+                       and source['事实时效'] == '当前档案字段，尚无结束记录')
         old = next(source for source in read['sources'] if source['type'] == 'field'
-                   and source['temporal_status'] == 'historical_field')
+                   and source['事实时效'] == '已结束的历史档案字段，不代表现状')
         return f"Current city: {current['text']} [[{current['id']}]]. Previous city: {old['text']} [[{old['id']}]]."
 
     result, model = ask(api, tool='get_person', args={'person_id': pid}, answer=answer)

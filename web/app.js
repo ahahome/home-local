@@ -4,7 +4,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 const state={page:'home',cid:localStorage.getItem('home-conversation'),streams:new Map(),persons:[],skills:[],archived:false,atlas3d:true,atlasRotation:0};
 const labels={home:'今日跟进',chat:'对话',persons:'人物档案',memories:'记忆',atlas:'关系星图',projects:'项目',pending:'待确认',promises:'承诺与提醒',ledger:'往来账本',research:'深度研究',skills:'沟通技能',journal:'关系日志',tasks:'任务中心',settings:'设置与数据'};
 const fieldNames={company:'公司',title:'职位',city:'城市',birthday:'生日',phone:'电话',email:'邮箱',family:'家属信息'};
-const kindNames={person_identity:'人物身份',field:'档案信息',ledger:'往来账目',promise:'承诺',memory:'关系记忆',outcome_memory:'记忆更新',relation:'人物关系',fact:'事实',person:'人物',note:'个人记忆',contact:'实际联系',reminder:'提醒',extract:'信息提取',tool:'操作'};
+const kindNames={person_identity:'人物身份',field:'档案信息',ledger:'往来账目',promise:'承诺',memory:'关系记忆',outcome_memory:'记忆更新',relation:'人物关系',fact:'事实',person:'人物',note:'个人记忆',contact:'实际联系',reminder:'提醒',skill:'沟通技能',research:'研究提案',extract:'信息提取',tool:'操作',intent:'记忆处理'};
 const statusNames={queued:'等待中',running:'处理中',done:'已完成',partial:'部分完成',failed:'失败',cancelled:'已取消',interrupted:'已中断',proposed:'待确认提案',parsing:'正在解析',confirmed:'已确认',pending:'待确认',void:'已丢弃'};
 const terminal=new Set(['done','partial','failed','cancelled','interrupted']);
 function fmt(v,full=false,year=false){if(!v)return '';let d;if(typeof v==='number')d=new Date(v);else {let raw=String(v).replace(' ','T');if(/^\d{4}-\d{2}-\d{2}$/.test(raw))raw+='T12:00:00+08:00';else if(!/(?:Z|[+-]\d{2}:?\d{2})$/i.test(raw))raw+='+08:00';d=new Date(raw);}if(Number.isNaN(d.getTime()))return String(v);return new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',...(year?{year:'numeric'}:{}),month:'2-digit',day:'2-digit',...(full?{hour:'2-digit',minute:'2-digit'}:{})}).format(d);}
@@ -20,7 +20,32 @@ let toastTimer;function toast(text){$('#toast').textContent=text;$('#toast').cla
 function resetOverlayState(){captureMemoryEdits();captureMemoryCorrectionEdits();state.memoryView=null;state.memoryOpening=null;state.memoryDetailOpening=null;state.memoryDetailView=null;state.personOpening=null;state.personMemoryView=null;state.agendaDialog=null;state.contactPolicyOpening=null;state.contactPolicyView=null;state.followupSeed=null;state.chatSourceOpening=null;state.chatSourceView=null;}
 function close(){stopFollowupView();resetOverlayState();$('#overlay').innerHTML='';}
 function modal(title,body,drawer=false){stopFollowupView();resetOverlayState();$('#overlay').innerHTML=`<div class="mask" data-action="close"></div><section class="${drawer?'drawer':'modal'}" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="modal-head"><h2>${esc(title)}</h2>${btn('✕','close','','ghost')}</div>${body}</section>`;document.querySelectorAll('#overlay .form-field > label').forEach(l=>{const c=l.nextElementSibling;if(c?.id&&c.matches('input,textarea,select'))l.htmlFor=c.id;});setTimeout(()=>($('#overlay input')||$('#overlay textarea')||$('#overlay button'))?.focus(),30);}
-function receipts(meta){const items=meta?.outcomes||[...(meta?.saved||[]),...(meta?.pending||[]),...(meta?.failed||[])];const visible=items.filter(o=>['ok','pending','failed','skipped'].includes(o.status));if(!visible.length)return '';const seen=new Set();return `<div class="receipts">${visible.filter(o=>{const k=o.status+o.kind+o.detail;if(seen.has(k))return false;seen.add(k);return true;}).map(o=>`<div class="${o.status==='failed'?'error':o.status==='pending'?'warning':''}">${o.status==='ok'?'✓ 已保存':o.status==='pending'?'◇ 待确认':o.status==='skipped'?'· 未写入':'! 未保存'} · ${esc(kindNames[o.kind]||o.kind)}：${esc(o.detail)}${o.status==='pending'?' <a href="#/pending">去确认 →</a>':''}</div>`).join('')}</div>`;}
+function receiptItems(meta){
+  const items=[...(Array.isArray(meta?.outcomes)?meta.outcomes:[...(meta?.saved||[]),...(meta?.pending||[]),...(meta?.failed||[])])];
+  const actionKinds={reminder:'reminder',promise:'promise',promise_done:'promise',skill:'skill',research:'research',save_person_fact:'field',record_transfer:'ledger',create_promise:'promise',note:'note',save_skill:'skill',deep_research:'research',create_reminder:'reminder',complete_promise:'promise'};
+  const operations={reminder:'create_reminder',promise:'create_promise',promise_done:'complete_promise',skill:'save_skill',research:'deep_research'};
+  for(const receipt of Array.isArray(meta?.receipts)?meta.receipts:[]){
+    if(!receipt||!Object.hasOwn(actionKinds,receipt.type))continue;
+    const nested=Array.isArray(receipt.outcomes)?receipt.outcomes.filter(item=>item&&typeof item==='object'):[];
+    if(nested.length){items.push(...nested);continue;}
+    const status=receipt.status;if(!['ok','pending','failed','skipped'].includes(status))continue;
+    let detail=typeof receipt.detail==='string'?receipt.detail:'';
+    if(!detail){
+      if(status==='pending')detail='这项操作仍待确认。';
+      else if(status==='failed')detail='这项操作未完成，请检查后重试。';
+      else if(status==='skipped')detail='这项操作未执行。';
+      else if(receipt.duplicate)detail='这条记录已存在，未重复创建。';
+      else if(['reminder','create_reminder'].includes(receipt.type))detail=`已创建提醒${receipt.fire_at?`，时间：${fmt(receipt.fire_at,true,true)}`:''}。`;
+      else if(['promise_done','complete_promise'].includes(receipt.type))detail='指定承诺已标记为完成。';
+      else if(['skill','save_skill'].includes(receipt.type))detail=`已${receipt.created===false?'更新':'保存'}沟通技能${receipt.name?`“${receipt.name}”`:''}。`;
+      else if(['research','deep_research'].includes(receipt.type))detail='已生成研究提案，请在研究面板确认后开始。';
+      else detail='这项操作已完成。';
+    }
+    items.push({kind:actionKinds[receipt.type],operation:operations[receipt.type]||receipt.type,status,detail});
+  }
+  return items.filter(item=>item&&typeof item==='object').map(item=>Object.hasOwn(actionKinds,item.kind)?{...item,operation:item.operation||operations[item.kind]||item.kind,kind:actionKinds[item.kind]}:item).filter(item=>item.kind!=='tool'||!items.some(other=>other?.kind&&other.kind!=='tool'&&other.detail===item.detail));
+}
+function receipts(meta){const visible=receiptItems(meta).filter(o=>o&&['ok','pending','failed','skipped'].includes(o.status));if(!visible.length)return '';const seen=new Set();return `<div class="receipts">${visible.filter(o=>{const k=o.status+(o.operation||o.kind)+o.detail;if(seen.has(k))return false;seen.add(k);return true;}).map(o=>`<div class="${o.status==='failed'?'error':o.status==='pending'?'warning':''}">${o.status==='ok'?'✓ 已保存':o.status==='pending'?'◇ 待确认':o.status==='skipped'?'· 未写入':'! 未保存'} · ${esc(kindNames[o.kind]||o.kind)}：${esc(o.detail)}${o.status==='pending'?' <a href="#/pending">去确认 →</a>':''}</div>`).join('')}</div>`;}
 const chatSourceKinds={memory:'记忆',field:'档案信息',interaction:'沟通记录'};
 const chatSourceTemporal={historical_background:'已记录背景',current_field:'当时的当前档案',historical_field:'历史档案',contact:'实际联系',note:'资料记录'};
 function validChatSource(source){return !!source&&typeof source==='object'&&/^S[1-9]\d*$/.test(source.id||'')&&Object.hasOwn(chatSourceKinds,source.type)&&typeof source.entity_id==='string'&&typeof source.text==='string';}

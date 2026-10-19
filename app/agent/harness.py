@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import re
 
-from app.agent import conversation_scope, prompts, tools
+from app.agent import answer_review, conversation_scope, prompts, tools, turn_intent
 from app.agent.source_registry import SourceRegistry, compact_source
 from app.config import get_settings
 from app.llm import get_llm
@@ -152,21 +152,28 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
     read_scope = conversation_scope.for_user_message(conn, conversation_id, user_msg_id, user_text)
 
     emit = emit or (lambda kind, data: None)
-    emit("progress", {"message": "提取信息并检查身份与来源"})
+    emit("progress", {"message": "判断查询与记事范围"})
+    intent = turn_intent.for_user_message(conn, conversation_id, user_msg_id, user_text, llm=llm)
     outcomes, pending_ids = [], []
     try:
-        known = [p["display_name"] for p in repo.all_active_persons(conn)][:100]
-        extraction = extract.extract_from_text(user_text, known, today_local())
-        from app.memory import apply as apply_mod
-        applied = apply_mod.apply_extraction(conn, extraction, user_msg_id, user_text)
-        outcomes = applied["outcomes"]
-        pending_ids = applied["pending_ids"]
-        linked = [(pid, "mentioned") for pid in applied.get("person_ids", [])]
-        if linked:
-            repo.insert_interaction(conn, now_ms(), "chat", clamp(user_text, 4000), user_msg_id,
-                                    linked, kind="note")
-            for pid, _role in linked:
-                repo.recompute_importance(conn, pid)
+        record_text = turn_intent.write_text(intent, user_text)
+        if record_text is None:
+            outcomes = [turn_intent.readonly_outcome(intent)]
+        else:
+            emit("progress", {"message": "提取记事原文并检查身份与来源"})
+            known = [p["display_name"] for p in repo.all_active_persons(conn)][:100]
+            extraction = extract.extract_from_text(record_text, known, today_local())
+            from app.memory import apply as apply_mod
+            applied = apply_mod.apply_extraction(conn, extraction, user_msg_id, record_text,
+                                                evidence_id=intent['evidence_id'])
+            outcomes = applied["outcomes"]
+            pending_ids = applied["pending_ids"]
+            linked = [(pid, "mentioned") for pid in applied.get("person_ids", [])]
+            if linked:
+                repo.insert_interaction(conn, now_ms(), "chat", clamp(record_text, 4000), user_msg_id,
+                                        linked, kind="note")
+                for pid, _role in linked:
+                    repo.recompute_importance(conn, pid)
         conn.commit()
     except Exception as e:
         conn.rollback()
@@ -191,6 +198,9 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
         messages += _history_messages(conn, conversation_id, through_user_message_id=user_msg_id)
     messages.insert(1, {"role": "system", "content": "本轮实际记忆处理回执：" +
         json.dumps(outcomes, ensure_ascii=False) + "。仅成功项可称已记录；待确认和失败必须如实说明。"})
+    messages.insert(2, {'role': 'system', 'content': '本轮查询与记事边界：' +
+        json.dumps({key: intent[key] for key in ('intent', 'allow_writes', 'record_spans')}, ensure_ascii=False) +
+        '。只允许记事原话支持的写入；查询或无法判定的消息不得新增或修改记忆、人物或其他操作。'})
 
     # ---- 工具循环 ----
     receipts: list[dict] = []
@@ -221,7 +231,7 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
             try:
                 result = tools.execute_tool(conn, tc["function"]["name"], args,
                                             source_text=user_text, source_msg_id=user_msg_id,
-                                            read_scope=read_scope)
+                                            read_scope=read_scope, turn_intent=intent)
             except Exception as e:  # noqa: BLE001
                 result = {"ok": False, "error": str(e)}
             if tc['function']['name'] in {'get_person', 'query_memory'}:
@@ -229,7 +239,11 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
             available = s.ctx_budget_chars - sum(len(json.dumps(message, ensure_ascii=False)) for message in messages)
             result = registry.tool_result(result, budget=max(0, min(12000, available)))
             if result.get("receipt"):
-                receipts.append(result["receipt"])
+                receipt = dict(result['receipt'])
+                # Several action tools return an id receipt without a status.
+                # Its status comes from the executed tool result, never the model.
+                receipt.setdefault('status', 'ok' if result.get('ok') else 'failed')
+                receipts.append(receipt)
             outcomes.extend(result.get("outcomes", []))
             pending_ids.extend(result.get("pending_ids", []))
             if not result.get("ok"):
@@ -246,7 +260,27 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
 
     if not answer.strip():
         answer = "（这一轮没有产出内容，请重试）"  # FR-CHT-06
-    answer, sources, source_warnings = registry.citations(answer, require_citations=bool(person_ids) or read_tools_used)
+    # The editor is one model revision, not a semantic correctness certificate.
+    # Keep the original warning for fabricated references even if the edit removes them.
+    draft = answer
+    _, _, draft_warnings = registry.citations(draft)
+    if read_scope['blocked']:
+        review = {'answer': draft, 'metadata': {'version': 1, 'status': 'not_needed',
+                  'reason': 'deterministic_clarification', 'semantic_verified': False}, 'warnings': []}
+    else:
+        emit('progress', {'message': '核对资料、日期与事实引用'})
+        review = answer_review.review_answer(llm, user_text, draft, registry.sources,
+            context={'outcomes': outcomes, 'receipts': receipts, 'pending_ids': pending_ids,
+                     'intent': intent['intent'], 'read_scope': read_scope})
+    answer = review['answer']
+    reviewed_no_answer = (review['metadata'].get('status') == 'completed'
+                          and review['metadata'].get('answer_type') == 'no_answer')
+    answer, sources, source_warnings = registry.citations(
+        answer, require_citations=not reviewed_no_answer and (bool(person_ids) or read_tools_used))
+    extra_warnings = [warning for warning in draft_warnings if warning['code'] == 'invalid_citation']
+    for warning in [*review['warnings'], *extra_warnings]:
+        if warning not in source_warnings:
+            source_warnings.append(warning)
     if not answer.strip():
         answer = '（这一轮没有可核查的回答内容，请重试）'
 
@@ -256,7 +290,8 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
     metadata = {"receipts": receipts, "outcomes": outcomes, "saved": saved, "pending": pending,
                 "failed": failed, "pending_ids": list(dict.fromkeys(pending_ids)),
                 'sources': sources, 'source_warnings': source_warnings,
-                'source_dependencies': registry.dependencies, 'conversation_scope': read_scope}
+                'source_dependencies': registry.dependencies, 'conversation_scope': read_scope,
+                'turn_intent': intent, 'answer_review': review['metadata']}
     assistant_message_id = registry.save_answer(lambda: repo.add_message(
         conn, conversation_id, 'assistant', answer, json.dumps(metadata, ensure_ascii=False)))
 

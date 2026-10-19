@@ -1,17 +1,17 @@
 # Portable Demo Data
 
 This directory contains the synthetic data used in the local QA workspace,
-updated on 2026-10-19 from `data/qa/memory-quality-v08-20261019/preview/`.
+updated on 2026-10-19 from `data/qa/answer-trust-v09-20261019/preview/`.
 All people, conversations, commitments, and transfers are fictional.
 
 The committed snapshot includes:
 
 - `home.db`: a standalone SQLite backup, including committed WAL contents.
 - `blobs/`: the three original attachments, stored by SHA-256.
-- 70 people (65 visible), 218 field versions, 346 interactions, 126 memories,
+- 71 people (66 visible), 220 field versions, 347 interactions, 126 memories,
   69 commitments, 131 ledger entries, 32 confirmation records, 3 projects,
-  21 completed tasks, and 6 conversations with 24 messages. The database uses
-  schema version 9.
+  27 tasks (26 completed and one partial), and 8 conversations with 41 stored
+  messages (including five tool messages). The database uses schema version 9.
 - Three synthetic communication followups with four saved outcomes and four
   memory analyses, including five confirmed proposals and one discarded proposal.
   These demonstrate historical field updates, communication preferences, source
@@ -30,10 +30,29 @@ The committed snapshot includes:
   a comparison, and clarification after an ambiguous pronoun. The real gateway
   answers remain unchanged, including an uncited followup and its warning;
   these are examples for inspection, not a claim that every answer is complete.
+- Two v0.9 conversations retain six real gateway turns as product demonstrations,
+  rather than a benchmark. `v0.9 可信回答与写入边界演示` contains four observations
+  made before the final write guards: a cited communication-preference query,
+  a blood-type query with the fixed insufficient-information answer and no
+  uncited warning, and two mixed inputs that safely fell back to read-only
+  processing when the intent classifier was unavailable. All four original
+  answers and metadata remain unchanged.
+- `v0.9 最终版混合写入演示 · 648e46e7` contains two turns from the final application
+  version. An input explicitly labelled as fictional demonstration material
+  remains read-only under the non-assertive policy. A subsequent natural factual
+  statement saves the fictional person `顾予澄`, company `澄川设计`, and city
+  `厦门`, while answering the separate question about 沈知遥 with citation S3.
+  The saved note contains only the factual statement; the complete input stays
+  in its original audit evidence. No new memory or confirmation records were
+  created by these six turns. The extra natural statement corrects the QA input
+  so the read-only hypothetical case is not mistaken for a normal mixed-input
+  failure. Original wording issues, including a repeated `建议：`, are retained.
 
-The snapshot retains every row from the earlier demo, including the exact older
-conversation content and source metadata. A fresh restore passed SQLite integrity
-and foreign-key checks, attachment hash checks, and saved citation/evidence checks.
+The snapshot retains all 2,394 application rows from the earlier demo, including
+the exact older conversation content and source metadata. A fresh restore passed
+SQLite integrity and foreign-key checks, attachment hash checks, and saved
+citation/evidence checks. Desktop and narrow-screen screenshots are available in
+`docs/assets/v09/`; other QA artifacts remain under the ignored local data folder.
 
 After installing `requirements.txt`, restore a working copy from the repository
 root:

@@ -122,6 +122,8 @@ def _resolve(conn, text, previous):
             return _scope(conn, 'clarify', reason='unavailable_person')
         return _scope(conn, 'single' if len(explicit) == 1 else 'multiple', explicit, 'explicit_id')
 
+    if _GLOBAL.search(text):
+        return _scope(conn, 'global', reason='explicit_global')
     if _mentions_archived_person(conn, text):
         return _scope(conn, 'clarify', reason='unavailable_person')
     people, _, ambiguous = mentioned_people(conn, text)
@@ -140,8 +142,6 @@ def _resolve(conn, text, previous):
     if _ORDINAL.search(text) or (previous.get('candidates') and _NUMERIC_SELECTION.fullmatch(text)):
         return _scope(conn, 'clarify', [item['person_id'] for item in previous.get('candidates', [])],
                       'ordinal_selection')
-    if _GLOBAL.search(text):
-        return _scope(conn, 'global', reason='explicit_global')
     if previous.get('mode') == 'clarify' and previous.get('candidates'):
         selected = _background_choice(conn, text, [item['person_id'] for item in previous['candidates']],
                                       selection_only=True)

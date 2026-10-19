@@ -57,6 +57,14 @@ def test_unrelated_user_topic_clears_focus_and_global_is_explicit(conn):
     assert turn(conn, cid, '第一季度计划怎么安排？')['mode'] == 'none'
 
 
+def test_explicit_global_can_include_a_name_but_explicit_person_id_still_wins(conn):
+    pid = person(conn, '林舟')
+    cid = conversation(conn)
+    assert turn(conn, cid, '改为全库，比较林舟和所有人的偏好')['mode'] == 'global'
+    selected = turn(conn, cid, f'人物 ID: {pid}，这次先查看所有人物中的这一位')
+    assert selected['mode'] == 'single' and selected['person_ids'] == [pid]
+
+
 @pytest.mark.parametrize('reference', ['她呢？', '他喜欢什么？', '他们的偏好呢？', '两人谁更喜欢邮件？'])
 def test_multiple_people_never_choose_by_pronoun_or_read_order(conn, reference):
     first, second = person(conn, '林舟'), person(conn, '陈岚')

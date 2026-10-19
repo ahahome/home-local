@@ -15,6 +15,16 @@
 评估器本身的比对逻辑在 `eval/metrics.py`，由 `tests/test_eval_metrics.py` 覆盖。
 **理由：评估器写错了比被测代码错了更危险**——指标会假绿，问题被掩盖。
 
+## 0.10 分类诊断与记忆追问
+
+`fixtures/answer_stability_v010.json` 在真实调用前冻结，7 组、12 问，正式重复两轮。沿用 0.9 虚构资料、增加自然问法，覆盖别名与恢复原文、唯一记忆日期追问、多记忆澄清、冲突范围、简短缺资料、无问号查询、带条件尾句的明确记事及 mixed 真实更新。另回归 0.9 和 0.8 原语料。完整结果见 [0.10 验收](../docs/ANSWER_STABILITY_V010.md)，逐轮代理证据核对见 [审阅记录](../docs/ANSWER_STABILITY_V010_REVIEW.md)；语义仍待人工审阅。
+
+```sh
+.venv/bin/python -m eval.memory_questions --track answers --cases eval/fixtures/answer_stability_v010.json --repeat 2 --output-dir /tmp/home-v010-acceptance
+```
+
+报告新增 `classifier_diagnostics`（意图/状态、实际请求与重试、失败类别、结束原因、用量）、`answer_review_diagnostics`（协议完成/降级与问题摘录审计状态）、`memory_focus_diagnostics`（绑定状态、原因及来源注册）。`expect.memory_focus` 可检查确定性的绑定契约。这些统计不替代原有实际领域表变化、当前字段和来源检查；分类标签匹配也不是模型语义正确率。日期模板的零请求查询与模型分类分别统计，不能把它计作模型分类成功样本。
+
 ## 0.9 查询写入与回答可信度
 
 `fixtures/answer_trust_v09.json` 在正式采样前冻结，含 7 组虚构开发对话、10 个回答，覆盖恢复状态与编辑日期、冲突偏好、无问号查询、假设、旧回答引文、更新与查询混合，以及带问号的明确记事。使用同一 runner 对机械导出的 0.8 基线和当前实现采样；当前实现重复两次，另用 0.8 原语料做回归。它不是独立真实用户基准。

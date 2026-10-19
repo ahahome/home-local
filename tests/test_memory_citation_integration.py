@@ -455,7 +455,9 @@ def test_multiple_read_tools_consume_one_cumulative_source_budget(api, conn):
     pid = seed_person(conn)
     for index in range(10):
         seed_memory(conn, pid, f'communication preference {index}: ' + 'long background ' * 100)
-    settings = harness.get_settings().model_copy(update={'ctx_budget_chars': 8000})
+    # Leave space for one source after the growing system instructions; the
+    # remaining tool calls must still share this same finite budget.
+    settings = harness.get_settings().model_copy(update={'ctx_budget_chars': 10000})
     api.monkeypatch.setattr(harness, 'get_settings', lambda: settings)
     calls, reads = [], []
 
@@ -482,7 +484,7 @@ def test_multiple_read_tools_consume_one_cumulative_source_budget(api, conn):
     exposed = {hit['id'] for read in reads for hit in read.get('results', [])}
     assert {dependency['entity_id'] for dependency in result['source_dependencies']} == exposed
     assert len(result['sources']) == 1 and result['sources'][0]['entity_id'] in exposed
-    assert sum(len(message['content']) for message in calls[1] if message['role'] == 'tool') <= 8000
+    assert sum(len(message['content']) for message in calls[1] if message['role'] == 'tool') <= settings.ctx_budget_chars
 
 
 def test_source_ids_are_bound_to_the_saved_assistant_and_conversation(api, conn):

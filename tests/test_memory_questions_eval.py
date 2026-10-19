@@ -41,6 +41,44 @@ def test_fixture_rejects_missing_or_duplicated_relevance_labels():
         evaluation.validate_fixture(fixture)
 
 
+def test_v010_acceptance_uses_old_records_new_questions_and_explicit_turn_contracts():
+    directory = evaluation.RUNNER_ROOT / 'eval/fixtures'
+    fixture = evaluation.load_fixture(directory / 'answer_stability_v010.json')
+    baseline = evaluation.load_fixture(directory / 'answer_trust_v09.json')
+    assert fixture['provenance'] == evaluation.PROVENANCE
+    assert '虚构开发验收语料' in fixture['description']
+    assert '语义逐轮待人工审阅' in fixture['description']
+    for key in ('persons', 'fields', 'memories', 'interactions'):
+        assert fixture[key] == baseline[key]
+    turns = [turn for case in fixture['dialogues'] for turn in case['turns']]
+    assert len(fixture['dialogues']) == 7 and len(turns) == 12
+    old_questions = {turn['question'] for case in baseline['dialogues'] for turn in case['turns']}
+    assert not old_questions & {turn['question'] for turn in turns}
+    assert sum(turn['question'] == '这条记忆是什么时候被我修改的？' for turn in turns) == 2
+    for turn in turns:
+        expect = turn['expect']
+        assert expect['intent'] in {'query', 'record', 'mixed'}
+        assert expect['no_memory_writes'] is (expect['intent'] == 'query')
+        assert 'source_records' in expect and expect['allowed_persons'] and expect['review_points']
+        if expect['intent'] != 'query':
+            assert expect['saved_fields']
+    focuses = [turn['expect']['memory_focus'] for turn in turns if 'memory_focus' in turn['expect']]
+    assert focuses == [{'status': 'selected', 'registration_status': 'registered'},
+                       {'status': 'clarify', 'reason': 'ambiguous_memory'}]
+
+
+@pytest.mark.parametrize('focus', [
+    'selected', {}, {'status': 'succeeded'}, {'status': 'clarify', 'reason': ''},
+    {'status': 'selected', 'registration_status': 'made_up'},
+    {'status': 'selected', 'source_id': 'S1'},
+])
+def test_fixture_rejects_invalid_focus_contracts(focus):
+    fixture = small_fixture()
+    fixture['dialogues'][0]['turns'][0]['expect']['memory_focus'] = focus
+    with pytest.raises(ValueError, match='memory_focus'):
+        evaluation.validate_fixture(fixture)
+
+
 def test_ranking_miss_and_wrong_first_result_reduce_recall_and_mrr():
     metrics = evaluation.ranking_metrics(['foreign', 'other', 'a', 'more', 'b'], ['a', 'b'])
     assert metrics == {'recall_at_1': 0, 'recall_at_3': .5, 'recall_at_5': 1., 'mrr_at_5': 1 / 3}
@@ -240,6 +278,90 @@ def test_report_never_converts_semantic_pending_or_absent_sources_to_accuracy():
                                            'reviewed_turns': 0, 'score': None}
     assert summary['limited_fact_checks']['total'] == 0
     assert 'accuracy' not in summary
+
+
+def test_summary_separates_classifier_failures_review_and_focus_from_domain_checks():
+    units = [
+        {'expected': {'intent': 'query'}, 'result': {
+            'turn_intent': {'intent': 'query', 'status': 'classified', 'classifier': {
+                'request_count': 2, 'failure_category': None, 'attempts': [
+                    {'finish_reason': 'length', 'failure_category': 'truncated',
+                     'usage': {'total_tokens': 20, 'reasoning_tokens': 10}},
+                    {'finish_reason': 'stop', 'failure_category': None,
+                     'usage': {'total_tokens': 40, 'prompt_tokens': 15, 'completion_tokens': 25}},
+                ]}},
+            'answer_review': {'status': 'completed', 'changed': True, 'issues': [
+                {'quote_status': 'unmatched'}]},
+            'memory_focus': {'status': 'selected', 'reason': 'unique_cited_memory',
+                             'binding': {'status': 'selected'}, 'registration': {'status': 'registered'}},
+        }, 'deterministic_checks': [{'name': 'query_has_no_memory_writes', 'passed': False}]},
+        {'expected': {'intent': 'mixed'}, 'result': {
+            'turn_intent': {'intent': 'unknown', 'status': 'failed', 'classifier': {
+                'request_count': 1, 'failure_category': 'authentication', 'attempts': [
+                    {'http_status': 403, 'failure_category': 'authentication'},
+                ]}},
+            'answer_review': {'status': 'unavailable', 'unavailable_reason': 'review_call_failed'},
+            'memory_focus': {'status': 'clarify', 'reason': 'ambiguous_memory',
+                             'registration': {'status': 'not_selected'}},
+        }},
+        {'expected': {'intent': 'record'}, 'error': {'type': 'WorkerTimeout'}},
+    ]
+
+    summary = evaluation.summarize('answers', [{'id': 'diagnostics', 'turns': units}])
+
+    assert summary['runtime_errors'] == 1 and summary['units'] == 3
+    assert summary['deterministic_checks'] == {'total': 1, 'passed': 0, 'failed': 1}
+    classifier = summary['classifier_diagnostics']
+    assert classifier['turns_with_intent'] == 2 and classifier['turns_missing_intent'] == 1
+    assert classifier['status_counts'] == {'classified': 1, 'failed': 1, 'not_reported': 1}
+    assert classifier['request_count'] == 3 and classifier['retried_turns'] == 1
+    assert classifier['attempt_count'] == 3
+    assert classifier['expected_intent_turns'] == 3
+    assert classifier['matched_expected_intent_turns'] == 1
+    assert classifier['mismatched_expected_intent_turns'] == 2
+    assert classifier['failure_category_counts'] == {'authentication': 1}
+    assert classifier['attempt_failure_category_counts'] == {'authentication': 1, 'truncated': 1}
+    assert classifier['finish_reason_counts'] == {'length': 1, 'not_reported': 1, 'stop': 1}
+    assert classifier['http_status_counts'] == {'403': 1}
+    assert classifier['reported_token_usage'] == {
+        'prompt_tokens': 15, 'completion_tokens': 25, 'total_tokens': 60, 'reasoning_tokens': 10}
+    review = summary['answer_review_diagnostics']
+    assert review['turns_with_review'] == 2 and review['turns_missing_review'] == 1
+    assert review['status_counts'] == {'completed': 1, 'not_reported': 1, 'unavailable': 1}
+    assert review['unavailable_reason_counts'] == {'review_call_failed': 1}
+    assert review['changed_turns'] == 1 and review['issue_quote_status_counts'] == {'unmatched': 1}
+    focus = summary['memory_focus_diagnostics']
+    assert focus['status_counts'] == {'clarify': 1, 'not_reported': 1, 'selected': 1}
+    assert focus['reason_counts'] == {'ambiguous_memory': 1, 'not_reported': 1, 'unique_cited_memory': 1}
+    assert focus['registration_status_counts'] == {'not_reported': 1, 'not_selected': 1, 'registered': 1}
+    assert summary['semantic_review']['score'] is None
+
+
+def test_missing_or_malformed_optional_diagnostics_cannot_hide_an_answer_failure():
+    unit = {'error': {'type': 'DeliberateFailure'}, 'result': {
+        'turn_intent': {'classifier': {'attempts': None}},
+        'answer_review': {'issues': None}, 'memory_focus': {'registration': None}}}
+
+    summary = evaluation.summarize('answers', [{'turns': [unit]}])
+
+    assert summary['runtime_errors'] == 1
+    assert summary['classifier_diagnostics']['attempt_count'] == 0
+    assert summary['answer_review_diagnostics']['issue_quote_status_counts'] == {}
+    assert summary['memory_focus_diagnostics']['registration_status_counts'] == {'not_reported': 1}
+
+
+def test_focus_expectation_checks_actual_resolution_and_registration(conn):
+    expected = {'memory_focus': {'status': 'clarify', 'reason': 'ambiguous_memory'}}
+    # A model answer saying "please clarify" cannot substitute for actual binding state.
+    result = {'answer': '请澄清。', 'memory_focus': {'status': 'selected', 'reason': 'unique_cited_memory'}}
+    checks = evaluation._answer_checks({}, conn, result, expected, {}, {})
+    assert all(not check['passed'] for check in checks if check['name'].startswith('memory_focus_'))
+    result['memory_focus'] = {'status': 'clarify', 'reason': 'ambiguous_memory'}
+    assert all(check['passed'] for check in evaluation._answer_checks({}, conn, result, expected, {}, {}))
+    expected = {'memory_focus': {'status': 'selected', 'registration_status': 'registered'}}
+    result['memory_focus'] = {'status': 'selected', 'registration': {'status': 'budget_exceeded'}}
+    checks = evaluation._answer_checks({}, conn, result, expected, {}, {})
+    assert next(check for check in checks if check['name'] == 'memory_focus_registration_status')['passed'] is False
 
 
 def test_query_write_guard_checks_database_changes_even_when_classifier_says_query(conn):

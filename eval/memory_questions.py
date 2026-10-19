@@ -7,6 +7,7 @@ Application imports happen only inside isolated workers, after --app-root routin
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from contextlib import redirect_stdout
 from datetime import datetime, timezone
 import hashlib
@@ -99,6 +100,14 @@ def validate_fixture(fixture):
                     raise ValueError('Unknown expected turn intent')
                 if 'no_memory_writes' in expect and not isinstance(expect['no_memory_writes'], bool):
                     raise ValueError('no_memory_writes must be boolean')
+                focus = expect.get('memory_focus')
+                if focus is not None and (not isinstance(focus, dict)
+                        or not set(focus) <= {'status', 'reason', 'registration_status'}
+                        or focus.get('status') not in {'selected', 'clarify', 'not_applicable'}
+                        or 'reason' in focus and (not isinstance(focus['reason'], str) or not focus['reason'])
+                        or 'registration_status' in focus and focus['registration_status'] not in {
+                            'registered', 'not_selected', 'budget_exceeded'}):
+                    raise ValueError('memory_focus needs an explicit supported status and optional reason/registration')
                 for field in expect.get('saved_fields', []):
                     if field.get('person') not in people or not field.get('field') or 'value' not in field:
                         raise ValueError('saved_fields needs an explicit person, field and value')
@@ -396,6 +405,16 @@ def _material(app, conn, records):
 
 def _answer_checks(app, conn, result, expect, people, records):
     checks = []
+    if 'memory_focus' in expect:
+        actual = result.get('memory_focus') if isinstance(result.get('memory_focus'), dict) else {}
+        expected = expect['memory_focus']
+        for key in ('status', 'reason', 'registration_status'):
+            if key not in expected:
+                continue
+            registration = actual.get('registration') if isinstance(actual.get('registration'), dict) else {}
+            observed = registration.get('status') if key == 'registration_status' else actual.get(key)
+            checks.append(_check('memory_focus_' + key, observed == expected[key],
+                                 expected=expected[key], actual=observed))
     for index, source in enumerate(result.get('sources', [])):
         failures = source_checks(conn, source)
         checks.append(_check('cited_source_snapshot:' + str(index), not failures, failures=failures))
@@ -557,6 +576,88 @@ def _execute(job, timeout=600):
                             'message': 'Isolated worker did not return a JSON report'}}}
 
 
+def _diagnostic_counts(values):
+    """Keep absent diagnostics visible; no status bucket is a quality score."""
+    return dict(sorted(Counter(value if isinstance(value, str) and value else 'not_reported'
+                               for value in values).items()))
+
+
+def _answer_diagnostics(units):
+    def objects(value):
+        return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+
+    results = [unit.get('result') if isinstance(unit.get('result'), dict) else {} for unit in units]
+    intents = [result.get('turn_intent') if isinstance(result.get('turn_intent'), dict) else {}
+               for result in results]
+    classifiers = [intent.get('classifier') if isinstance(intent.get('classifier'), dict) else {}
+                   for intent in intents]
+    attempts = [attempt for classifier in classifiers for attempt in objects(classifier.get('attempts'))]
+    reviews = [result.get('answer_review') if isinstance(result.get('answer_review'), dict) else {}
+               for result in results]
+    issues = [issue for review in reviews for issue in objects(review.get('issues'))]
+    focuses = [result.get('memory_focus') if isinstance(result.get('memory_focus'), dict) else {}
+               for result in results]
+    expected_intents = [(unit.get('expected', {}).get('intent'), intent.get('intent'))
+                        for unit, intent in zip(units, intents) if 'intent' in unit.get('expected', {})]
+
+    def requests(classifier):
+        count = classifier.get('request_count')
+        return count if type(count) is int and count >= 0 else 0
+
+    def token_total(key):
+        values = [attempt.get('usage', {}).get(key) for attempt in attempts
+                  if isinstance(attempt.get('usage'), dict)]
+        return sum(value for value in values if type(value) is int and value >= 0)
+
+    return {
+        'classifier_diagnostics': {
+            'turns_with_intent': sum(bool(intent) for intent in intents),
+            'turns_missing_intent': sum(not intent for intent in intents),
+            'turns_with_classifier_diagnostics': sum(bool(classifier) for classifier in classifiers),
+            'status_counts': _diagnostic_counts(intent.get('status') for intent in intents),
+            'intent_counts': _diagnostic_counts(intent.get('intent') for intent in intents),
+            'method_counts': _diagnostic_counts(classifier.get('method', 'model') if classifier else None
+                                               for classifier in classifiers),
+            'expected_intent_turns': len(expected_intents),
+            'matched_expected_intent_turns': sum(expected == actual for expected, actual in expected_intents),
+            'mismatched_expected_intent_turns': sum(expected != actual for expected, actual in expected_intents),
+            'request_count': sum(requests(classifier) for classifier in classifiers),
+            'retried_turns': sum(requests(classifier) > 1 for classifier in classifiers),
+            'attempt_count': len(attempts),
+            'failure_category_counts': _diagnostic_counts(classifier['failure_category'] for classifier in classifiers
+                                                          if classifier.get('failure_category')),
+            'attempt_failure_category_counts': _diagnostic_counts(attempt['failure_category'] for attempt in attempts
+                                                                  if attempt.get('failure_category')),
+            'finish_reason_counts': _diagnostic_counts(attempt.get('finish_reason') for attempt in attempts),
+            'http_status_counts': dict(sorted(Counter(str(attempt['http_status']) for attempt in attempts
+                                                       if type(attempt.get('http_status')) is int).items())),
+            'reported_token_usage': {key: token_total(key) for key in
+                                     ('prompt_tokens', 'completion_tokens', 'total_tokens', 'reasoning_tokens')},
+            'meaning': 'Observed classifier execution and expected-label comparison; domain writes are checked separately',
+        },
+        'answer_review_diagnostics': {
+            'turns_with_review': sum(bool(review) for review in reviews),
+            'turns_missing_review': sum(not review for review in reviews),
+            'status_counts': _diagnostic_counts(review.get('status') for review in reviews),
+            'unavailable_reason_counts': _diagnostic_counts(review['unavailable_reason'] for review in reviews
+                                                            if review.get('unavailable_reason')),
+            'changed_turns': sum(review.get('changed') is True for review in reviews),
+            'issue_quote_status_counts': _diagnostic_counts(issue.get('quote_status') for issue in issues),
+            'meaning': 'Revision protocol diagnostics only; completed does not establish semantic correctness',
+        },
+        'memory_focus_diagnostics': {
+            'turns_with_focus': sum(bool(focus) for focus in focuses),
+            'turns_missing_focus': sum(not focus for focus in focuses),
+            'status_counts': _diagnostic_counts(focus.get('status') for focus in focuses),
+            'reason_counts': _diagnostic_counts(focus.get('reason') for focus in focuses),
+            'registration_status_counts': _diagnostic_counts(
+                focus.get('registration', {}).get('status') if isinstance(focus.get('registration'), dict) else None
+                for focus in focuses),
+            'meaning': 'Persisted memory reference resolution and source registration; no answer quality score',
+        },
+    }
+
+
 def summarize(track, details):
     units = details if track == 'retrieval' else [turn for item in details for turn in item.get('turns', [])]
     checks = [check for item in units for check in item.get('deterministic_checks', [])]
@@ -582,6 +683,8 @@ def summarize(track, details):
                                 **{metric: sum(item['metrics'][metric] for item in positives) / len(positives)
                                    if positives else None
                                    for metric in ('recall_at_1', 'recall_at_3', 'recall_at_5', 'mrr_at_5')}}
+    else:
+        summary.update(_answer_diagnostics(units))
     return summary
 
 
@@ -627,7 +730,8 @@ def evaluate(fixture=None, *, track='retrieval', app_root=None, repeat=1, tags=N
                   'limited_fact_rules': 'Literal string probes only; negation and entailment require human review',
                   'deterministic_checks': 'Stored provenance, identity scope, source status and lifecycle contracts',
                   'no_memory_writes': 'Actual domain-table changes excluding the original audit evidence, not the intent label',
-                  'saved_fields': 'Exact current stored field value, not a model claim or a pending proposal'},
+                  'saved_fields': 'Exact current stored field value, not a model claim or a pending proposal',
+                  'memory_focus': 'Deterministic reference status, reason and source registration; not semantic correctness'},
               'human_review_rubric': fixture.get('human_review_rubric', []),
               'selected_scenarios': len(cases) * repeat, 'details': details, 'summary': summarize(track, [])}
     if checkpoint:
@@ -689,6 +793,9 @@ def review_markdown(report):
                               'Review rating: PENDING', '', 'Reviewer notes: ', ''])
                 lines.extend('- ' + point for point in unit.get('expected', {}).get('review_points', []))
             blocks = {'Expected labels': unit.get('expected'), 'Expected material before the answer': unit.get('expected_material'),
+                      'Turn intent and classifier diagnostics': result.get('turn_intent'),
+                      'Answer revision audit': result.get('answer_review'),
+                      'Memory focus diagnostics': result.get('memory_focus'),
                       'Actual sources': result.get('sources'), 'Exposed dependencies': result.get('source_dependencies'),
                       'Tool trace': unit.get('tool_trace'), 'Actual outcomes': result.get('outcomes'),
                       'Data changes during real extraction and tools': unit.get('data_changes'),

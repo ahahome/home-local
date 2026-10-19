@@ -71,7 +71,30 @@ async function chooseChatPerson(data){
 function chatUserText(text,meta){
   const scope=meta?.conversation_scope,match=/^人物 ID: ([A-Za-z0-9_-]+)\n/.exec(text||'');
   const person=scope?.mode==='single'&&scope.person_ids?.length===1&&scope.person_ids[0]===match?.[1]&&(Array.isArray(scope.candidates)?scope.candidates:[]).find(candidate=>candidate?.person_id===match[1]&&typeof candidate.display_name==='string');
-  return person?`已选择：${person.display_name}${typeof person.summary==='string'&&person.summary?`（${person.summary}）`:''}\n${text.slice(match[0].length)}`:text;
+  const display=person?`已选择：${person.display_name}${typeof person.summary==='string'&&person.summary?`（${person.summary}）`:''}\n${text.slice(match[0].length)}`:text;
+  return meta?.reanalysis?.source_user_message_id?`重新分析原消息：\n${display}`:display;
+}
+function chatIntentStatus(meta,mid,cid){
+  const intent=meta?.turn_intent;
+  if(!mid||!cid||!intent||intent.allow_writes!==false||!(intent.intent==='unknown'||['failed','invalid'].includes(intent.status)))return '';
+  const category=intent.classifier?.failure_category||(intent.status==='failed'?'request':null);
+  const reason=category==='config'?'记事分析配置不可用，请先检查设置。':['timeout','request','refusal'].includes(category)?'记事分析服务暂时不可用。':['json','schema','empty_content','truncated'].includes(category)?'记事分析响应未通过校验。':category==='span'?'未能确认完整、安全的记事原文。':'尚不能确定这条消息是否需要记事。';
+  return `<section class="chat-intent-status" aria-label="重新分析消息"><p>${esc(reason)} 本次未保存记事或执行操作。</p><p class="muted">重新分析后，若原文包含明确记事内容，将按原文保存。旧回答保留。</p>${btn('重新分析原消息','chat-reanalyze',`data-cid="${esc(cid)}" data-mid="${esc(mid)}"`,'small-button')}</section>`;
+}
+async function reanalyzeChat(data){
+  if(state.page!=='chat'||state.cid!==data.cid)return;
+  if(state.sending||currentStream())return toast('请等待当前回复，或先取消');
+  const cid=state.cid;state.sending=true;
+  const button=document.querySelector(`[data-action="chat-reanalyze"][data-mid="${CSS.escape(data.mid)}"]`);if(button)button.disabled=true;
+  try{
+    const task=await api(`/conversations/${encodeURIComponent(cid)}/messages/${encodeURIComponent(data.mid)}/reanalyze`,{});
+    if(state.page==='chat'&&state.cid===cid)await loadMessages();
+    if(terminal.has(task.status)){if(state.page==='chat'&&state.cid===cid)toast('这条消息已重新分析，请查看后续回答；中断的任务可在任务中心重试。');}
+    else watch(task,cid);
+  }catch(error){
+    if(!error.status)throw new Error('连接中断，处理可能已经开始。可再次点击，系统会继续同一次分析。');
+    throw error;
+  }finally{state.sending=false;if(button?.isConnected)button.disabled=false;}
 }
 function chatAnswer(text,meta,mid,cid){
   const host=document.createElement('div');host.innerHTML=md(text,true);
@@ -88,7 +111,7 @@ function chatAnswer(text,meta,mid,cid){
   const list=[...used].map(id=>sources.get(id));
   return host.innerHTML+chatSourceWarnings(meta)+chatPersonChoices(meta,mid,cid)+(list.length?`<details class="chat-sources"><summary>引用资料（${list.length}）</summary><ol class="chat-source-list">${list.map(source=>`<li>${btn(`${esc(source.id)} <span>${esc(chatSourceLabel(source))}</span>`,'chat-source',chatSourceAttrs(cid,mid,source.id),'chat-source-link')}<p class="chat-source-preview">${esc(memoryPreview(source.text,130))}</p></li>`).join('')}</ol></details>`:'');
 }
-function message(role,text,meta,mid=null,cid=state.cid){return `<div class="message ${role}"${mid?` data-message-id="${esc(mid)}"`:''}>${avatar(role==='user'?'我':'h')}<div class="message-content ${role==='assistant'?'markdown':''}">${role==='assistant'?chatAnswer(text,meta,mid,cid):esc(chatUserText(text,meta))}${role==='assistant'?receipts(meta):''}</div></div>`;}
+function message(role,text,meta,mid=null,cid=state.cid){return `<div class="message ${role}"${mid?` data-message-id="${esc(mid)}"`:''}>${avatar(role==='user'?'我':'h')}<div class="message-content ${role==='assistant'?'markdown':''}">${role==='assistant'?chatAnswer(text,meta,mid,cid):esc(chatUserText(text,meta))}${role==='assistant'?receipts(meta):chatIntentStatus(meta,mid,cid)}</div></div>`;}
 async function go(page){history.pushState(null,'','#/'+page);await route();}
 async function route(){state.page=location.hash.replace('#/','').split(/[/?]/)[0]||'home';if(!labels[state.page])state.page='home';$('.sidebar').classList.remove('open');close();document.querySelectorAll('[data-page]').forEach(a=>a.classList.toggle('active',a.dataset.page===state.page));$('#breadcrumb').textContent=labels[state.page];$('#main').innerHTML='<div class="loading">正在读取…</div>';try{await pages[state.page]();}catch(e){$('#main').innerHTML=`<div class="card">${empty(esc(e.message),'<p style="margin-top:15px">'+btn('重新加载','reload')+'</p>')}</div>`;toast(e.message);}}
 function render(page,html){if(state.page===page)$('#main').innerHTML=html;}
@@ -206,7 +229,21 @@ async function openChatSource(data){
 function scrollChat(){const b=$('#messages');if(b)b.scrollTop=b.scrollHeight;}
 function currentStream(){return [...state.streams.values()].find(s=>s.cid===state.cid&&!s.finished);}
 function paintStream(s){const progress=$('#task-progress');if(progress?.dataset.task===s.task.id)progress.textContent=s.progress;if(state.page!=='chat'||s.cid!==state.cid)return;let box=$('#stream-answer');if(!box){$('#messages .chat-empty')?.remove();$('#messages').insertAdjacentHTML('beforeend',`<div id="stream-answer"><div class="progress-line"><i class="pulse"></i><span id="stream-progress"></span></div><div class="message assistant">${avatar('h')}<div class="message-content markdown" id="stream-content"></div></div></div>`);}$('#stream-progress').textContent=s.progress||'正在处理';$('#stream-content').innerHTML=md(s.text,true);$('#send-button').disabled=true;document.querySelector('[data-action="cancel-chat"]')?.classList.remove('hide');scrollChat();}
-function watch(task,cid=null){if(state.streams.has(task.id)){paintStream(state.streams.get(task.id));return;}const s={task,cid,text:'',progress:'等待处理',cursor:0,finished:false};state.streams.set(task.id,s);const es=new EventSource(`/api/tasks/${task.id}/events`);s.es=es;const consume=(type,fn)=>es.addEventListener(type,e=>{const seq=Number(e.lastEventId);if(seq&&seq<=s.cursor)return;if(seq)s.cursor=seq;fn(JSON.parse(e.data));paintStream(s);});consume('answer_start',()=>{s.text='';});consume('delta',d=>{s.text+=d.text;});consume('progress',d=>{s.progress=d.message;});consume('tool',d=>{s.progress='正在处理相关信息';});consume('memory',d=>{s.progress=d.outcomes.some(x=>x.status==='failed')?'部分信息未保存，正在生成回答':'信息检查完成，正在整理回答';});consume('result',d=>{s.result=d;s.text=d.answer||s.text;});consume('failed',d=>{s.error=d.message;});consume('cancelled',d=>{s.error=d.message;});es.addEventListener('end',async e=>{s.finished=true;es.close();const d=JSON.parse(e.data);if(state.page==='chat'&&state.cid===cid){$('#stream-answer')?.remove();$('#send-button').disabled=false;document.querySelector('[data-action="cancel-chat"]')?.classList.add('hide');await loadMessages();if(d.status!=='done'&&d.status!=='partial')$('#messages')?.insertAdjacentHTML('beforeend',message('assistant',s.error||d.error||'任务已停止。可在任务中心重试。'));}else if(!cid)toast(`${task.title} · ${statusNames[d.status]||d.status}`);if($('#task-progress')?.dataset.task===task.id)await taskDetail(task.id);if(['tasks','research','persons'].includes(state.page))pages[state.page]();badges();});es.onerror=()=>{s.progress='连接恢复中，任务记录已保留';paintStream(s);};paintStream(s);badges();}
+function watch(task,cid=null){
+  const previous=state.streams.get(task.id);
+  if(previous&&!previous.finished){paintStream(previous);return;}
+  previous?.es?.close();
+  const s={task,cid,text:'',progress:'等待处理',cursor:previous?.cursor||0,finished:false};
+  state.streams.set(task.id,s);
+  const es=new EventSource(`/api/tasks/${task.id}/events?after=${s.cursor}`);s.es=es;
+  const consume=(type,fn)=>es.addEventListener(type,e=>{const seq=Number(e.lastEventId);if(seq&&seq<=s.cursor)return;if(seq)s.cursor=seq;fn(JSON.parse(e.data));paintStream(s);});
+  consume('answer_start',()=>{s.text='';});consume('delta',d=>{s.text+=d.text;});
+  consume('progress',d=>{s.progress=d.message;});consume('tool',d=>{s.progress='正在处理相关信息';});
+  consume('memory',d=>{s.progress=d.outcomes.some(x=>x.status==='failed')?'部分信息未保存，正在生成回答':'信息检查完成，正在整理回答';});
+  consume('result',d=>{s.result=d;s.text=d.answer||s.text;});consume('failed',d=>{s.error=d.message;});consume('cancelled',d=>{s.error=d.message;});
+  es.addEventListener('end',async e=>{s.finished=true;es.close();const d=JSON.parse(e.data);if(state.page==='chat'&&state.cid===cid){$('#stream-answer')?.remove();$('#send-button').disabled=false;document.querySelector('[data-action="cancel-chat"]')?.classList.add('hide');await loadMessages();if(d.status!=='done'&&d.status!=='partial')$('#messages')?.insertAdjacentHTML('beforeend',message('assistant',s.error||d.error||'任务已停止。可在任务中心重试。'));}else if(!cid)toast(`${task.title} · ${statusNames[d.status]||d.status}`);if($('#task-progress')?.dataset.task===task.id)await taskDetail(task.id);if(['tasks','research','persons'].includes(state.page))pages[state.page]();badges();});
+  es.onerror=()=>{s.progress='连接恢复中，任务记录已保留';paintStream(s);};paintStream(s);badges();
+}
 async function sendChat(text,displayText){if(state.sending||currentStream())return toast('请等待当前回复，或先取消');text=(text||$('#chat-input')?.value||'').trim();if(!text)return;state.sending=true;const input=$('#chat-input');if(input)input.value='';localStorage.setItem('home-draft',text);try{if(!state.cid){await newConversation();}const cid=state.cid;const task=await api(`/conversations/${cid}/turns`,{text,request_id:crypto.randomUUID()});localStorage.removeItem('home-draft');if($('#chat-input'))$('#chat-input').value='';if(state.page==='chat'){$('#messages .chat-empty')?.remove();$('#messages').insertAdjacentHTML('beforeend',message('user',displayText||text));}watch(task,cid);}catch(e){if($('#chat-input'))$('#chat-input').value=text;throw e;}finally{state.sending=false;}}
 async function promptChat(text){close();if(state.page!=='chat')await go('chat');await sendChat(text);}
 
@@ -694,7 +731,7 @@ const agendaAction=fn=>async d=>{try{await fn(d);}catch(error){agendaError(error
 const actions={
   close, reload:route, menu:()=>$('.sidebar').classList.toggle('open'), capture,
   'new-chat':()=>newConversation(), 'select-chat':async d=>{state.cid=d.id;localStorage.setItem('home-conversation',d.id);await go('chat');},
-  'send-chat':()=>sendChat(), prompt:d=>promptChat(d.text),
+  'send-chat':()=>sendChat(), prompt:d=>promptChat(d.text), 'chat-reanalyze':d=>reanalyzeChat(d),
   'chat-source':openChatSource,
   'chat-choose-person':chooseChatPerson,
   'quick-note':async()=>{const text=$('#quick-note').value.trim();if(!text)return toast('请输入近况');await promptChat(text);state.quickNote='';}, 'capture-text':()=>promptChat($('#capture-text').value),

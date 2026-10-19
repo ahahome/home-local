@@ -180,7 +180,21 @@ def test_all_explicit_people_are_retained_and_order_uses_text_not_creation(conn)
 
 
 def model_stub(monkeypatch, chat):
+    # Scope tests script answer/history calls only. Keep the real classification
+    # persistence, tools and source validation while isolating the two new model
+    # stages, which have their own unit/integration tests.
+    def readonly_classifier(text, **kwargs):
+        return harness.turn_intent.validate_intent({
+            'intent': 'query', 'record_spans': [], 'reason': 'Scope integration reads existing records.'}, text)
+
+    def unchanged_review(llm, question, draft_answer, sources, *, context=None):
+        return {'answer': draft_answer, 'metadata': {
+            'version': 1, 'status': 'test_double', 'semantic_verified': False,
+            'original_answer': draft_answer, 'changed': False}, 'warnings': []}
+
     monkeypatch.setattr(harness.extract, 'extract_from_text', lambda *args: {'people': [], 'my_notes': []})
+    monkeypatch.setattr(harness.turn_intent, 'classify_turn', readonly_classifier)
+    monkeypatch.setattr(harness.answer_review, 'review_answer', unchanged_review)
     monkeypatch.setattr(harness, 'get_llm', lambda: SimpleNamespace(chat=chat))
 
 

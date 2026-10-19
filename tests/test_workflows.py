@@ -402,9 +402,15 @@ def test_chat_sends_current_message_once_and_reports_failure(conn, monkeypatch):
             return {"role": "assistant", "content": "已回答"}
     fake = Fake()
     monkeypatch.setattr(harness, "get_llm", lambda: fake)
+    monkeypatch.setattr(harness.turn_intent, 'classify_turn', lambda text, **kwargs:
+        harness.turn_intent.validate_intent({'intent': 'record', 'record_spans': [text],
+                                            'reason': 'explicit recording fixture'}, text))
+    monkeypatch.setattr(harness.answer_review, 'review_answer', lambda llm, question, draft, sources, **kwargs:
+        {'answer': draft, 'metadata': {'status': 'test_double', 'semantic_verified': False}, 'warnings': []})
     monkeypatch.setattr(harness.extract, "extract_from_text", lambda *a: (_ for _ in ()).throw(RuntimeError("抽取失败")))
     cid = repo.create_conversation(conn)
     result = harness.run_turn(conn, cid, "unique text")
+    assert len(fake.calls) == 1  # Classifier/reviewer doubles do not consume answer scripts.
     assert sum(m["content"] == "unique text" for m in fake.calls[0]) == 1
     assert result["failed"][0]["detail"] == "抽取失败"
     final = repo.list_messages(conn, cid)[-1]

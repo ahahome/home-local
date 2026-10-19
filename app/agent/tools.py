@@ -238,10 +238,203 @@ def _read_scope_args(conn, name, args, read_scope):
     return args
 
 
+_WRITE_TOOLS = frozenset({'save_person_fact', 'record_transfer', 'create_promise', 'note',
+                          'complete_promise', 'save_skill', 'deep_research', 'create_reminder'})
+
+
+def _denied_write(name, reason):
+    detail = '本轮未授权这项写入，未保存或修改资料。' + reason
+    return {'ok': False, 'error': detail, 'write_blocked': True,
+            'receipt': {'type': name, 'status': 'skipped', 'detail': detail},
+            'outcomes': [{'kind': name, 'status': 'skipped', 'detail': detail}]}
+
+
+def _person_arg_grounded(conn, args, text, read_scope):
+    person = args.get('person')
+    pid = args.get('person_id')
+    if person or pid:
+        aliases = repo.aliases_of(conn, pid) if pid else [person]
+        mentioned = any(isinstance(alias, str) and alias and alias in text for alias in aliases)
+        scoped_pronoun = (isinstance(read_scope, dict) and read_scope.get('mode') == 'single'
+                          and read_scope.get('person_ids') == [pid]
+                          and re.search(r'[他她]|对方|\b(?:he|she|they)\b', text, re.I))
+        if not mentioned and not (pid and pid in text) and not scoped_pronoun:
+            return False
+    return True
+
+
+def _literal_arg(args, key, text, *, optional=False):
+    value = args.get(key)
+    if optional and value in (None, ''):
+        return True
+    return isinstance(value, str) and bool(value.strip()) and value in text
+
+
+def _explicit_dates(text):
+    from datetime import date
+    dates = set()
+    for match in re.finditer(r'(?<!\d)(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})(?:日|号)?(?!\d)', text):
+        try:
+            dates.add(date(*(int(part) for part in match.groups())).isoformat())
+        except ValueError:
+            pass
+    return dates
+
+
+def _completion_grounded(conn, args, text, read_scope):
+    row = conn.execute('SELECT * FROM promise WHERE id=?', (args.get('promise_id'),)).fetchone()
+    if row is None:
+        return False
+    pid = row['person_id']
+    if isinstance(read_scope, dict):
+        allowed = read_scope.get('person_ids', [])
+        if read_scope.get('blocked') or allowed and pid not in allowed:
+            return False
+    if args.get('person_id') and args['person_id'] != pid:
+        return False
+    aliases = repo.aliases_of(conn, pid) if pid else []
+    if args.get('person') and args['person'] not in aliases:
+        return False
+    # A literal promise ID identifies the exact operation even when its wording
+    # is duplicated. Otherwise require the full content and an unambiguous owner.
+    if row['id'] in text:
+        return True
+    if not row['content'] or row['content'] not in text:
+        return False
+    owner_selected = (pid is None or any(alias and alias in text for alias in aliases)
+                      or isinstance(read_scope, dict) and read_scope.get('mode') == 'single'
+                      and read_scope.get('person_ids') == [pid])
+    if not owner_selected:
+        return False
+    matching = conn.execute("SELECT id FROM promise WHERE content=? AND person_id IS ? AND status='open'",
+                            (row['content'], pid)).fetchall()
+    return len(matching) == 1 and matching[0]['id'] == row['id']
+
+
+def _action_args_grounded(conn, name, args, text, read_scope):
+    if not _person_arg_grounded(conn, args, text, read_scope):
+        return False
+    if name == 'create_reminder':
+        action = re.search(r'提醒|闹钟|\bremind\b', text, re.I)
+        if (action is None or not _literal_arg(args, 'text', text[action.end():])
+                or re.search(r'如果|要是|假如|\bif\b', text, re.I)):
+            return False
+        # The current tool accepts a fixed calendar day, not a conditional or
+        # relative schedule. Multiple dates require a more precise instruction.
+        return isinstance(args.get('fire_date'), str) and _explicit_dates(text) == {args['fire_date']}
+    if name == 'save_skill':
+        return bool(re.search(r'技能|打法|\bskill\b', text, re.I)
+                    and re.search(r'保存|记录|记下|存成|创建|新增|更新|修改|替换|\b(?:save|create|update)\b', text, re.I)
+                    and all(_literal_arg(args, key, text) for key in ('name', 'body'))
+                    and all(_literal_arg(args, key, text, optional=True)
+                            for key in ('style_notes', 'trigger_hint')))
+    if name == 'complete_promise':
+        return bool(re.search(r'完成|办妥|履行|结清|搞定|\b(?:done|completed|fulfilled)\b', text, re.I)
+                    and _completion_grounded(conn, args, text, read_scope))
+    if name == 'deep_research':
+        action = re.search(r'调研|调查|研究|查.{0,5}背景|\bresearch\b', text, re.I)
+        return bool(action and _literal_arg(args, 'topic', text[action.end():]))
+    return False
+
+
+def _shared_dates_grounded(conn, name, args, spans, read_scope):
+    supplied = [args[key] for key in ('valid_from', 'due_date', 'occurred_date')
+                if args.get(key) not in (None, '')]
+    if not supplied:
+        return True  # Omitted dates preserve the tool's existing system-time default.
+    if any(not isinstance(value, str) for value in supplied) or len(set(supplied)) != 1:
+        return False
+    day = supplied[0]
+    value_key = {'save_person_fact': 'value', 'create_promise': 'content', 'note': 'text'}.get(name)
+    for span in spans:
+        if _explicit_dates(span) != {day} or not _person_arg_grounded(conn, args, span, read_scope):
+            continue
+        if value_key and not _literal_arg(args, value_key, span):
+            continue
+        if name == 'record_transfer':
+            cents = amount_to_cents(args.get('amount_yuan'))
+            amounts = []
+            for literal in re.findall(r'\d+(?:\.\d+)?', span):
+                try:
+                    amounts.append(amount_to_cents(literal))
+                except ValueError:
+                    pass
+            if cents not in amounts or not re.search(r'转|给|收|付|借|还|礼金|随礼|报销', span):
+                continue
+        return True
+    return False
+
+
+def _party_names(conn, args, read_scope):
+    pid, person = args.get('person_id'), args.get('person')
+    names = repo.aliases_of(conn, pid) if pid else [person] if person else []
+    if (isinstance(read_scope, dict) and read_scope.get('mode') == 'single'
+            and read_scope.get('person_ids') == [pid]):
+        names = [*names, '他', '她', '对方']
+    return [name for name in names if isinstance(name, str) and name]
+
+
+def _shared_span_grounded(conn, name, args, span, read_scope):
+    if not _person_arg_grounded(conn, args, span, read_scope):
+        return False
+    value_key = {'save_person_fact': 'value', 'create_promise': 'content', 'note': 'text'}.get(name)
+    if value_key and not _literal_arg(args, value_key, span):
+        return False
+    if not _shared_dates_grounded(conn, name, args, [span], read_scope):
+        return False
+    if name == 'record_transfer':
+        from app.memory.writes import explicit_transfer_direction
+        cents = amount_to_cents(args.get('amount_yuan'))
+        amounts = []
+        for value in re.findall(r'\d+(?:\.\d+)?', span):
+            try:
+                amounts.append(amount_to_cents(value))
+            except ValueError:
+                pass
+        if (cents not in amounts or not re.search(r'转|给|收|付|借|还|礼金|随礼|报销', span)
+                or not _literal_arg(args, 'note', span, optional=True)):
+            return False
+        # Calendar dates between "我" and "给" do not change the parties or
+        # direction. Keep the existing narrow transfer parser for that binding.
+        direction_text = re.sub(r'(?:在)?\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}(?:日|号)?', '', span)
+        direction = explicit_transfer_direction(direction_text, _party_names(conn, args, read_scope), cents)
+        # The existing matcher handles only explicit transfer phrasing. Do not
+        # claim it proves every possible direction; unsupported phrasing retains
+        # apply_extraction's original confidence and confirmation rules.
+        return direction is None or direction == args.get('direction')
+    return name in {'save_person_fact', 'create_promise', 'note'}
+
+
+def _bound_write_span(conn, name, args, text, read_scope, record_spans=None):
+    # Return the actual supporting span so apply_extraction's direction and
+    # confidence checks cannot read a different approved record as its evidence.
+    check = (_action_args_grounded if name in
+             {'create_reminder', 'save_skill', 'complete_promise', 'deep_research'}
+             else _shared_span_grounded)
+    return next((span for span in (record_spans or [text])
+                 if check(conn, name, args, span, read_scope)), None)
+
+
 def execute_tool(conn, name: str, args: dict, source_text: str | None = None,
-                 source_msg_id: str | None = None, read_scope: dict | None = None) -> dict:
+                 source_msg_id: str | None = None, read_scope: dict | None = None,
+                 turn_intent: dict | None = None) -> dict:
     from app.memory.writes import AmbiguousPerson
     try:
+        if name in _WRITE_TOOLS and turn_intent is not None:
+            from app.agent.turn_intent import write_text
+            grounded = write_text(turn_intent, source_text)
+            if grounded is None:
+                return _denied_write(name, '查询或无法判定的消息仅作只读处理。')
+            # Even in a mixed turn a tool cannot turn the question into a new
+            # fact/pending item. Paraphrases still go through extraction's review.
+            value_key = {'save_person_fact': 'value', 'create_promise': 'content', 'note': 'text'}.get(name)
+            if value_key and (not isinstance(args.get(value_key), str) or not args[value_key]
+                              or args[value_key] not in grounded):
+                return _denied_write(name, '工具内容不在本轮已确认的记事原话中。')
+            bound_span = _bound_write_span(conn, name, args, grounded, read_scope, turn_intent['record_spans'])
+            if bound_span is None:
+                return _denied_write(name, '人物、内容、金额、日期或操作不在同一段已确认的记事原话中；请明确操作对象与日历日期。')
+            source_text = bound_span
         if name in {"save_person_fact", "record_transfer", "create_promise", "note"}:
             return _shared_write(conn, name, args, source_text, source_msg_id)
         if name in {'query_memory', 'get_person'}:

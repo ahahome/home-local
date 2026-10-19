@@ -140,12 +140,16 @@ def test_active_shared_alias_and_explicit_id_take_precedence_for_scope(conn):
     assert scope(conn, f'人物 ID: {active}。何川怎么联系？')['person_ids'] == [active]
 
 
-def test_harness_archived_alias_extraction_keeps_evidence_without_recreating_or_reading_person(conn, monkeypatch):
+def test_harness_archived_alias_query_keeps_evidence_without_extracting_recreating_or_reading_person(conn, monkeypatch):
     archived = archived_person(conn)
     repo.create_person(conn, '陈言', status='active')
     cid = repo.create_conversation(conn, 'Fresh archived query')
     conn.commit()
-    monkeypatch.setattr(harness.extract, 'extract_from_text', lambda *args: extraction())
+    monkeypatch.setattr(harness.extract, 'extract_from_text', lambda *args: pytest.fail('archived query is read-only'))
+    monkeypatch.setattr(harness.turn_intent, 'classify_turn', lambda text, **kwargs:
+        harness.turn_intent.validate_intent({'intent': 'query', 'record_spans': [], 'reason': 'query fixture'}, text))
+    monkeypatch.setattr(harness.answer_review, 'review_answer', lambda *args, **kwargs:
+        pytest.fail('deterministic unavailable clarification needs no model review'))
     monkeypatch.setattr(harness, 'get_llm', lambda: SimpleNamespace(
         chat=lambda *args, **kwargs: pytest.fail('archived query must not ask answer model to guess')))
     result = harness.run_turn(conn, cid, '老何怎么联系？')
@@ -153,8 +157,8 @@ def test_harness_archived_alias_extraction_keeps_evidence_without_recreating_or_
     assert result['conversation_scope']['candidates'] == []
     assert result['sources'] == result['source_dependencies'] == []
     assert '不可用' in result['answer'] and '陈言' not in result['answer']
-    assert any(outcome['status'] == 'skipped' and '已归档' in outcome['detail']
-               for outcome in result['outcomes'])
+    assert result['turn_intent']['intent'] == 'query'
+    assert any(outcome['kind'] == 'intent' and outcome['status'] == 'skipped' for outcome in result['outcomes'])
     assert conn.execute("SELECT COUNT(*) FROM person WHERE display_name='老何'").fetchone()[0] == 0
     assert conn.execute('SELECT COUNT(*) FROM interaction').fetchone()[0] == 0
     assert repo.current_fields(conn, archived)['city']['value'] == '深圳'

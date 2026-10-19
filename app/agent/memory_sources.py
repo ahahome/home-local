@@ -2,11 +2,16 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
+from app.config import tz
 from app.store import repo
 from app.util import now_ms
 
 EVIDENCE_KEYS = ('id', 'kind', 'excerpt', 'source_ref', 'blob_hash', 'created_at')
+# Additive quotation metadata did not exist in old saved answers. Compare it only
+# when it was captured, while continuing to compare every original content key.
+_CONTEXT_KEYS = {'record_context'}
 
 
 def _person(conn, person_id):
@@ -55,6 +60,18 @@ def _memory_snapshot(conn, row):
         'ts': row['ts'], 'kind': row['kind'], 'evidence': _evidence(conn, row['evidence_id']),
         'captured_at': now_ms(),
     }
+    edited = conn.execute("SELECT created_at FROM memory_correction WHERE memory_id=? AND action='edit' "
+                          'ORDER BY revision DESC,created_at DESC,id DESC LIMIT 1', (row['id'],)).fetchone()
+    lifecycle = conn.execute("SELECT action,created_at FROM memory_correction WHERE memory_id=? "
+                             "AND action IN ('withdraw','restore') "
+                             'ORDER BY revision DESC,created_at DESC,id DESC LIMIT 1', (row['id'],)).fetchone()
+    source['record_context'] = {
+        'status': row['status'], 'recorded_at': row['created_at'],
+        # updated_at and revision also change on archive/move/restore. Neither is
+        # evidence of a user edit. Only the dedicated edit audit supports this.
+        'last_user_edit_at': edited['created_at'] if edited else None,
+        'last_lifecycle_change': dict(lifecycle) if lifecycle else None,
+    }
     initial = _evidence(conn, row['origin_evidence_id'])
     original = _original_evidence(conn, initial)
     if original:
@@ -83,6 +100,7 @@ def _field_snapshot(conn, row):
         'valid_from': row['valid_from'], 'valid_to': row['valid_to'], 'recorded_at': row['recorded_at'],
         'temporal_status': 'current_field' if row['valid_to'] is None else 'historical_field',
         'evidence': _evidence(conn, row['evidence_id']), 'captured_at': now_ms(),
+        'record_context': {'recorded_at': row['recorded_at']},
     }
     original = _original_evidence(conn, source['evidence'])
     if original:
@@ -128,6 +146,7 @@ def interaction_source(conn, interaction_id):
         'people': people, 'text': row['content'], 'date': row['ts'], 'ts': row['ts'],
         'temporal_status': row['kind'], 'kind': row['kind'], 'channel': row['channel'],
         'source_ref': row['source_ref'], 'evidence': evidence, 'captured_at': now_ms(),
+        'record_context': {'recorded_at': row['created_at']},
     }
     original = _original_evidence(conn, evidence)
     if original:
@@ -137,8 +156,57 @@ def interaction_source(conn, interaction_id):
 
 def _unchanged(snapshot, current):
     # Registry labels and capture time describe the quotation, not its stored content.
-    return {key: value for key, value in snapshot.items() if key not in {'id', 'captured_at'}} == \
-        {key: value for key, value in current.items() if key not in {'id', 'captured_at'}}
+    ignored = {'id', 'captured_at'} | (_CONTEXT_KEYS - snapshot.keys())
+    return {key: value for key, value in snapshot.items() if key not in ignored} == \
+        {key: value for key, value in current.items() if key not in ignored}
+
+
+def _readable_time(value):
+    if type(value) is not int:
+        return '未知'
+    try:
+        return datetime.fromtimestamp(value / 1000, tz()).isoformat(timespec='seconds')
+    except (ValueError, OverflowError, OSError):
+        return '未知'
+
+
+def model_source_context(source):
+    """Explain database availability separately from the truth/date of its claim.
+
+    This projection is model input only. Original snapshot keys remain intact for
+    old answer rendering, evidence inspection and optimistic concurrency checks.
+    """
+    kind = source.get('type')
+    context = source.get('record_context') or {}
+    times = {'最近人工编辑时间': _readable_time(context.get('last_user_edit_at'))}
+    if kind == 'memory':
+        status = context.get('status')
+        state = {'active': '记录可读取，未撤销', 'withdrawn': '记录已撤销，不可作为可用记忆采用'}.get(
+            status, '未提供撤销状态，不可据此推断记录已撤销或已恢复')
+        state += '；所属人物当前可读取' if source.get('person') else '；属于用户自己的记忆'
+        times.update({'记忆所标日期（不代表录入或修改日期）': _readable_time(source.get('ts', source.get('date'))),
+                      '首次录入时间': _readable_time(context.get('recorded_at'))})
+        lifecycle = context.get('last_lifecycle_change')
+        if isinstance(lifecycle, dict) and lifecycle.get('action') in {'restore', 'withdraw'}:
+            action = '恢复' if lifecycle['action'] == 'restore' else '撤销'
+            times['最近撤销或恢复操作'] = {'操作': action, '操作时间': _readable_time(lifecycle.get('created_at'))}
+        return {'记录状态': state, '事实时效': '有日期的背景记录；当前事实是否仍成立尚未核实。背景记录不表示已撤销。',
+                '时间信息': times}
+    if kind == 'field':
+        current = source.get('valid_to') is None
+        times.update({'字段生效时间': _readable_time(source.get('valid_from')),
+                      '录入时间': _readable_time(source.get('recorded_at'))})
+        if not current:
+            times['字段结束时间'] = _readable_time(source.get('valid_to'))
+        return {'记录状态': '档案可读取；所属人物当前可读取',
+                '事实时效': '当前档案字段，尚无结束记录' if current else '已结束的历史档案字段，不代表现状',
+                '时间信息': times}
+    if kind == 'interaction':
+        times.update({'发生时间': _readable_time(source.get('ts', source.get('date'))),
+                      '录入时间': _readable_time(context.get('recorded_at'))})
+        return {'记录状态': '互动记录及其关联人物当前可读取',
+                '事实时效': '所标发生时间的记录，不证明其中描述的情况现在仍成立', '时间信息': times}
+    return {}
 
 
 def source_state(conn, snapshot):

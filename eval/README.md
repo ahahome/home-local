@@ -15,6 +15,18 @@
 评估器本身的比对逻辑在 `eval/metrics.py`，由 `tests/test_eval_metrics.py` 覆盖。
 **理由：评估器写错了比被测代码错了更危险**——指标会假绿，问题被掩盖。
 
+## 0.9 查询写入与回答可信度
+
+`fixtures/answer_trust_v09.json` 在正式采样前冻结，含 7 组虚构开发对话、10 个回答，覆盖恢复状态与编辑日期、冲突偏好、无问号查询、假设、旧回答引文、更新与查询混合，以及带问号的明确记事。使用同一 runner 对机械导出的 0.8 基线和当前实现采样；当前实现重复两次，另用 0.8 原语料做回归。它不是独立真实用户基准。
+
+```sh
+.venv/bin/python -m eval.memory_questions --track answers --cases eval/fixtures/answer_trust_v09.json --repeat 2 --output-dir /tmp/home-v09-acceptance
+```
+
+`expect.intent` 核对保存的分类元数据；旧实现没有此功能的失败须与实际误写分开。`expect.no_memory_writes` 比较数据库变化，不只相信模型标签。快照覆盖人物、别名、档案字段、记忆、待确认、互动、互动人物、关系、承诺、账目、提醒、应用记录、纠错与证据；不覆盖所有数据库表，技能与研究的边界另有工具及集成测试。查询允许新增审计证据摘录（至多 4000 字符）；完整原文保留在会话。`expect.saved_fields` 检查当前真实字段，不能用模型的成功声明或待确认提案替代。
+
+报告保留意图决定、草稿、修订稿、实际回执、工具轨迹和写入差异。`configured_model_tiers` 记录配置的分类与修订模型层级，与对话生成模型列表分开。`answer_review.status=completed` 只代表段落协议及来源校验，`semantic_verified=false`；评测的 `semantic_review` 继续为待人工审阅，不能将模型自己的问题标签当作语义分数。完整结果、逐轮反例与限制见 [0.9 验收](../docs/ANSWER_TRUST_V09.md)。
+
 ## 0.8 记忆检索与真实回答
 
 `fixtures/memory_questions_v08.json` 是**虚构资料与自然语言问法**，不包含真实用户记录，也不应称为独立未见基准。它是开发回归集，包含 16 个固定检索或来源场景，其中 10 个正召回问法、5 个无答案或身份/可见性负例及 1 个档案时间状态场景。另外有 6 组对话、13 个目标回答，覆盖昵称、口语、指代、同名澄清、当前与历史信息、冲突、缺少答案，以及修改、撤销、恢复、转移与归档。

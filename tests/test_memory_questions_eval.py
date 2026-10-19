@@ -213,11 +213,15 @@ def test_dialogue_instrumentation_preserves_harness_extraction_and_captures_side
     # A stub checks recording behavior only. Its response is never a quality score.
     monkeypatch.setattr(harness, 'get_llm', lambda: SimpleNamespace(chat=lambda *args, **kwargs: {
         'role': 'assistant', 'content': '仅用于检查评测记录行为。'}))
-    case = {'id': 'instrumentation', 'turns': [{'question': '老陈有哪些记录？',
+    monkeypatch.setattr(harness.turn_intent, 'classify_turn', lambda text, **kwargs:
+        harness.turn_intent.validate_intent({'intent': 'record', 'record_spans': [text], 'reason': 'test'}, text))
+    monkeypatch.setattr(harness.answer_review, 'review_answer', lambda llm, question, draft, sources, **kwargs:
+        {'answer': draft, 'metadata': {'status': 'test_double', 'semantic_verified': False}, 'warnings': []})
+    case = {'id': 'instrumentation', 'turns': [{'question': '请记住老陈这次提供了新资料。',
              'expect': {'source_records': ['chen_food'], 'review_points': ['人工审阅仍待完成']}}]}
     result = evaluation._dialogue(app, conn, case, people, records)
     turn = result['turns'][0]
-    assert extracted == ['老陈有哪些记录？']
+    assert extracted == ['请记住老陈这次提供了新资料。']
     assert 'error' not in turn, turn
     assert turn['semantic_review']['status'] == 'review_pending'
     assert turn['semantic_review']['ratings'] is None
@@ -236,3 +240,32 @@ def test_report_never_converts_semantic_pending_or_absent_sources_to_accuracy():
                                            'reviewed_turns': 0, 'score': None}
     assert summary['limited_fact_checks']['total'] == 0
     assert 'accuracy' not in summary
+
+
+def test_query_write_guard_checks_database_changes_even_when_classifier_says_query(conn):
+    from app.store import repo
+    app = {'repo': repo}
+    before = evaluation._data_snapshot(conn)
+    pid = repo.create_person(conn, '不应新增', status='active')
+    repo.add_alias(conn, pid, '别名', source='test')
+    repo.add_memory(conn, 'semantic', '模型把问句误当事实', pid, .9, None)
+    changes = evaluation._changes(before, evaluation._data_snapshot(conn))
+    checks = evaluation._write_checks(app, conn, {'turn_intent': {'intent': 'query'}},
+                                     {'intent': 'query', 'no_memory_writes': True}, {}, changes)
+    assert checks[0]['passed'] is True
+    assert checks[1]['passed'] is False
+    assert {'person', 'person_alias', 'memory_item'} <= set(checks[1]['changed_tables'])
+
+
+def test_audit_evidence_is_allowed_but_mixed_record_field_must_actually_be_saved(conn):
+    from app.store import repo
+    pid = repo.create_person(conn, '实际落库', status='active')
+    before = evaluation._data_snapshot(conn)
+    repo.add_evidence(conn, 'text', excerpt='仅查询，留原文')
+    changes = evaluation._changes(before, evaluation._data_snapshot(conn))
+    assert evaluation._write_checks({'repo': repo}, conn, {}, {'no_memory_writes': True}, {}, changes)[0]['passed']
+    expect = {'saved_fields': [{'person': 'p', 'field': 'city', 'value': '苏州'}]}
+    # A model claim or a pending item cannot substitute for the exact current field.
+    assert not evaluation._write_checks({'repo': repo}, conn, {}, expect, {'p': pid}, {})[0]['passed']
+    repo.upsert_field(conn, pid, 'city', '苏州', 1., None, valid_from=1000)
+    assert evaluation._write_checks({'repo': repo}, conn, {}, expect, {'p': pid}, {})[0]['passed']

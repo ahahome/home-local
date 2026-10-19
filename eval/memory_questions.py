@@ -95,6 +95,13 @@ def validate_fixture(fixture):
                 if any(key in args for key in ('person_id', 'person_ids')):
                     raise ValueError('Fixed questions cannot receive hidden person IDs')
                 expect = turn['expect']
+                if expect.get('intent') not in {None, 'query', 'record', 'mixed', 'unknown'}:
+                    raise ValueError('Unknown expected turn intent')
+                if 'no_memory_writes' in expect and not isinstance(expect['no_memory_writes'], bool):
+                    raise ValueError('no_memory_writes must be boolean')
+                for field in expect.get('saved_fields', []):
+                    if field.get('person') not in people or not field.get('field') or 'value' not in field:
+                        raise ValueError('saved_fields needs an explicit person, field and value')
                 for key in ('relevant', 'excluded', 'source_records', 'forbidden_source_records'):
                     if not set(expect.get(key, [])) <= records:
                         raise ValueError('Unknown relevance/source record in ' + case['id'])
@@ -330,7 +337,9 @@ def _data_snapshot(conn):
     # Capture actual extraction side effects instead of silently replacing extraction.
     return {table: {str(row['_eval_rowid']): dict(row) for row in conn.execute(
         'SELECT rowid AS _eval_rowid,* FROM ' + table + ' ORDER BY rowid')}
-        for table in ('person', 'person_field', 'memory_item', 'pending_item', 'interaction', 'evidence')}
+        for table in ('person', 'person_alias', 'person_field', 'memory_item', 'pending_item',
+                      'interaction', 'interaction_person', 'relation_edge', 'promise', 'ledger_entry',
+                      'reminder', 'applied_patch', 'memory_correction', 'evidence')}
 
 
 def _changes(before, after):
@@ -344,6 +353,24 @@ def _changes(before, after):
         if added or removed or updated:
             changes[table] = {'added': added, 'removed': removed, 'updated': updated}
     return changes
+
+
+def _write_checks(app, conn, result, expect, people, changes):
+    """Compare actual persistent changes, independently of the model's intent label."""
+    checks = []
+    if 'intent' in expect:
+        actual = result.get('turn_intent', {}).get('intent')
+        checks.append(_check('classified_turn_intent', actual == expect['intent'],
+                             expected=expect['intent'], actual=actual))
+    if expect.get('no_memory_writes'):
+        unexpected = sorted(table for table in changes if table != 'evidence')
+        checks.append(_check('query_has_no_memory_writes', not unexpected, changed_tables=unexpected))
+    for field in expect.get('saved_fields', []):
+        current = app['repo'].current_fields(conn, people[field['person']]).get(field['field'])
+        checks.append(_check('stored_field:' + field['person'] + ':' + field['field'],
+                             current is not None and current['value'] == field['value'],
+                             expected=field['value'], actual=current['value'] if current else None))
+    return checks
 
 
 def _material(app, conn, records):
@@ -423,6 +450,8 @@ def _dialogue(app, conn, case, people, records):
                       'metadata': json.loads(row['tool_calls']) if row['tool_calls'] else None}
                      for row in rows if row['role'] in {'assistant', 'tool'}]
             checks.extend(_answer_checks(app, conn, result, expect, people, records))
+            changes = _changes(before, _data_snapshot(conn))
+            checks.extend(_write_checks(app, conn, result, expect, people, changes))
             answer_row = conn.execute('SELECT content,tool_calls FROM message WHERE id=?',
                                       (result['assistant_message_id'],)).fetchone()
             prior.append({'id': result['assistant_message_id'], 'row': dict(answer_row),
@@ -432,7 +461,7 @@ def _dialogue(app, conn, case, people, records):
             cited = {record_key(source, records) for source in result.get('sources', [])}
             detail = {'turn': number, 'question': turn['question'], 'actions': turn.get('actions', []),
                       'expected': expect, 'expected_material': material, 'result': result, 'tool_trace': trace,
-                      'data_changes': _changes(before, _data_snapshot(conn)), 'prior_answer_states': prior_states,
+                      'data_changes': changes, 'prior_answer_states': prior_states,
                       'deterministic_checks': checks,
                       'limited_fact_checks': limited_fact_checks(result['answer'], expect.get('limited_fact_rules', [])),
                       'evidence_access': {'relevant_record_labels': sorted(relevant),
@@ -503,6 +532,8 @@ def _worker(job):
             else:
                 detail = _dialogue(app, conn, job['case'], people, records)
             return {'detail': detail, 'model': app['settings'].model_mid if job['track'] == 'answers' else None,
+                    'configured_model_tiers': {'mini': app['settings'].model_mini, 'mid': app['settings'].model_mid}
+                        if job['track'] == 'answers' else None,
                     'source_hash_after': app_source_hash(job['app_root'])}
         finally:
             conn.close()
@@ -583,7 +614,7 @@ def evaluate(fixture=None, *, track='retrieval', app_root=None, repeat=1, tags=N
               'app_git': app_git, 'runner_git': runner_git,
               'configuration': {'repeat': repeat, 'tags': tags or [], 'limit': limit,
                                 'worker_timeout_seconds': worker_timeout,
-                                'models': [], 'embedding': 'disabled', 'cache': False,
+                                'models': [], 'configured_model_tiers': [], 'embedding': 'disabled', 'cache': False,
                                 'runtime': 'separate process and temporary SQLite per scenario and repeat',
                                 'retrieval_mode': 'FTS only; network forbidden' if track == 'retrieval'
                                     else 'real harness including extraction; embeddings disabled'},
@@ -594,7 +625,9 @@ def evaluate(fixture=None, *, track='retrieval', app_root=None, repeat=1, tags=N
                   'relevant': 'Fixed-query relevance labels used only for retrieval ranking metrics',
                   'source_records': 'Potentially relevant evidence for human review, not mandatory citations or an answer score',
                   'limited_fact_rules': 'Literal string probes only; negation and entailment require human review',
-                  'deterministic_checks': 'Stored provenance, identity scope, source status and lifecycle contracts'},
+                  'deterministic_checks': 'Stored provenance, identity scope, source status and lifecycle contracts',
+                  'no_memory_writes': 'Actual domain-table changes excluding the original audit evidence, not the intent label',
+                  'saved_fields': 'Exact current stored field value, not a model claim or a pending proposal'},
               'human_review_rubric': fixture.get('human_review_rubric', []),
               'selected_scenarios': len(cases) * repeat, 'details': details, 'summary': summarize(track, [])}
     if checkpoint:
@@ -619,6 +652,9 @@ def evaluate(fixture=None, *, track='retrieval', app_root=None, repeat=1, tags=N
             details.append(detail)
             if result.get('model'):
                 models.add(result['model'])
+            tiers = result.get('configured_model_tiers')
+            if tiers and tiers not in report['configuration']['configured_model_tiers']:
+                report['configuration']['configured_model_tiers'].append(tiers)
             if result.get('source_hash_after') and result['source_hash_after'] != before_hash:
                 source_changed = True
             report['configuration']['models'] = sorted(models)

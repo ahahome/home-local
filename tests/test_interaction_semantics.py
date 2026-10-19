@@ -130,20 +130,28 @@ def test_quiet_people_and_importance_ignore_new_notes(conn):
 
 
 @pytest.mark.parametrize("query", ["林舟最近怎么样？", "帮我起草发给林舟的消息"])
-def test_agent_queries_and_drafts_create_notes_without_refreshing_contact(conn, monkeypatch, query):
+def test_agent_queries_and_drafts_keep_only_audit_without_refreshing_contact(conn, monkeypatch, query):
     pid = person(conn, "林舟")
     ts = now_ms() - 20 * 86400000
     repo.insert_interaction(conn, ts, "manual", "此前实际联系", None,
                             [(pid, "participant")], kind="contact")
     cid = repo.create_conversation(conn)
     monkeypatch.setattr(harness, "get_llm", lambda: SimpleNamespace(chat=lambda *a, **kw: {"content": "回答"}))
-    monkeypatch.setattr(harness.extract, "extract_from_text", lambda *a: people_patch("林舟"))
+    monkeypatch.setattr(harness.turn_intent, 'classify_turn', lambda text, **kwargs:
+        harness.turn_intent.validate_intent({'intent': 'query', 'record_spans': [], 'reason': 'query fixture'}, text))
+    monkeypatch.setattr(harness.answer_review, 'review_answer', lambda llm, question, draft, sources, **kwargs:
+        {'answer': draft, 'metadata': {'status': 'test_double', 'semantic_verified': False}, 'warnings': []})
+    monkeypatch.setattr(harness.extract, "extract_from_text", lambda *a: pytest.fail('query must not enter extraction'))
 
-    harness.run_turn(conn, cid, query)
+    result = harness.run_turn(conn, cid, query)
 
     assert repo.last_contact(conn, pid) == ts
-    latest = repo.recent_interactions(conn, pid)[0]
-    assert latest["kind"] == "note" and latest["person_role"] == "mentioned"
+    interactions = repo.recent_interactions(conn, pid)
+    assert len(interactions) == 1 and interactions[0]['kind'] == 'contact'
+    assert result['saved'] == result['pending'] == []
+    assert conn.execute('SELECT COUNT(*) FROM pending_item').fetchone()[0] == 0
+    source_id = result['conversation_scope']['user_message_id']
+    assert conn.execute('SELECT excerpt FROM evidence WHERE source_ref=?', (source_id,)).fetchone()[0] == query
 
 
 @pytest.mark.parametrize("entry", ["file", "url"])

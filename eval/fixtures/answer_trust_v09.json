@@ -1,0 +1,81 @@
+{
+  "version": "0.9.0-acceptance-1",
+  "provenance": "fictional_records_with_natural_questions",
+  "description": "预先冻结的新增虚构验收问法，用于状态日期、查询写入与事实建议边界。不是独立真实用户分布；冻结后不按其模型结果调参，语义逐轮审阅单列。",
+  "time_anchor": "2026-10-19T09:00:00+08:00",
+  "top_k": 5,
+  "persons": [
+    {"key": "tang", "name": "唐宁", "aliases": ["糖糖"]},
+    {"key": "xu", "name": "许澄", "aliases": ["小许"]},
+    {"key": "gu", "name": "顾舟", "aliases": ["顾工"]}
+  ],
+  "fields": [
+    {"key": "tang_city", "person": "tang", "field": "city", "value": "南京", "valid_from": 1756684800000},
+    {"key": "xu_company", "person": "xu", "field": "company", "value": "远帆设计", "valid_from": 1756684800000},
+    {"key": "gu_city", "person": "gu", "field": "city", "value": "天津", "valid_from": 1756684800000}
+  ],
+  "memories": [
+    {"key": "tang_contact", "person": "tang", "text": "唐宁说工作联系先发短信，收到后再约通话。", "ts": 1757552400000},
+    {"key": "xu_phone", "person": "xu", "text": "许澄说周三午休方便接电话，其他时候先留言。", "ts": 1757638800000},
+    {"key": "xu_email", "person": "xu", "text": "许澄说项目事项都写邮件，不要直接给他打电话。", "ts": 1757725200000},
+    {"key": "gu_food", "person": "gu", "text": "顾舟吃饭不吃花生，口味偏清淡。", "ts": 1757811600000}
+  ],
+  "interactions": [],
+  "retrieval_cases": [
+    {"id": "dated-background", "question": "工作联系", "args": {"person": "糖糖"}, "expect": {"relevant": ["tang_contact"]}}
+  ],
+  "dialogues": [
+    {
+      "id": "restored-record-and-edit-date", "tags": ["acceptance", "temporal", "lifecycle"],
+      "turns": [
+        {"question": "糖糖那条联系方式恢复后还能查到吗？现在保存的原话是什么？", "actions": [{"op": "edit", "memory": "tang_contact", "text": "唐宁说工作联系统一发邮件，急事也先留言，不直接打电话。"}, {"op": "withdraw", "memory": "tang_contact"}, {"op": "restore", "memory": "tang_contact"}], "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["tang_contact"], "allowed_persons": ["tang"], "review_points": ["记录已恢复且active，不得说仍被撤销或要求再次恢复", "不把记录可用推成偏好现今必然成立", "具体原话有来源，不泄露内部字段或修订号"]}},
+        {"question": "那9月11日是这条记忆所标的日期，还是我实际修改它的时间？", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["tang_contact"], "allowed_persons": ["tang"], "review_points": ["区分9月记忆所标日期与10月19日实际编辑审计日期", "恢复时间不能当作编辑或事实发生时间"]}}
+      ]
+    },
+    {
+      "id": "conflicting-contact-records", "tags": ["acceptance", "conflict", "grounding"],
+      "turns": [
+        {"question": "许澄的这两条联系习惯有点矛盾，能确定哪个用于工作、哪个用于私事吗？", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["xu_phone", "xu_email"], "allowed_persons": ["xu"], "review_points": ["分别引用电话和邮件原文", "不能把未限定场景的电话记录擅自限定为私事", "不因记录较新就自行撤销旧记录", "建议与已记录偏好分开"]}}
+      ]
+    },
+    {
+      "id": "query-without-question-mark", "tags": ["acceptance", "query", "write_boundary"],
+      "turns": [
+        {"question": "我想知道糖糖通常希望怎么联系", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["tang_contact"], "allowed_persons": ["tang"], "review_points": ["没有问号仍是查询", "不把想知道保存成个人意图记忆", "联系方式有可核查引用"]}},
+        {"question": "那他吃花生会过敏吗？", "expect": {"intent": "query", "no_memory_writes": true, "source_records": [], "allowed_persons": ["tang"], "forbidden_source_records": ["gu_food"], "review_points": ["不把别人的饮食资料当作唐宁过敏依据", "缺资料时明确不确定且无多余未引用告警"]}}
+      ]
+    },
+    {
+      "id": "hypothesis-does-not-update", "tags": ["acceptance", "hypothesis", "write_boundary"],
+      "turns": [
+        {"question": "如果顾舟搬去北京，他的资料应该怎么更新？这只是假设。", "expect": {"intent": "query", "no_memory_writes": true, "allowed_persons": ["gu"], "saved_fields": [{"person": "gu", "field": "city", "value": "天津"}], "review_points": ["不保存假设城市北京", "可以给操作建议，但不声称已更新"]}}
+      ]
+    },
+    {
+      "id": "quoted-old-answer-is-not-a-fact", "tags": ["acceptance", "quotation", "write_boundary"],
+      "turns": [
+        {"question": "你之前说“顾舟喜欢花生”，这有可靠依据吗？不要把这句引文记成新事实。", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["gu_food"], "allowed_persons": ["gu"], "review_points": ["不把旧回答引文保存成偏好", "根据原文不吃花生纠正旧断言并引用", "不把不吃花生推断成过敏诊断"]}}
+      ]
+    },
+    {
+      "id": "mixed-real-update-and-query", "tags": ["acceptance", "mixed", "write_boundary"],
+      "turns": [
+        {"question": "唐宁现在搬到苏州了。顺便查一下，他平时怎么联系比较合适？", "expect": {"intent": "mixed", "source_records": ["tang_contact"], "allowed_persons": ["tang"], "saved_fields": [{"person": "tang", "field": "city", "value": "苏州"}], "review_points": ["真实新城市能保存，查询半句不生成意图记忆", "新事实有真实保存回执，联系偏好有来源", "不把邮件或短信建议当成本轮新断言"]}},
+        {"question": "再确认一下，他现在档案里是哪座城市？", "expect": {"intent": "query", "no_memory_writes": true, "allowed_persons": ["tang"], "saved_fields": [{"person": "tang", "field": "city", "value": "苏州"}], "review_points": ["从本轮有效资料核对苏州，不仅复述旧助手文本"]}}
+      ]
+    },
+    {
+      "id": "explicit-record-with-question-form", "tags": ["acceptance", "record", "write_boundary"],
+      "turns": [
+        {"question": "请帮我记住：顾舟现在住青岛，可以吗？", "expect": {"saved_fields": [{"person": "gu", "field": "city", "value": "青岛"}], "allowed_persons": ["gu"], "review_points": ["带问号的明确记事不能只读丢弃", "实际落库青岛才可以显示成功回执"]}}
+      ]
+    }
+  ],
+  "human_review_rubric": [
+    "状态：记录已恢复可用与事实当下是否仍成立分别表达。",
+    "时间：事实/所标日期、录入、人工修改、恢复日期不能互相冒充。",
+    "写入：纯查询与假设不产生领域写入，混合消息只保存明确断言。",
+    "来源：具体事实就近引用，缺资料与建议不硬贴无关来源。",
+    "推论：不虚构工作/私事划分，不把饮食偏好升级为医学过敏。"
+  ]
+}

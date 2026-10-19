@@ -1,0 +1,106 @@
+{
+  "version": "0.8.1",
+  "provenance": "fictional_records_with_natural_questions",
+  "description": "虚构资料与自然语言问法。用于开发回归，不是真实用户数据，也不是独立未见语义基准。",
+  "time_anchor": "2026-10-19T09:00:00+08:00",
+  "top_k": 5,
+  "persons": [
+    {"key": "chen", "name": "陈言", "aliases": ["老陈", "CY"]},
+    {"key": "lin_work", "name": "林舟", "aliases": ["阿舟"]},
+    {"key": "lin_school", "name": "林舟", "aliases": ["篮球队老林"]},
+    {"key": "zhou", "name": "周敏", "aliases": ["敏姐"]},
+    {"key": "he", "name": "何川", "aliases": ["老何"]}
+  ],
+  "fields": [
+    {"key": "chen_company", "person": "chen", "field": "company", "value": "星桥软件", "valid_from": 1735689600000},
+    {"key": "chen_old_city", "person": "chen", "field": "city", "value": "杭州", "valid_from": 1735689600000},
+    {"key": "chen_current_city", "person": "chen", "field": "city", "value": "上海", "valid_from": 1756684800000},
+    {"key": "lin_work_company", "person": "lin_work", "field": "company", "value": "星河科技", "valid_from": 1735689600000},
+    {"key": "lin_school_company", "person": "lin_school", "field": "company", "value": "南山中学", "valid_from": 1735689600000},
+    {"key": "zhou_city", "person": "zhou", "field": "city", "value": "杭州", "valid_from": 1735689600000}
+  ],
+  "memories": [
+    {"key": "chen_contact", "person": "chen", "text": "陈言说白天会议多，急事发短信，普通事情用邮件，别直接打电话。", "ts": 1791334800000},
+    {"key": "chen_food", "person": "chen", "text": "陈言吃饭不吃香菜，可以选清淡的粤菜。", "ts": 1791421200000},
+    {"key": "chen_meeting", "person": "chen", "text": "陈言在2025年10月说每周三去上海开会，出发前先发议程。该条没有说明居住城市。", "ts": 1760058000000},
+    {"key": "lin_preference", "person": "lin_work", "text": "林舟说急事先电话联系，平时别发长邮件。", "ts": 1791507600000},
+    {"key": "school_preference", "person": "lin_school", "text": "南山中学的林舟说教学时不接电话，傍晚发短信比较方便。", "ts": 1791594000000},
+    {"key": "zhou_hobby", "person": "zhou", "text": "周敏说下班后喜欢打羽毛球，膝盖不舒服时就只散步。", "ts": 1791680400000},
+    {"key": "he_contact", "person": "he", "text": "何川说工作日午休可以打电话，其他时间发短信。", "ts": 1791766800000},
+    {"key": "personal_checklist", "person": null, "text": "我见客户前会准备项目清单和纸质名片，先核对会议地址。", "ts": 1791853200000},
+    {"key": "zhou_distractor", "person": "zhou", "text": "周敏参加了邮件沟通培训，讨论电话、短信、会议和饮食记录，不能由此判断陈言或林舟的偏好。", "ts": 1791939600000}
+  ],
+  "interactions": [
+    {"key": "chen_lunch", "person": "chen", "text": "与陈言在上海午餐，他再次说不要香菜，讨论星桥软件的秋季项目。", "ts": 1792026000000, "channel": "线下", "kind": "contact"}
+  ],
+  "retrieval_cases": [
+    {"id": "nickname-urgent-contact", "tags": ["nickname", "colloquial"], "question": "老陈白天开会多，急事怎么找他？", "expect": {"relevant": ["chen_contact"], "excluded_persons": ["zhou", "lin_school", "he"]}},
+    {"id": "nickname-food", "tags": ["nickname", "colloquial"], "question": "老陈吃饭要避开什么？", "expect": {"relevant": ["chen_food", "chen_lunch"], "excluded_persons": ["zhou", "lin_school"]}},
+    {"id": "colloquial-hobby", "tags": ["colloquial", "paraphrase"], "question": "敏姐下班想散散心，叫她去打球行吗？", "expect": {"relevant": ["zhou_hobby"], "excluded_persons": ["chen", "lin_work"]}},
+    {"id": "negative-food-question", "tags": ["colloquial", "negation"], "question": "老陈有什么不吃的？", "expect": {"relevant": ["chen_food", "chen_lunch"]}},
+    {"id": "namesake-needs-choice", "tags": ["namesake", "negative"], "question": "林舟怎么联系比较合适？", "expect": {"relevant": [], "ambiguity": ["lin_work", "lin_school"]}},
+    {"id": "unique-nickname-contact", "tags": ["nickname", "namesake"], "question": "阿舟希望我怎么联系他？", "expect": {"relevant": ["lin_preference"], "excluded_persons": ["lin_school", "zhou"]}},
+    {"id": "namesake-background-clue", "tags": ["namesake", "background"], "question": "星河科技那个林舟怎么联系？", "expect": {"relevant": ["lin_preference"], "excluded_persons": ["lin_school"]}},
+    {"id": "missing-blood-type", "tags": ["no_answer", "negative"], "question": "敏姐的血型是什么？", "expect": {"relevant": [], "empty": true}},
+    {"id": "personal-checklist", "tags": ["personal", "scope"], "question": "我自己见客户前都准备什么？", "args": {"scope": "personal"}, "expect": {"relevant": ["personal_checklist"], "personal_only": true}},
+    {"id": "withdrawn-preference", "tags": ["lifecycle", "withdraw", "negative"], "question": "阿舟的沟通偏好是什么？", "actions": [{"op": "withdraw", "memory": "lin_preference"}], "expect": {"relevant": [], "empty": true, "excluded": ["lin_preference"]}},
+    {"id": "restored-preference", "tags": ["lifecycle", "restore"], "question": "阿舟的沟通偏好是什么？", "actions": [{"op": "withdraw", "memory": "lin_preference"}, {"op": "restore", "memory": "lin_preference"}], "expect": {"relevant": ["lin_preference"], "excluded_persons": ["lin_school"]}},
+    {"id": "edited-preference", "tags": ["lifecycle", "edit"], "question": "阿舟现在希望怎么沟通？", "actions": [{"op": "edit", "memory": "lin_preference", "text": "林舟纠正之前说法：工作沟通统一发邮件，请不要直接打电话。"}], "expect": {"relevant": ["lin_preference"], "snapshot_contains": ["统一发邮件"]}},
+    {"id": "moved-away-from-original-owner", "tags": ["lifecycle", "move", "negative"], "question": "阿舟怎么联系？", "actions": [{"op": "edit", "memory": "lin_preference", "person": "he", "text": "何川说工作沟通统一发邮件，请不要直接打电话。"}], "expect": {"relevant": [], "empty": true, "excluded": ["lin_preference"]}},
+    {"id": "archived-owner", "tags": ["lifecycle", "archive", "negative"], "question": "老何怎么联系？", "args": {"person": "老何"}, "actions": [{"op": "archive_person", "person": "he"}], "expect": {"relevant": [], "empty": true, "error": true, "excluded": ["he_contact"]}},
+    {"id": "profile-current-and-history", "tags": ["temporal", "source", "scope"], "tool": "get_person", "question": "老陈现在和以前分别住哪里？", "args": {"name": "老陈"}, "expect": {"fields": [{"record": "chen_current_city", "temporal_status": "current_field", "text": "上海"}, {"record": "chen_old_city", "temporal_status": "historical_field", "text": "杭州"}]}},
+    {"id": "nickname-scope-with-no-query-rewrite", "tags": ["scope", "nickname"], "question": "急事发短信还是直接打电话？", "args": {"person": "老陈"}, "expect": {"relevant": ["chen_contact"], "excluded_persons": ["zhou", "lin_school", "he"]}}
+  ],
+  "dialogues": [
+    {
+      "id": "nickname-context", "tags": ["nickname", "multi_turn", "pronoun"],
+      "turns": [
+        {"question": "老陈现在在哪家公司，住哪儿？", "expect": {"source_records": ["chen_company", "chen_current_city"], "allowed_persons": ["chen"], "limited_fact_rules": [{"id": "company-mentioned", "kind": "contains_any", "values": ["星桥软件"], "description": "只检查是否提及公司字符串，不判定句意"}, {"id": "current-city-mentioned", "kind": "contains_any", "values": ["上海"], "description": "只检查是否提及上海，不证明当前和历史表述正确"}], "review_points": ["昵称是否指向陈言", "是否把上海作为当前城市"]}},
+        {"question": "那他吃饭有什么忌口？", "expect": {"source_records": ["chen_food", "chen_lunch"], "allowed_persons": ["chen"], "limited_fact_rules": [{"id": "cilantro-mentioned", "kind": "contains_any", "values": ["香菜"], "description": "只检查提及香菜，不判定是否正确表达不能吃"}], "review_points": ["他是否承接上一轮陈言", "是否正确表达不吃香菜而不是喜欢香菜"]}}
+      ]
+    },
+    {
+      "id": "namesake-clarification", "tags": ["namesake", "multi_turn", "negative"],
+      "turns": [
+        {"question": "林舟怎么联系比较合适？", "expect": {"source_records": [], "forbidden_source_records": ["lin_preference", "school_preference"], "review_points": ["是否先展示两份档案并请求确认", "是否避免混合两人的偏好"]}},
+        {"question": "我说的是在星河科技上班的那位，接着说。", "expect": {"source_records": ["lin_preference"], "allowed_persons": ["lin_work"], "forbidden_source_records": ["school_preference"], "limited_fact_rules": [{"id": "phone-mentioned", "kind": "contains_any", "values": ["电话"], "description": "只检查电话字符串，仍需审阅归属和条件"}], "review_points": ["是否利用上一轮候选和公司线索确认人物", "是否只采用星河科技林舟的资料"]}}
+      ]
+    },
+    {
+      "id": "temporal-conflict", "tags": ["temporal", "conflict", "multi_turn"],
+      "turns": [
+        {"question": "老陈现在住哪，之前在哪？", "expect": {"source_records": ["chen_current_city", "chen_old_city"], "allowed_persons": ["chen"], "limited_fact_rules": [{"id": "current-city-mentioned", "kind": "contains_any", "values": ["上海"], "description": "只检查提及上海"}, {"id": "historical-city-mentioned", "kind": "contains_any", "values": ["杭州"], "description": "只检查提及杭州"}], "review_points": ["是否按生效时间区分当前上海和历史杭州"]}},
+        {"question": "那条每周三去上海开会的旧记录，能说明他现在还住杭州吗？", "expect": {"source_records": ["chen_meeting", "chen_current_city"], "allowed_persons": ["chen"], "limited_fact_rules": [{"id": "current-city-mentioned", "kind": "contains_any", "values": ["上海"], "description": "只检查上海字符串，不判定是否拒绝错误推论"}], "review_points": ["是否说明开会地点不能证明居住城市", "是否优先依据较新的当前字段，保留旧记忆日期"]}}
+      ]
+    },
+    {
+      "id": "no-answer", "tags": ["no_answer", "negative"],
+      "turns": [
+        {"question": "敏姐的血型是什么？", "expect": {"source_records": [], "allowed_persons": ["zhou"], "review_points": ["是否明确没有记录且不猜测血型", "是否避免把无关爱好当成血型依据"]}}
+      ]
+    },
+    {
+      "id": "correction-withdrawal", "tags": ["lifecycle", "edit", "withdraw", "multi_turn"],
+      "turns": [
+        {"question": "阿舟一般希望怎么联系？", "expect": {"source_records": ["lin_preference"], "allowed_persons": ["lin_work"], "limited_fact_rules": [{"id": "original-phone-mentioned", "kind": "contains_any", "values": ["电话"], "description": "只检查初始记录中的电话字符串"}], "review_points": ["是否准确呈现急事和普通沟通的条件"]}},
+        {"question": "重新查一下，阿舟现在希望怎么联系？", "actions": [{"op": "edit", "memory": "lin_preference", "text": "林舟纠正之前说法：工作沟通统一发邮件，请不要直接打电话。"}], "expect": {"source_records": ["lin_preference"], "allowed_persons": ["lin_work"], "previous_source_states": {"lin_preference": "updated"}, "limited_fact_rules": [{"id": "corrected-email-mentioned", "kind": "contains_any", "values": ["邮件"], "description": "只检查纠错后的邮件字符串，仍需人工判断是否当作当前偏好"}], "review_points": ["是否依据新修订回答，而不是沿用旧回答中的电话偏好"]}},
+        {"question": "重新核对一下，他的沟通偏好还有有效依据吗？", "actions": [{"op": "withdraw", "memory": "lin_preference"}], "expect": {"source_records": [], "allowed_persons": ["lin_work"], "forbidden_source_records": ["lin_preference"], "previous_source_states": {"lin_preference": "withdrawn"}, "review_points": ["是否停止使用撤销的偏好及依赖该偏好的旧回答", "是否说明缺少有效依据，而不是断言已恢复电话偏好"]}}
+      ]
+    },
+    {
+      "id": "restore-move-archive", "tags": ["lifecycle", "restore", "move", "archive", "multi_turn"],
+      "turns": [
+        {"question": "阿舟之前那条沟通习惯，恢复后现在记的是什么？", "actions": [{"op": "edit", "memory": "lin_preference", "text": "林舟说工作沟通统一发邮件，请不要直接打电话。"}, {"op": "withdraw", "memory": "lin_preference"}, {"op": "restore", "memory": "lin_preference"}], "expect": {"source_records": ["lin_preference"], "allowed_persons": ["lin_work"], "limited_fact_rules": [{"id": "restored-email-mentioned", "kind": "contains_any", "values": ["邮件"], "description": "只检查恢复后保留的邮件字符串"}], "review_points": ["是否恢复编辑后的内容"]}},
+        {"question": "老何怎么联系比较合适？", "actions": [{"op": "edit", "memory": "lin_preference", "person": "he", "text": "何川说工作沟通统一发邮件，请不要直接打电话。"}], "expect": {"source_records": ["lin_preference", "he_contact"], "allowed_persons": ["he"], "previous_source_states": {"lin_preference": "moved"}, "limited_fact_rules": [{"id": "moved-email-mentioned", "kind": "contains_any", "values": ["邮件"], "description": "只检查提及转移后的邮件记录，不能自动判定矛盾处理正确"}], "review_points": ["是否识别资料已归属何川", "旧电话背景与新邮件背景并存时是否交代日期和不确定性"]}},
+        {"question": "再查老何，现在还能找到他的有效记录吗？", "actions": [{"op": "archive_person", "person": "he"}], "expect": {"source_records": [], "forbidden_source_records": ["lin_preference", "he_contact"], "previous_source_states": {"lin_preference": "unavailable", "he_contact": "unavailable"}, "review_points": ["是否停止把归档人物资料作为有效背景", "是否避免通过旧回答继续泄漏归档资料"]}}
+      ]
+    }
+  ],
+  "human_review_rubric": [
+    "身份与指代：回答指向正确的人，同名时先澄清，后续利用用户选择。",
+    "事实与时间：当前字段、旧字段、背景记录和纠错状态表述正确。",
+    "证据与推论：引用支持实际结论，不把相关记录当作充分证明。",
+    "无答案：证据缺失、撤销或不可见时明确说明，不猜测。",
+    "生命周期：后续回答停止沿用已失效的记忆和旧回答。"
+  ]
+}

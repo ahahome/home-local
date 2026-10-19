@@ -19,6 +19,15 @@ def discard_key(kind, fingerprint, source_id):
     return sha256_text(f'discard|{kind}|{fingerprint}|{source_id}')
 
 
+def archived_only_aliases(conn):
+    """Names reserved by archived people, excluding aliases also used by an active person."""
+    return {row['alias'] for row in conn.execute(
+        'SELECT DISTINCT a.alias FROM person_alias a JOIN person p ON p.id=a.person_id '
+        "WHERE p.deleted_at IS NOT NULL AND p.status!='merged' AND NOT EXISTS ("
+        'SELECT 1 FROM person_alias active_alias JOIN person active ON active.id=active_alias.person_id '
+        "WHERE active_alias.alias=a.alias AND active.deleted_at IS NULL AND active.status!='merged')")}
+
+
 def resolve_person(conn, name=None, person_id=None, create=False):
     if person_id:
         p = repo.get_person(conn, person_id)
@@ -35,6 +44,8 @@ def resolve_person(conn, name=None, person_id=None, create=False):
     if rows:
         return rows[0]["id"]
     if create:
+        if name in archived_only_aliases(conn):
+            raise ValueError(f'「{name}」对应已归档人物，请先恢复档案，或明确另建同名人物')
         from app.memory.extract import is_role_person
         if is_role_person(name):
             raise ValueError("角色词不能作为人物建档")

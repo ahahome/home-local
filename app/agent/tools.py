@@ -39,6 +39,10 @@ TOOLS = [
             "query": {"type": "string"}, "top_k": {"type": "integer", "default": 8, "minimum": 1, "maximum": 100},
             "person": {"type": "string", "description": "准确姓名或别名，同名时需要 person_id"},
             "person_id": {"type": "string", "description": "已知人物 ID，限制检索该人物相关记忆与互动"},
+            "person_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": True,
+                           "description": "比较多个人物时指定 ID 集合，不能同时传 person_id 或 person"},
+            "retrieval_mode": {"type": "string", "enum": ["hybrid", "fts"], "default": "hybrid",
+                               "description": "hybrid 使用已配置通道，fts 只使用本地文字检索"},
             "scope": {"type": "string", "enum": ["all", "personal"], "default": "all",
                       "description": "all 为全部或指定人物，personal 仅个人记忆与未关联人物的资料，不能同时指定人物"}},
             "required": ["query"]}}},
@@ -157,19 +161,94 @@ def _alias_in_query(alias, query):
 
 
 def _scoped_query(conn, query, person_id):
-    for alias in sorted(repo.aliases_of(conn, person_id), key=len, reverse=True):
-        if _alias_in_query(alias, query):
-            query = re.sub(_alias_pattern(alias), ' ', query)
+    aliases = sorted(repo.aliases_of(conn, person_id), key=len, reverse=True)
+    matches = [(match.start(), match.end()) for alias in aliases
+               for match in re.finditer(_alias_pattern(alias) if len(alias) > 1 else
+                                        r'(?<!\w)' + re.escape(alias) + r'(?!\w)', query)]
+    # Apply intervals against the original query, so removing a long name cannot expose a short alias inside a word.
+    for start, end in sorted(matches, reverse=True):
+        if any(other_start <= start and other_end >= end and (other_start, other_end) != (start, end)
+               for other_start, other_end in matches):
+            continue
+        query = query[:start] + ' ' + query[end:]
     return query.strip()
 
 
+class ReadScopeError(ValueError):
+    def __init__(self, message, candidates=None):
+        super().__init__(message)
+        self.candidates = candidates or []
+
+
+def _read_scope_args(conn, name, args, read_scope):
+    if read_scope is None:
+        return args
+    if not isinstance(read_scope, dict):
+        raise ReadScopeError('请先确认本次查询的人物。')
+    if read_scope.get('blocked') or read_scope.get('mode') == 'clarify':
+        raise ReadScopeError(read_scope.get('reason') or '请先确认本次查询的人物。', read_scope.get('candidates'))
+    ids = read_scope.get('person_ids', [])
+    if not isinstance(ids, list) or any(not isinstance(pid, str) or not pid for pid in ids):
+        raise ReadScopeError('人物查询范围无效，请重新指定人物。')
+    if not ids and read_scope.get('mode') in {'none', 'global'}:
+        return args
+    if not ids:
+        raise ReadScopeError('当前没有已确认的查询人物，请重新指定。')
+    allowed = sorted(set(ids))
+    candidates = []
+    for pid in allowed:
+        person = repo.get_person(conn, pid)
+        if not person or person['deleted_at'] is not None or person['status'] == 'merged':
+            raise ReadScopeError('本轮查询的人物资料已变化，请重新确认人物。')
+        candidates.append({'person_id': pid, 'display_name': person['display_name']})
+    args = dict(args)
+    if name == 'query_memory' and args.get('scope') == 'personal':
+        raise ReadScopeError('本轮已限定人物，不能同时切换为个人记忆范围。', candidates)
+    explicit_many = args.get('person_ids')
+    if explicit_many is not None:
+        if name == 'get_person':
+            raise ReadScopeError('请指定要查看的单个人物档案。', candidates)
+        selected = retrieve._selected_people(args.get('person_id'), explicit_many)
+        if args.get('person') or not selected or not set(selected) <= set(allowed):
+            raise ReadScopeError('本次读取超出了已确认的人物范围，请重新指定。', candidates)
+        return args
+    explicit_name = args.get('name') if name == 'get_person' else args.get('person')
+    explicit_id = args.get('person_id')
+    if explicit_name and not explicit_id:
+        matches = conn.execute('SELECT DISTINCT p.id FROM person p JOIN person_alias a ON a.person_id=p.id '
+                               "WHERE a.alias=? AND p.deleted_at IS NULL AND p.status!='merged'",
+                               (explicit_name,)).fetchall()
+        matches = [row['id'] for row in matches if row['id'] in allowed]
+        if len(matches) == 1:
+            explicit_id = matches[0]
+        elif len(matches) > 1:
+            raise ReadScopeError('这个名字对应多位查询人物，请使用人物 ID。', candidates)
+        else:
+            raise ReadScopeError('本次读取超出了已确认的人物范围，请重新指定。', candidates)
+    if explicit_id:
+        if explicit_id not in allowed:
+            raise ReadScopeError('本次读取超出了已确认的人物范围，请重新指定。', candidates)
+        args['person_id'] = explicit_id
+    elif len(allowed) == 1:
+        args['person_id'] = allowed[0]
+    elif name == 'query_memory':
+        args['person_ids'] = allowed
+    else:
+        raise ReadScopeError('请从本次比较的人物中选择要查看的档案。', candidates)
+    return args
+
+
 def execute_tool(conn, name: str, args: dict, source_text: str | None = None,
-                 source_msg_id: str | None = None) -> dict:
+                 source_msg_id: str | None = None, read_scope: dict | None = None) -> dict:
     from app.memory.writes import AmbiguousPerson
     try:
         if name in {"save_person_fact", "record_transfer", "create_promise", "note"}:
             return _shared_write(conn, name, args, source_text, source_msg_id)
+        if name in {'query_memory', 'get_person'}:
+            args = _read_scope_args(conn, name, args, read_scope)
         return _execute_tool(conn, name, args)
+    except ReadScopeError as e:
+        return {'ok': False, 'needs_confirmation': True, 'error': str(e), 'candidates': e.candidates}
     except AmbiguousPerson as e:
         return {"ok": False, "needs_confirmation": True, "error": str(e), "candidates": e.candidates}
     except (ValueError, KeyError, TypeError) as e:
@@ -280,18 +359,26 @@ def _execute_tool(conn, name: str, args: dict) -> dict:
 
     if name == "query_memory":
         scope = args.get('scope', 'all')
+        pids = args.get('person_ids')
+        if pids is not None and (args.get('person') or args.get('person_id')):
+            raise ValueError('人物集合不能同时指定单个人物')
         pid = _resolve_person_id(conn, args.get('person'), args.get('person_id'))
         inferred = False
-        if pid is None and scope == 'all':
+        if pid is None and pids is None and scope == 'all':
             pid = _query_person_hint(conn, args['query'])
             inferred = pid is not None
         query = _scoped_query(conn, args['query'], pid) if pid is not None else args['query']
-        results = retrieve.hybrid_search(conn, query, args.get("top_k", 8), person_id=pid, scope=scope)
+        if pids is not None:
+            for selected in retrieve._selected_people(person_ids=pids):
+                query = _scoped_query(conn, query, selected)
+        results = retrieve.hybrid_search(conn, query, args.get("top_k", 8), person_id=pid, scope=scope,
+                                         person_ids=pids, retrieval_mode=args.get('retrieval_mode', 'hybrid'))
         for r in results:
             r["when"] = ms_to_local_str(r["ts"])
         person = repo.get_person(conn, pid) if pid else None
         return {"ok": True, "results": results, "scope": scope, 'scope_inferred': inferred,
-                'scoped_person': {'id': pid, 'display_name': person['display_name']} if person else None}
+                'scoped_person': {'id': pid, 'display_name': person['display_name']} if person else None,
+                'scoped_person_ids': retrieve._selected_people(pid, pids)}
 
     if name == "list_open_promises":
         pid = _resolve_person_id(conn, args.get("person"), args.get("person_id"))

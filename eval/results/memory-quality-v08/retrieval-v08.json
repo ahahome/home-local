@@ -1,0 +1,1714 @@
+{
+  "evaluation": "memory-questions-v08",
+  "schema_version": 1,
+  "track": "retrieval",
+  "created_at": "2026-10-19T01:36:02.171805+00:00",
+  "report_id": "20261019-013602-171805-29399",
+  "run_status": "complete",
+  "fixture_version": "0.8.1",
+  "fixture_hash": "488829b9d4e638b7f3f4f88839c3b56164f624ea492c27289610e913573c59d3",
+  "corpus_provenance": "fictional_records_with_natural_questions",
+  "corpus_description": "虚构资料与自然语言问法。用于开发回归，不是真实用户数据，也不是独立未见语义基准。",
+  "app_root": "/Users/emdoor/Documents/projects/integrate/home-local",
+  "app_source_hash": "803855c56033a96cd1abd77e1779f26f54614fb473c3edff2124bb578bb7619c",
+  "runner_source_hash": "f31f0429de5ca642035f38e0df4a2ed44a9089cff1fa2bea3dc78b421553b2f9",
+  "app_source_changed_during_run": false,
+  "app_git": {
+    "sha": "9270eb57348b1640d9fa0f4184aa8eea0b96c9dc",
+    "dirty": true
+  },
+  "runner_git": {
+    "sha": "9270eb57348b1640d9fa0f4184aa8eea0b96c9dc",
+    "dirty": true
+  },
+  "configuration": {
+    "repeat": 1,
+    "tags": [],
+    "limit": null,
+    "worker_timeout_seconds": 600,
+    "models": [],
+    "embedding": "disabled",
+    "cache": false,
+    "runtime": "separate process and temporary SQLite per scenario and repeat",
+    "retrieval_mode": "FTS only; network forbidden"
+  },
+  "limitations": [
+    "Fictional development corpus, not real users or an unseen semantic benchmark",
+    "String checks and source integrity do not establish answer correctness",
+    "Answer semantics require human review; no LLM self-grading"
+  ],
+  "expectation_semantics": {
+    "relevant": "Fixed-query relevance labels used only for retrieval ranking metrics",
+    "source_records": "Potentially relevant evidence for human review, not mandatory citations or an answer score",
+    "limited_fact_rules": "Literal string probes only; negation and entailment require human review",
+    "deterministic_checks": "Stored provenance, identity scope, source status and lifecycle contracts"
+  },
+  "human_review_rubric": [
+    "身份与指代：回答指向正确的人，同名时先澄清，后续利用用户选择。",
+    "事实与时间：当前字段、旧字段、背景记录和纠错状态表述正确。",
+    "证据与推论：引用支持实际结论，不把相关记录当作充分证明。",
+    "无答案：证据缺失、撤销或不可见时明确说明，不猜测。",
+    "生命周期：后续回答停止沿用已失效的记忆和旧回答。"
+  ],
+  "selected_scenarios": 16,
+  "details": [
+    {
+      "question": "老陈白天开会多，急事怎么找他？",
+      "tags": [
+        "nickname",
+        "colloquial"
+      ],
+      "expected": {
+        "relevant": [
+          "chen_contact"
+        ],
+        "excluded_persons": [
+          "zhou",
+          "lin_school",
+          "he"
+        ]
+      },
+      "id": "nickname-urgent-contact",
+      "tool": "query_memory",
+      "actual_arguments": {
+        "query": "老陈白天开会多，急事怎么找他？",
+        "top_k": 5
+      },
+      "result": {
+        "ok": true,
+        "results": [
+          {
+            "type": "memory",
+            "id": "6e7546f327914e30",
+            "text": "陈言说白天会议多，急事发短信，普通事情用邮件，别直接打电话。",
+            "ts": 1791334800000,
+            "kind": "semantic",
+            "person": "陈言",
+            "source": {
+              "type": "memory",
+              "entity_id": "6e7546f327914e30",
+              "person": {
+                "id": "d6130c8ff9484081",
+                "display_name": "陈言"
+              },
+              "text": "陈言说白天会议多，急事发短信，普通事情用邮件，别直接打电话。",
+              "date": 1791334800000,
+              "temporal_status": "historical_background",
+              "revision": 0,
+              "ts": 1791334800000,
+              "kind": "semantic",
+              "evidence": {
+                "id": "c19edf71ffe54251",
+                "kind": "text",
+                "excerpt": "陈言说白天会议多，急事发短信，普通事情用邮件，别直接打电话。",
+                "source_ref": "eval-v08:chen_contact",
+                "blob_hash": null,
+                "created_at": 1792373762461
+              },
+              "captured_at": 1792373762719,
+              "origin_source": {
+                "id": "c19edf71ffe54251",
+                "kind": "text",
+                "excerpt": "陈言说白天会议多，急事发短信，普通事情用邮件，别直接打电话。",
+                "source_ref": "eval-v08:chen_contact",
+                "blob_hash": null,
+                "created_at": 1792373762461
+              }
+            },
+            "score": 0.0901,
+            "match_type": "text_partial",
+            "when": "2026-10-07 09:00"
+          },
+          {
+            "type": "memory",
+            "id": "9712615ea83647b5",
+            "text": "陈言在2025年10月说每周三去上海开会，出发前先发议程。该条没有说明居住城市。",
+            "ts": 1760058000000,
+            "kind": "semantic",
+            "person": "陈言",
+            "source": {
+              "type": "memory",
+              "entity_id": "9712615ea83647b5",
+              "person": {
+                "id": "d6130c8ff9484081",
+                "display_name": "陈言"
+              },
+              "text": "陈言在2025年10月说每周三去上海开会，出发前先发议程。该条没有说明居住城市。",
+              "date": 1760058000000,
+              "temporal_status": "historical_background",
+              "revision": 0,
+              "ts": 1760058000000,
+              "kind": "semantic",
+              "evidence": {
+                "id": "91aec64b300644aa",
+                "kind": "text",
+                "excerpt": "陈言在2025年10月说每周三去上海开会，出发前先发议程。该条没有说明居住城市。",
+                "source_ref": "eval-v08:chen_meeting",
+                "blob_hash": null,
+                "created_at": 1792373762716
+              },
+              "captured_at": 1792373762719,
+              "origin_source": {
+                "id": "91aec64b300644aa",
+                "kind": "text",
+                "excerpt": "陈言在2025年10月说每周三去上海开会，出发前先发议程。该条没有说明居住城市。",
+                "source_ref": "eval-v08:chen_meeting",
+                "blob_hash": null,
+                "created_at": 1792373762716
+              }
+            },
+            "score": 0.07,
+            "match_type": "text_partial",
+            "when": "2025-10-10 09:00"
+          }
+        ],
+        "scope": "all",
+        "scope_inferred": true,
+        "scoped_person": {
+          "id": "d6130c8ff9484081",
+          "display_name": "陈言"
+        },
+        "scoped_person_ids": [
+          "d6130c8ff9484081"
+        ]
+      },
+      "ranked_records": [
+        "chen_contact",
+        "chen_meeting"
+      ],
+      "metrics": {
+        "recall_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "deterministic_checks": [
+        {
+          "name": "tool_completed",
+          "passed": true
+        },
+        {
+          "name": "excluded_records_absent",
+          "passed": true
+        },
+        {
+          "name": "source_snapshot:0",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "person_isolation:0",
+          "passed": true
+        },
+        {
+          "name": "source_snapshot:1",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "person_isolation:1",
+          "passed": true
+        }
+      ],
+      "semantic_review": {
+        "status": "not_applicable_fixed_retrieval"
+      },
+      "repeat": 1
+    },
+    {
+      "question": "老陈吃饭要避开什么？",
+      "tags": [
+        "nickname",
+        "colloquial"
+      ],
+      "expected": {
+        "relevant": [
+          "chen_food",
+          "chen_lunch"
+        ],
+        "excluded_persons": [
+          "zhou",
+          "lin_school"
+        ]
+      },
+      "id": "nickname-food",
+      "tool": "query_memory",
+      "actual_arguments": {
+        "query": "老陈吃饭要避开什么？",
+        "top_k": 5
+      },
+      "result": {
+        "ok": true,
+        "results": [
+          {
+            "type": "memory",
+            "id": "f8749b7a890249b6",
+            "text": "陈言吃饭不吃香菜，可以选清淡的粤菜。",
+            "ts": 1791421200000,
+            "kind": "semantic",
+            "person": "陈言",
+            "source": {
+              "type": "memory",
+              "entity_id": "f8749b7a890249b6",
+              "person": {
+                "id": "d42d74cbc55f4393",
+                "display_name": "陈言"
+              },
+              "text": "陈言吃饭不吃香菜，可以选清淡的粤菜。",
+              "date": 1791421200000,
+              "temporal_status": "historical_background",
+              "revision": 0,
+              "ts": 1791421200000,
+              "kind": "semantic",
+              "evidence": {
+                "id": "e4f4bbf84b2a4ce1",
+                "kind": "text",
+                "excerpt": "陈言吃饭不吃香菜，可以选清淡的粤菜。",
+                "source_ref": "eval-v08:chen_food",
+                "blob_hash": null,
+                "created_at": 1792373763316
+              },
+              "captured_at": 1792373763319,
+              "origin_source": {
+                "id": "e4f4bbf84b2a4ce1",
+                "kind": "text",
+                "excerpt": "陈言吃饭不吃香菜，可以选清淡的粤菜。",
+                "source_ref": "eval-v08:chen_food",
+                "blob_hash": null,
+                "created_at": 1792373763316
+              }
+            },
+            "score": 0.0908,
+            "match_type": "text_partial",
+            "when": "2026-10-08 09:00"
+          }
+        ],
+        "scope": "all",
+        "scope_inferred": true,
+        "scoped_person": {
+          "id": "d42d74cbc55f4393",
+          "display_name": "陈言"
+        },
+        "scoped_person_ids": [
+          "d42d74cbc55f4393"
+        ]
+      },
+      "ranked_records": [
+        "chen_food"
+      ],
+      "metrics": {
+        "recall_at_1": 0.5,
+        "recall_at_3": 0.5,
+        "recall_at_5": 0.5,
+        "mrr_at_5": 1.0
+      },
+      "deterministic_checks": [
+        {
+          "name": "tool_completed",
+          "passed": true
+        },
+        {
+          "name": "excluded_records_absent",
+          "passed": true
+        },
+        {
+          "name": "source_snapshot:0",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "person_isolation:0",
+          "passed": true
+        }
+      ],
+      "semantic_review": {
+        "status": "not_applicable_fixed_retrieval"
+      },
+      "repeat": 1
+    },
+    {
+      "question": "敏姐下班想散散心，叫她去打球行吗？",
+      "tags": [
+        "colloquial",
+        "paraphrase"
+      ],
+      "expected": {
+        "relevant": [
+          "zhou_hobby"
+        ],
+        "excluded_persons": [
+          "chen",
+          "lin_work"
+        ]
+      },
+      "id": "colloquial-hobby",
+      "tool": "query_memory",
+      "actual_arguments": {
+        "query": "敏姐下班想散散心，叫她去打球行吗？",
+        "top_k": 5
+      },
+      "result": {
+        "ok": true,
+        "results": [
+          {
+            "type": "memory",
+            "id": "483f057e1d724b63",
+            "text": "周敏说下班后喜欢打羽毛球，膝盖不舒服时就只散步。",
+            "ts": 1791680400000,
+            "kind": "semantic",
+            "person": "周敏",
+            "source": {
+              "type": "memory",
+              "entity_id": "483f057e1d724b63",
+              "person": {
+                "id": "a3f6504ba1014266",
+                "display_name": "周敏"
+              },
+              "text": "周敏说下班后喜欢打羽毛球，膝盖不舒服时就只散步。",
+              "date": 1791680400000,
+              "temporal_status": "historical_background",
+              "revision": 0,
+              "ts": 1791680400000,
+              "kind": "semantic",
+              "evidence": {
+                "id": "0df12d51494c4322",
+                "kind": "text",
+                "excerpt": "周敏说下班后喜欢打羽毛球，膝盖不舒服时就只散步。",
+                "source_ref": "eval-v08:zhou_hobby",
+                "blob_hash": null,
+                "created_at": 1792373763959
+              },
+              "captured_at": 1792373763962,
+              "origin_source": {
+                "id": "0df12d51494c4322",
+                "kind": "text",
+                "excerpt": "周敏说下班后喜欢打羽毛球，膝盖不舒服时就只散步。",
+                "source_ref": "eval-v08:zhou_hobby",
+                "blob_hash": null,
+                "created_at": 1792373763959
+              }
+            },
+            "score": 0.093,
+            "match_type": "text_partial",
+            "when": "2026-10-11 09:00"
+          }
+        ],
+        "scope": "all",
+        "scope_inferred": true,
+        "scoped_person": {
+          "id": "a3f6504ba1014266",
+          "display_name": "周敏"
+        },
+        "scoped_person_ids": [
+          "a3f6504ba1014266"
+        ]
+      },
+      "ranked_records": [
+        "zhou_hobby"
+      ],
+      "metrics": {
+        "recall_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "deterministic_checks": [
+        {
+          "name": "tool_completed",
+          "passed": true
+        },
+        {
+          "name": "excluded_records_absent",
+          "passed": true
+        },
+        {
+          "name": "source_snapshot:0",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "person_isolation:0",
+          "passed": true
+        }
+      ],
+      "semantic_review": {
+        "status": "not_applicable_fixed_retrieval"
+      },
+      "repeat": 1
+    },
+    {
+      "question": "老陈有什么不吃的？",
+      "tags": [
+        "colloquial",
+        "negation"
+      ],
+      "expected": {
+        "relevant": [
+          "chen_food",
+          "chen_lunch"
+        ]
+      },
+      "id": "negative-food-question",
+      "tool": "query_memory",
+      "actual_arguments": {
+        "query": "老陈有什么不吃的？",
+        "top_k": 5
+      },
+      "result": {
+        "ok": true,
+        "results": [
+          {
+            "type": "memory",
+            "id": "d8bcd14779214633",
+            "text": "陈言吃饭不吃香菜，可以选清淡的粤菜。",
+            "ts": 1791421200000,
+            "kind": "semantic",
+            "person": "陈言",
+            "source": {
+              "type": "memory",
+              "entity_id": "d8bcd14779214633",
+              "person": {
+                "id": "ad345f0e9aea4560",
+                "display_name": "陈言"
+              },
+              "text": "陈言吃饭不吃香菜，可以选清淡的粤菜。",
+              "date": 1791421200000,
+              "temporal_status": "historical_background",
+              "revision": 0,
+              "ts": 1791421200000,
+              "kind": "semantic",
+              "evidence": {
+                "id": "11e5bd8d626047a1",
+                "kind": "text",
+                "excerpt": "陈言吃饭不吃香菜，可以选清淡的粤菜。",
+                "source_ref": "eval-v08:chen_food",
+                "blob_hash": null,
+                "created_at": 1792373764622
+              },
+              "captured_at": 1792373764625,
+              "origin_source": {
+                "id": "11e5bd8d626047a1",
+                "kind": "text",
+                "excerpt": "陈言吃饭不吃香菜，可以选清淡的粤菜。",
+                "source_ref": "eval-v08:chen_food",
+                "blob_hash": null,
+                "created_at": 1792373764622
+              }
+            },
+            "score": 0.3631,
+            "match_type": "fts_exact",
+            "when": "2026-10-08 09:00"
+          }
+        ],
+        "scope": "all",
+        "scope_inferred": true,
+        "scoped_person": {
+          "id": "ad345f0e9aea4560",
+          "display_name": "陈言"
+        },
+        "scoped_person_ids": [
+          "ad345f0e9aea4560"
+        ]
+      },
+      "ranked_records": [
+        "chen_food"
+      ],
+      "metrics": {
+        "recall_at_1": 0.5,
+        "recall_at_3": 0.5,
+        "recall_at_5": 0.5,
+        "mrr_at_5": 1.0
+      },
+      "deterministic_checks": [
+        {
+          "name": "tool_completed",
+          "passed": true
+        },
+        {
+          "name": "excluded_records_absent",
+          "passed": true
+        },
+        {
+          "name": "source_snapshot:0",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "person_isolation:0",
+          "passed": true
+        }
+      ],
+      "semantic_review": {
+        "status": "not_applicable_fixed_retrieval"
+      },
+      "repeat": 1
+    },
+    {
+      "question": "林舟怎么联系比较合适？",
+      "tags": [
+        "namesake",
+        "negative"
+      ],
+      "expected": {
+        "relevant": [],
+        "ambiguity": [
+          "lin_work",
+          "lin_school"
+        ]
+      },
+      "id": "namesake-needs-choice",
+      "tool": "query_memory",
+      "actual_arguments": {
+        "query": "林舟怎么联系比较合适？",
+        "top_k": 5
+      },
+      "result": {
+        "ok": false,
+        "needs_confirmation": true,
+        "error": "「林舟」对应多个人，请先选择人物",
+        "candidates": [
+          {
+            "person_id": "6fc864f46f4645e7",
+            "display_name": "林舟"
+          },
+          {
+            "person_id": "20aeaedf2cf24adc",
+            "display_name": "林舟"
+          }
+        ]
+      },
+      "ranked_records": [],
+      "metrics": {
+        "recall_at_1": null,
+        "recall_at_3": null,
+        "recall_at_5": null,
+        "mrr_at_5": null
+      },
+      "deterministic_checks": [
+        {
+          "name": "exact_ambiguity_candidates",
+          "passed": true
+        },
+        {
+          "name": "excluded_records_absent",
+          "passed": true
+        }
+      ],
+      "semantic_review": {
+        "status": "not_applicable_fixed_retrieval"
+      },
+      "repeat": 1
+    },
+    {
+      "question": "阿舟希望我怎么联系他？",
+      "tags": [
+        "nickname",
+        "namesake"
+      ],
+      "expected": {
+        "relevant": [
+          "lin_preference"
+        ],
+        "excluded_persons": [
+          "lin_school",
+          "zhou"
+        ]
+      },
+      "id": "unique-nickname-contact",
+      "tool": "query_memory",
+      "actual_arguments": {
+        "query": "阿舟希望我怎么联系他？",
+        "top_k": 5
+      },
+      "result": {
+        "ok": true,
+        "results": [
+          {
+            "type": "memory",
+            "id": "ebbd998c70a94627",
+            "text": "林舟说急事先电话联系，平时别发长邮件。",
+            "ts": 1791507600000,
+            "kind": "semantic",
+            "person": "林舟",
+            "source": {
+              "type": "memory",
+              "entity_id": "ebbd998c70a94627",
+              "person": {
+                "id": "d16964b65c094be2",
+                "display_name": "林舟"
+              },
+              "text": "林舟说急事先电话联系，平时别发长邮件。",
+              "date": 1791507600000,
+              "temporal_status": "historical_background",
+              "revision": 0,
+              "ts": 1791507600000,
+              "kind": "semantic",
+              "evidence": {
+                "id": "a19a1b48985943cb",
+                "kind": "text",
+                "excerpt": "林舟说急事先电话联系，平时别发长邮件。",
+                "source_ref": "eval-v08:lin_preference",
+                "blob_hash": null,
+                "created_at": 1792373765964
+              },
+              "captured_at": 1792373765966,
+              "origin_source": {
+                "id": "a19a1b48985943cb",
+                "kind": "text",
+                "excerpt": "林舟说急事先电话联系，平时别发长邮件。",
+                "source_ref": "eval-v08:lin_preference",
+                "blob_hash": null,
+                "created_at": 1792373765964
+              }
+            },
+            "score": 0.0915,
+            "match_type": "text_partial",
+            "when": "2026-10-09 09:00"
+          }
+        ],
+        "scope": "all",
+        "scope_inferred": true,
+        "scoped_person": {
+          "id": "d16964b65c094be2",
+          "display_name": "林舟"
+        },
+        "scoped_person_ids": [
+          "d16964b65c094be2"
+        ]
+      },
+      "ranked_records": [
+        "lin_preference"
+      ],
+      "metrics": {
+        "recall_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "deterministic_checks": [
+        {
+          "name": "tool_completed",
+          "passed": true
+        },
+        {
+          "name": "excluded_records_absent",
+          "passed": true
+        },
+        {
+          "name": "source_snapshot:0",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "person_isolation:0",
+          "passed": true
+        }
+      ],
+      "semantic_review": {
+        "status": "not_applicable_fixed_retrieval"
+      },
+      "repeat": 1
+    },
+    {
+      "question": "星河科技那个林舟怎么联系？",
+      "tags": [
+        "namesake",
+        "background"
+      ],
+      "expected": {
+        "relevant": [
+          "lin_preference"
+        ],
+        "excluded_persons": [
+          "lin_school"
+        ]
+      },
+      "id": "namesake-background-clue",
+      "tool": "query_memory",
+      "actual_arguments": {
+        "query": "星河科技那个林舟怎么联系？",
+        "top_k": 5
+      },
+      "result": {
+        "ok": false,
+        "needs_confirmation": true,
+        "error": "「林舟」对应多个人，请先选择人物",
+        "candidates": [
+          {
+            "person_id": "3049285883724eea",
+            "display_name": "林舟"
+          },
+          {
+            "person_id": "a2b9f05c335b4f14",
+            "display_name": "林舟"
+          }
+        ]
+      },
+      "ranked_records": [],
+      "metrics": {
+        "recall_at_1": 0.0,
+        "recall_at_3": 0.0,
+        "recall_at_5": 0.0,
+        "mrr_at_5": 0.0
+      },
+      "deterministic_checks": [
+        {
+          "name": "tool_completed",
+          "passed": false
+        },
+        {
+          "name": "excluded_records_absent",
+          "passed": true
+        }
+      ],
+      "semantic_review": {
+        "status": "not_applicable_fixed_retrieval"
+      },
+      "repeat": 1
+    },
+    {
+      "question": "敏姐的血型是什么？",
+      "tags": [
+        "no_answer",
+        "negative"
+      ],
+      "expected": {
+        "relevant": [],
+        "empty": true
+      },
+      "id": "missing-blood-type",
+      "tool": "query_memory",
+      "actual_arguments": {
+        "query": "敏姐的血型是什么？",
+        "top_k": 5
+      },
+      "result": {
+        "ok": true,
+        "results": [],
+        "scope": "all",
+        "scope_inferred": true,
+        "scoped_person": {
+          "id": "05625e8172a74096",
+          "display_name": "周敏"
+        },
+        "scoped_person_ids": [
+          "05625e8172a74096"
+        ]
+      },
+      "ranked_records": [],
+      "metrics": {
+        "recall_at_1": null,
+        "recall_at_3": null,
+        "recall_at_5": null,
+        "mrr_at_5": null
+      },
+      "deterministic_checks": [
+        {
+          "name": "tool_completed",
+          "passed": true
+        },
+        {
+          "name": "empty_result",
+          "passed": true
+        },
+        {
+          "name": "excluded_records_absent",
+          "passed": true
+        }
+      ],
+      "semantic_review": {
+        "status": "not_applicable_fixed_retrieval"
+      },
+      "repeat": 1
+    },
+    {
+      "question": "我自己见客户前都准备什么？",
+      "tags": [
+        "personal",
+        "scope"
+      ],
+      "expected": {
+        "relevant": [
+          "personal_checklist"
+        ],
+        "personal_only": true
+      },
+      "id": "personal-checklist",
+      "tool": "query_memory",
+      "actual_arguments": {
+        "scope": "personal",
+        "query": "我自己见客户前都准备什么？",
+        "top_k": 5
+      },
+      "result": {
+        "ok": true,
+        "results": [
+          {
+            "type": "memory",
+            "id": "1b761e18601b4142",
+            "text": "我见客户前会准备项目清单和纸质名片，先核对会议地址。",
+            "ts": 1791853200000,
+            "kind": "semantic",
+            "person": "",
+            "source": {
+              "type": "memory",
+              "entity_id": "1b761e18601b4142",
+              "person": null,
+              "text": "我见客户前会准备项目清单和纸质名片，先核对会议地址。",
+              "date": 1791853200000,
+              "temporal_status": "historical_background",
+              "revision": 0,
+              "ts": 1791853200000,
+              "kind": "semantic",
+              "evidence": {
+                "id": "b13593bb12c94b4f",
+                "kind": "text",
+                "excerpt": "我见客户前会准备项目清单和纸质名片，先核对会议地址。",
+                "source_ref": "eval-v08:personal_checklist",
+                "blob_hash": null,
+                "created_at": 1792373767895
+              },
+              "captured_at": 1792373767898,
+              "origin_source": {
+                "id": "b13593bb12c94b4f",
+                "kind": "text",
+                "excerpt": "我见客户前会准备项目清单和纸质名片，先核对会议地址。",
+                "source_ref": "eval-v08:personal_checklist",
+                "blob_hash": null,
+                "created_at": 1792373767895
+              }
+            },
+            "score": 0.0945,
+            "match_type": "text_partial",
+            "when": "2026-10-13 09:00"
+          }
+        ],
+        "scope": "personal",
+        "scope_inferred": false,
+        "scoped_person": null,
+        "scoped_person_ids": null
+      },
+      "ranked_records": [
+        "personal_checklist"
+      ],
+      "metrics": {
+        "recall_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "deterministic_checks": [
+        {
+          "name": "tool_completed",
+          "passed": true
+        },
+        {
+          "name": "excluded_records_absent",
+          "passed": true
+        },
+        {
+          "name": "source_snapshot:0",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "person_isolation:0",
+          "passed": true
+        },
+        {
+          "name": "personal_scope:0",
+          "passed": true
+        }
+      ],
+      "semantic_review": {
+        "status": "not_applicable_fixed_retrieval"
+      },
+      "repeat": 1
+    },
+    {
+      "question": "阿舟的沟通偏好是什么？",
+      "tags": [
+        "lifecycle",
+        "withdraw",
+        "negative"
+      ],
+      "expected": {
+        "relevant": [],
+        "empty": true,
+        "excluded": [
+          "lin_preference"
+        ]
+      },
+      "id": "withdrawn-preference",
+      "tool": "query_memory",
+      "actual_arguments": {
+        "query": "阿舟的沟通偏好是什么？",
+        "top_k": 5
+      },
+      "result": {
+        "ok": true,
+        "results": [],
+        "scope": "all",
+        "scope_inferred": true,
+        "scoped_person": {
+          "id": "62cfa16c69814086",
+          "display_name": "林舟"
+        },
+        "scoped_person_ids": [
+          "62cfa16c69814086"
+        ]
+      },
+      "ranked_records": [],
+      "metrics": {
+        "recall_at_1": null,
+        "recall_at_3": null,
+        "recall_at_5": null,
+        "mrr_at_5": null
+      },
+      "deterministic_checks": [
+        {
+          "name": "tool_completed",
+          "passed": true
+        },
+        {
+          "name": "empty_result",
+          "passed": true
+        },
+        {
+          "name": "excluded_records_absent",
+          "passed": true
+        }
+      ],
+      "semantic_review": {
+        "status": "not_applicable_fixed_retrieval"
+      },
+      "repeat": 1
+    },
+    {
+      "question": "阿舟的沟通偏好是什么？",
+      "tags": [
+        "lifecycle",
+        "restore"
+      ],
+      "expected": {
+        "relevant": [
+          "lin_preference"
+        ],
+        "excluded_persons": [
+          "lin_school"
+        ]
+      },
+      "id": "restored-preference",
+      "tool": "query_memory",
+      "actual_arguments": {
+        "query": "阿舟的沟通偏好是什么？",
+        "top_k": 5
+      },
+      "result": {
+        "ok": true,
+        "results": [],
+        "scope": "all",
+        "scope_inferred": true,
+        "scoped_person": {
+          "id": "b240fc0b0eeb44a2",
+          "display_name": "林舟"
+        },
+        "scoped_person_ids": [
+          "b240fc0b0eeb44a2"
+        ]
+      },
+      "ranked_records": [],
+      "metrics": {
+        "recall_at_1": 0.0,
+        "recall_at_3": 0.0,
+        "recall_at_5": 0.0,
+        "mrr_at_5": 0.0
+      },
+      "deterministic_checks": [
+        {
+          "name": "tool_completed",
+          "passed": true
+        },
+        {
+          "name": "excluded_records_absent",
+          "passed": true
+        }
+      ],
+      "semantic_review": {
+        "status": "not_applicable_fixed_retrieval"
+      },
+      "repeat": 1
+    },
+    {
+      "question": "阿舟现在希望怎么沟通？",
+      "tags": [
+        "lifecycle",
+        "edit"
+      ],
+      "expected": {
+        "relevant": [
+          "lin_preference"
+        ],
+        "snapshot_contains": [
+          "统一发邮件"
+        ]
+      },
+      "id": "edited-preference",
+      "tool": "query_memory",
+      "actual_arguments": {
+        "query": "阿舟现在希望怎么沟通？",
+        "top_k": 5
+      },
+      "result": {
+        "ok": true,
+        "results": [
+          {
+            "type": "memory",
+            "id": "a0d3033670a443ca",
+            "text": "林舟纠正之前说法：工作沟通统一发邮件，请不要直接打电话。",
+            "ts": 1791507600000,
+            "kind": "semantic",
+            "person": "林舟",
+            "source": {
+              "type": "memory",
+              "entity_id": "a0d3033670a443ca",
+              "person": {
+                "id": "8759f81f4f8b4072",
+                "display_name": "林舟"
+              },
+              "text": "林舟纠正之前说法：工作沟通统一发邮件，请不要直接打电话。",
+              "date": 1791507600000,
+              "temporal_status": "historical_background",
+              "revision": 1,
+              "ts": 1791507600000,
+              "kind": "semantic",
+              "evidence": {
+                "id": "220a7aa2c51d452e",
+                "kind": "text",
+                "excerpt": "{\"correction_id\":\"33f71c20976a464d\",\"edited_by_user\":true,\"memory_id\":\"a0d3033670a443ca\",\"origin_evidence_id\":\"096b2e515cce4685\",\"previous_evidence_id\":\"096b2e515cce4685\",\"reason\":\"\",\"user_correction\":{\"person_id\":\"8759f81f4f8b4072\",\"text\":\"林舟纠正之前说法：工作沟通统一发邮件，请不要直接打电话。\",\"valid_from\":\"2026-10-09\"}}",
+                "source_ref": "memory-correction:33f71c20976a464d",
+                "blob_hash": null,
+                "created_at": 1792373769851
+              },
+              "captured_at": 1792373769852,
+              "origin_source": {
+                "id": "096b2e515cce4685",
+                "kind": "text",
+                "excerpt": "林舟说急事先电话联系，平时别发长邮件。",
+                "source_ref": "eval-v08:lin_preference",
+                "blob_hash": null,
+                "created_at": 1792373769848
+              }
+            },
+            "score": 0.0915,
+            "match_type": "text_partial",
+            "when": "2026-10-09 09:00"
+          }
+        ],
+        "scope": "all",
+        "scope_inferred": true,
+        "scoped_person": {
+          "id": "8759f81f4f8b4072",
+          "display_name": "林舟"
+        },
+        "scoped_person_ids": [
+          "8759f81f4f8b4072"
+        ]
+      },
+      "ranked_records": [
+        "lin_preference"
+      ],
+      "metrics": {
+        "recall_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "deterministic_checks": [
+        {
+          "name": "tool_completed",
+          "passed": true
+        },
+        {
+          "name": "excluded_records_absent",
+          "passed": true
+        },
+        {
+          "name": "source_snapshot:0",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "person_isolation:0",
+          "passed": true
+        },
+        {
+          "name": "snapshot_content:统一发邮件",
+          "passed": true
+        }
+      ],
+      "semantic_review": {
+        "status": "not_applicable_fixed_retrieval"
+      },
+      "repeat": 1
+    },
+    {
+      "question": "阿舟怎么联系？",
+      "tags": [
+        "lifecycle",
+        "move",
+        "negative"
+      ],
+      "expected": {
+        "relevant": [],
+        "empty": true,
+        "excluded": [
+          "lin_preference"
+        ]
+      },
+      "id": "moved-away-from-original-owner",
+      "tool": "query_memory",
+      "actual_arguments": {
+        "query": "阿舟怎么联系？",
+        "top_k": 5
+      },
+      "result": {
+        "ok": true,
+        "results": [],
+        "scope": "all",
+        "scope_inferred": true,
+        "scoped_person": {
+          "id": "8d0fafa66caa4507",
+          "display_name": "林舟"
+        },
+        "scoped_person_ids": [
+          "8d0fafa66caa4507"
+        ]
+      },
+      "ranked_records": [],
+      "metrics": {
+        "recall_at_1": null,
+        "recall_at_3": null,
+        "recall_at_5": null,
+        "mrr_at_5": null
+      },
+      "deterministic_checks": [
+        {
+          "name": "tool_completed",
+          "passed": true
+        },
+        {
+          "name": "empty_result",
+          "passed": true
+        },
+        {
+          "name": "excluded_records_absent",
+          "passed": true
+        }
+      ],
+      "semantic_review": {
+        "status": "not_applicable_fixed_retrieval"
+      },
+      "repeat": 1
+    },
+    {
+      "question": "老何怎么联系？",
+      "tags": [
+        "lifecycle",
+        "archive",
+        "negative"
+      ],
+      "expected": {
+        "relevant": [],
+        "empty": true,
+        "error": true,
+        "excluded": [
+          "he_contact"
+        ]
+      },
+      "id": "archived-owner",
+      "tool": "query_memory",
+      "actual_arguments": {
+        "person": "老何",
+        "query": "老何怎么联系？",
+        "top_k": 5
+      },
+      "result": {
+        "ok": false,
+        "error": "没有找到「老何」的档案"
+      },
+      "ranked_records": [],
+      "metrics": {
+        "recall_at_1": null,
+        "recall_at_3": null,
+        "recall_at_5": null,
+        "mrr_at_5": null
+      },
+      "deterministic_checks": [
+        {
+          "name": "unavailable_person_rejected",
+          "passed": true
+        },
+        {
+          "name": "empty_result",
+          "passed": true
+        },
+        {
+          "name": "excluded_records_absent",
+          "passed": true
+        }
+      ],
+      "semantic_review": {
+        "status": "not_applicable_fixed_retrieval"
+      },
+      "repeat": 1
+    },
+    {
+      "question": "老陈现在和以前分别住哪里？",
+      "tags": [
+        "temporal",
+        "source",
+        "scope"
+      ],
+      "expected": {
+        "fields": [
+          {
+            "record": "chen_current_city",
+            "temporal_status": "current_field",
+            "text": "上海"
+          },
+          {
+            "record": "chen_old_city",
+            "temporal_status": "historical_field",
+            "text": "杭州"
+          }
+        ]
+      },
+      "id": "profile-current-and-history",
+      "tool": "get_person",
+      "actual_arguments": {
+        "name": "老陈"
+      },
+      "result": {
+        "ok": true,
+        "card": "人物：陈言（别名：CY、老陈）\n字段：city=上海；company=星桥软件\n联系[2026-10-15]：与陈言在上海午餐，他再次说不要香菜，讨论星桥软件的秋季项目。",
+        "person_id": "9249440ddeb34e31",
+        "importance": 0.5527447031176009,
+        "status": "active",
+        "sources": [
+          {
+            "type": "field",
+            "entity_id": "[\"9249440ddeb34e31\",\"city\",1756684800000]",
+            "person": {
+              "id": "9249440ddeb34e31",
+              "display_name": "陈言"
+            },
+            "text": "上海",
+            "field": "city",
+            "date": 1756684800000,
+            "valid_from": 1756684800000,
+            "valid_to": null,
+            "recorded_at": 1792373771484,
+            "temporal_status": "current_field",
+            "evidence": {
+              "id": "6cfb264e62844f6d",
+              "kind": "text",
+              "excerpt": "上海",
+              "source_ref": "eval-v08:chen_current_city",
+              "blob_hash": null,
+              "created_at": 1792373771484
+            },
+            "captured_at": 1792373771757,
+            "origin_source": {
+              "id": "6cfb264e62844f6d",
+              "kind": "text",
+              "excerpt": "上海",
+              "source_ref": "eval-v08:chen_current_city",
+              "blob_hash": null,
+              "created_at": 1792373771484
+            }
+          },
+          {
+            "type": "field",
+            "entity_id": "[\"9249440ddeb34e31\",\"company\",1735689600000]",
+            "person": {
+              "id": "9249440ddeb34e31",
+              "display_name": "陈言"
+            },
+            "text": "星桥软件",
+            "field": "company",
+            "date": 1735689600000,
+            "valid_from": 1735689600000,
+            "valid_to": null,
+            "recorded_at": 1792373771484,
+            "temporal_status": "current_field",
+            "evidence": {
+              "id": "47f0195165244eac",
+              "kind": "text",
+              "excerpt": "星桥软件",
+              "source_ref": "eval-v08:chen_company",
+              "blob_hash": null,
+              "created_at": 1792373771484
+            },
+            "captured_at": 1792373771757,
+            "origin_source": {
+              "id": "47f0195165244eac",
+              "kind": "text",
+              "excerpt": "星桥软件",
+              "source_ref": "eval-v08:chen_company",
+              "blob_hash": null,
+              "created_at": 1792373771484
+            }
+          },
+          {
+            "type": "field",
+            "entity_id": "[\"9249440ddeb34e31\",\"city\",1735689600000]",
+            "person": {
+              "id": "9249440ddeb34e31",
+              "display_name": "陈言"
+            },
+            "text": "杭州",
+            "field": "city",
+            "date": 1735689600000,
+            "valid_from": 1735689600000,
+            "valid_to": 1756684800000,
+            "recorded_at": 1792373771484,
+            "temporal_status": "historical_field",
+            "evidence": {
+              "id": "e373b67706af4d9a",
+              "kind": "text",
+              "excerpt": "杭州",
+              "source_ref": "eval-v08:chen_old_city",
+              "blob_hash": null,
+              "created_at": 1792373771484
+            },
+            "captured_at": 1792373771757,
+            "origin_source": {
+              "id": "e373b67706af4d9a",
+              "kind": "text",
+              "excerpt": "杭州",
+              "source_ref": "eval-v08:chen_old_city",
+              "blob_hash": null,
+              "created_at": 1792373771484
+            }
+          },
+          {
+            "type": "memory",
+            "entity_id": "d6d6c6a09b71497c",
+            "person": {
+              "id": "9249440ddeb34e31",
+              "display_name": "陈言"
+            },
+            "text": "陈言吃饭不吃香菜，可以选清淡的粤菜。",
+            "date": 1791421200000,
+            "temporal_status": "historical_background",
+            "revision": 0,
+            "ts": 1791421200000,
+            "kind": "semantic",
+            "evidence": {
+              "id": "66bacd35a9704d08",
+              "kind": "text",
+              "excerpt": "陈言吃饭不吃香菜，可以选清淡的粤菜。",
+              "source_ref": "eval-v08:chen_food",
+              "blob_hash": null,
+              "created_at": 1792373771754
+            },
+            "captured_at": 1792373771757,
+            "origin_source": {
+              "id": "66bacd35a9704d08",
+              "kind": "text",
+              "excerpt": "陈言吃饭不吃香菜，可以选清淡的粤菜。",
+              "source_ref": "eval-v08:chen_food",
+              "blob_hash": null,
+              "created_at": 1792373771754
+            }
+          },
+          {
+            "type": "memory",
+            "entity_id": "6c1a0c4d9d6146d9",
+            "person": {
+              "id": "9249440ddeb34e31",
+              "display_name": "陈言"
+            },
+            "text": "陈言说白天会议多，急事发短信，普通事情用邮件，别直接打电话。",
+            "date": 1791334800000,
+            "temporal_status": "historical_background",
+            "revision": 0,
+            "ts": 1791334800000,
+            "kind": "semantic",
+            "evidence": {
+              "id": "cdc68af4cc574ba9",
+              "kind": "text",
+              "excerpt": "陈言说白天会议多，急事发短信，普通事情用邮件，别直接打电话。",
+              "source_ref": "eval-v08:chen_contact",
+              "blob_hash": null,
+              "created_at": 1792373771484
+            },
+            "captured_at": 1792373771757,
+            "origin_source": {
+              "id": "cdc68af4cc574ba9",
+              "kind": "text",
+              "excerpt": "陈言说白天会议多，急事发短信，普通事情用邮件，别直接打电话。",
+              "source_ref": "eval-v08:chen_contact",
+              "blob_hash": null,
+              "created_at": 1792373771484
+            }
+          },
+          {
+            "type": "memory",
+            "entity_id": "18d5f60359884989",
+            "person": {
+              "id": "9249440ddeb34e31",
+              "display_name": "陈言"
+            },
+            "text": "陈言在2025年10月说每周三去上海开会，出发前先发议程。该条没有说明居住城市。",
+            "date": 1760058000000,
+            "temporal_status": "historical_background",
+            "revision": 0,
+            "ts": 1760058000000,
+            "kind": "semantic",
+            "evidence": {
+              "id": "29411979d3454ba7",
+              "kind": "text",
+              "excerpt": "陈言在2025年10月说每周三去上海开会，出发前先发议程。该条没有说明居住城市。",
+              "source_ref": "eval-v08:chen_meeting",
+              "blob_hash": null,
+              "created_at": 1792373771754
+            },
+            "captured_at": 1792373771757,
+            "origin_source": {
+              "id": "29411979d3454ba7",
+              "kind": "text",
+              "excerpt": "陈言在2025年10月说每周三去上海开会，出发前先发议程。该条没有说明居住城市。",
+              "source_ref": "eval-v08:chen_meeting",
+              "blob_hash": null,
+              "created_at": 1792373771754
+            }
+          }
+        ]
+      },
+      "ranked_records": [],
+      "metrics": {},
+      "deterministic_checks": [
+        {
+          "name": "tool_completed",
+          "passed": true
+        },
+        {
+          "name": "excluded_records_absent",
+          "passed": true
+        },
+        {
+          "name": "source_snapshot:0",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "person_isolation:0",
+          "passed": true
+        },
+        {
+          "name": "source_snapshot:1",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "person_isolation:1",
+          "passed": true
+        },
+        {
+          "name": "source_snapshot:2",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "person_isolation:2",
+          "passed": true
+        },
+        {
+          "name": "source_snapshot:3",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "person_isolation:3",
+          "passed": true
+        },
+        {
+          "name": "source_snapshot:4",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "person_isolation:4",
+          "passed": true
+        },
+        {
+          "name": "source_snapshot:5",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "person_isolation:5",
+          "passed": true
+        },
+        {
+          "name": "field_temporal_state:chen_current_city",
+          "passed": true
+        },
+        {
+          "name": "field_temporal_state:chen_old_city",
+          "passed": true
+        }
+      ],
+      "semantic_review": {
+        "status": "not_applicable_fixed_retrieval"
+      },
+      "repeat": 1
+    },
+    {
+      "question": "急事发短信还是直接打电话？",
+      "tags": [
+        "scope",
+        "nickname"
+      ],
+      "expected": {
+        "relevant": [
+          "chen_contact"
+        ],
+        "excluded_persons": [
+          "zhou",
+          "lin_school",
+          "he"
+        ]
+      },
+      "id": "nickname-scope-with-no-query-rewrite",
+      "tool": "query_memory",
+      "actual_arguments": {
+        "person": "老陈",
+        "query": "急事发短信还是直接打电话？",
+        "top_k": 5
+      },
+      "result": {
+        "ok": true,
+        "results": [
+          {
+            "type": "memory",
+            "id": "44805d068ec74956",
+            "text": "陈言说白天会议多，急事发短信，普通事情用邮件，别直接打电话。",
+            "ts": 1791334800000,
+            "kind": "semantic",
+            "person": "陈言",
+            "source": {
+              "type": "memory",
+              "entity_id": "44805d068ec74956",
+              "person": {
+                "id": "656d1d0d50ee4001",
+                "display_name": "陈言"
+              },
+              "text": "陈言说白天会议多，急事发短信，普通事情用邮件，别直接打电话。",
+              "date": 1791334800000,
+              "temporal_status": "historical_background",
+              "revision": 0,
+              "ts": 1791334800000,
+              "kind": "semantic",
+              "evidence": {
+                "id": "d412732c6deb4573",
+                "kind": "text",
+                "excerpt": "陈言说白天会议多，急事发短信，普通事情用邮件，别直接打电话。",
+                "source_ref": "eval-v08:chen_contact",
+                "blob_hash": null,
+                "created_at": 1792373772147
+              },
+              "captured_at": 1792373772432,
+              "origin_source": {
+                "id": "d412732c6deb4573",
+                "kind": "text",
+                "excerpt": "陈言说白天会议多，急事发短信，普通事情用邮件，别直接打电话。",
+                "source_ref": "eval-v08:chen_contact",
+                "blob_hash": null,
+                "created_at": 1792373772147
+              }
+            },
+            "score": 0.1441,
+            "match_type": "text_partial",
+            "when": "2026-10-07 09:00"
+          }
+        ],
+        "scope": "all",
+        "scope_inferred": false,
+        "scoped_person": {
+          "id": "656d1d0d50ee4001",
+          "display_name": "陈言"
+        },
+        "scoped_person_ids": [
+          "656d1d0d50ee4001"
+        ]
+      },
+      "ranked_records": [
+        "chen_contact"
+      ],
+      "metrics": {
+        "recall_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "deterministic_checks": [
+        {
+          "name": "tool_completed",
+          "passed": true
+        },
+        {
+          "name": "excluded_records_absent",
+          "passed": true
+        },
+        {
+          "name": "source_snapshot:0",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "person_isolation:0",
+          "passed": true
+        }
+      ],
+      "semantic_review": {
+        "status": "not_applicable_fixed_retrieval"
+      },
+      "repeat": 1
+    }
+  ],
+  "summary": {
+    "scenarios": 16,
+    "units": 16,
+    "runtime_errors": 0,
+    "scenario_errors": 0,
+    "failed_turns": null,
+    "deterministic_checks": {
+      "total": 70,
+      "passed": 69,
+      "failed": 1
+    },
+    "limited_fact_checks": {
+      "total": 0,
+      "passed": 0,
+      "failed": 0,
+      "meaning": "Limited string rules, not semantic answer accuracy"
+    },
+    "semantic_review": {
+      "status": "not_applicable",
+      "pending_turns": 0,
+      "reviewed_turns": 0,
+      "score": null
+    },
+    "retrieval": {
+      "positive_queries": 10,
+      "nonranking_cases": 6,
+      "recall_at_1": 0.7,
+      "recall_at_3": 0.7,
+      "recall_at_5": 0.7,
+      "mrr_at_5": 0.8
+    }
+  }
+}

@@ -13,5 +13,6 @@ pypdf
 python-docx
 openpyxl
 python-pptx
+markdown-it-py[linkify]
 pillow
 pytest

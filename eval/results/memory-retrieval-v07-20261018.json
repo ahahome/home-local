@@ -1,0 +1,426 @@
+{
+  "evaluation": "memory-retrieval-lifecycle",
+  "fixture_version": 1,
+  "created_at": "2026-10-18T04:32:04.228817+00:00",
+  "channel": "real FTS5, embeddings disabled, isolated SQLite database per case, network forbidden",
+  "limitations": [
+    "Synthetic regression fixtures, not an unseen semantic benchmark",
+    "Does not measure LLM answer correctness or embedding quality"
+  ],
+  "summary": {
+    "cases": 18,
+    "passed": 18,
+    "failed": 0,
+    "default_top_k": 5,
+    "pass_rate": 1.0,
+    "positive_retrieval_cases": 10,
+    "recall_at_k": 1.0,
+    "mrr": 1.0,
+    "source_snapshot_accuracy": 1.0
+  },
+  "details": [
+    {
+      "id": "initial-phone-preference",
+      "label": "初始电话偏好及来源",
+      "passed": true,
+      "failures": [],
+      "ranked_records": [
+        "preference"
+      ],
+      "top_k": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "source_snapshots": 1,
+      "valid_source_snapshots": 1,
+      "expected": {
+        "ids": [
+          "preference"
+        ],
+        "only": true,
+        "contains": [
+          "电话"
+        ],
+        "absent": [
+          "短信",
+          "邮件"
+        ]
+      }
+    },
+    {
+      "id": "edited-email-preference",
+      "label": "编辑后召回邮件且不残留电话",
+      "passed": true,
+      "failures": [],
+      "ranked_records": [
+        "preference"
+      ],
+      "top_k": 5,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "source_snapshots": 1,
+      "valid_source_snapshots": 1,
+      "expected": {
+        "ids": [
+          "preference"
+        ],
+        "only": true,
+        "contains": [
+          "邮件"
+        ],
+        "absent": [
+          "电话",
+          "短信"
+        ]
+      }
+    },
+    {
+      "id": "withdrawn-preference-excluded",
+      "label": "撤销后不进入当前召回",
+      "passed": true,
+      "failures": [],
+      "ranked_records": [],
+      "top_k": 5,
+      "recall_at_k": null,
+      "reciprocal_rank": null,
+      "source_snapshots": 0,
+      "valid_source_snapshots": 0,
+      "expected": {
+        "ids": [],
+        "only": true
+      }
+    },
+    {
+      "id": "restored-preference-retains-edit",
+      "label": "恢复后保留纠错结果",
+      "passed": true,
+      "failures": [],
+      "ranked_records": [
+        "preference"
+      ],
+      "top_k": 5,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "source_snapshots": 1,
+      "valid_source_snapshots": 1,
+      "expected": {
+        "ids": [
+          "preference"
+        ],
+        "only": true,
+        "contains": [
+          "邮件"
+        ],
+        "absent": [
+          "电话"
+        ]
+      }
+    },
+    {
+      "id": "namesake-explicit-id-isolation",
+      "label": "同名人物按ID隔离",
+      "passed": true,
+      "failures": [],
+      "ranked_records": [
+        "namesake"
+      ],
+      "top_k": 1,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "source_snapshots": 1,
+      "valid_source_snapshots": 1,
+      "expected": {
+        "ids": [
+          "namesake"
+        ],
+        "only": true,
+        "contains": [
+          "短信"
+        ],
+        "absent": [
+          "电话",
+          "邮件"
+        ]
+      }
+    },
+    {
+      "id": "namesake-argument-needs-confirmation",
+      "label": "同名姓名参数要求确认",
+      "passed": true,
+      "failures": [],
+      "ranked_records": [],
+      "top_k": 5,
+      "recall_at_k": null,
+      "reciprocal_rank": null,
+      "source_snapshots": 0,
+      "valid_source_snapshots": 0,
+      "expected": {
+        "needs_confirmation": [
+          "lin_a",
+          "lin_b"
+        ]
+      }
+    },
+    {
+      "id": "namesake-in-query-needs-confirmation",
+      "label": "查询中的同名人物要求确认",
+      "passed": true,
+      "failures": [],
+      "ranked_records": [],
+      "top_k": 5,
+      "recall_at_k": null,
+      "reciprocal_rank": null,
+      "source_snapshots": 0,
+      "valid_source_snapshots": 0,
+      "expected": {
+        "needs_confirmation": [
+          "lin_a",
+          "lin_b"
+        ]
+      }
+    },
+    {
+      "id": "archived-person-excluded",
+      "label": "全局召回排除归档人物",
+      "passed": true,
+      "failures": [],
+      "ranked_records": [],
+      "top_k": 5,
+      "recall_at_k": null,
+      "reciprocal_rank": null,
+      "source_snapshots": 0,
+      "valid_source_snapshots": 0,
+      "expected": {
+        "ids": [],
+        "only": true
+      }
+    },
+    {
+      "id": "restored-person-visible",
+      "label": "人物恢复后重新可见",
+      "passed": true,
+      "failures": [],
+      "ranked_records": [
+        "preference"
+      ],
+      "top_k": 5,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "source_snapshots": 1,
+      "valid_source_snapshots": 1,
+      "expected": {
+        "ids": [
+          "preference"
+        ],
+        "only": true,
+        "contains": [
+          "电话"
+        ]
+      }
+    },
+    {
+      "id": "transferred-memory-leaves-old-owner",
+      "label": "转移后原人物不再召回",
+      "passed": true,
+      "failures": [],
+      "ranked_records": [],
+      "top_k": 5,
+      "recall_at_k": null,
+      "reciprocal_rank": null,
+      "source_snapshots": 0,
+      "valid_source_snapshots": 0,
+      "expected": {
+        "ids": [],
+        "only": true
+      }
+    },
+    {
+      "id": "transferred-memory-new-owner-source",
+      "label": "转移后来源标注新人物",
+      "passed": true,
+      "failures": [],
+      "ranked_records": [
+        "preference"
+      ],
+      "top_k": 5,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "source_snapshots": 1,
+      "valid_source_snapshots": 1,
+      "expected": {
+        "ids": [
+          "preference"
+        ],
+        "only": true,
+        "contains": [
+          "电话"
+        ]
+      }
+    },
+    {
+      "id": "personal-scope-isolation",
+      "label": "个人范围不混入人物记忆",
+      "passed": true,
+      "failures": [],
+      "ranked_records": [
+        "personal"
+      ],
+      "top_k": 5,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "source_snapshots": 1,
+      "valid_source_snapshots": 1,
+      "expected": {
+        "ids": [
+          "personal"
+        ],
+        "only": true,
+        "contains": [
+          "邮件",
+          "清单"
+        ],
+        "absent": [
+          "短信",
+          "电话"
+        ]
+      }
+    },
+    {
+      "id": "transfer-to-personal-scope",
+      "label": "转为个人记忆后可按个人范围召回",
+      "passed": true,
+      "failures": [],
+      "ranked_records": [
+        "preference"
+      ],
+      "top_k": 5,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "source_snapshots": 1,
+      "valid_source_snapshots": 1,
+      "expected": {
+        "ids": [
+          "preference"
+        ],
+        "only": true,
+        "contains": [
+          "电话"
+        ]
+      }
+    },
+    {
+      "id": "city-current-versus-history",
+      "label": "当前上海与历史杭州有明确时间状态",
+      "passed": true,
+      "failures": [],
+      "ranked_records": [],
+      "top_k": null,
+      "recall_at_k": null,
+      "reciprocal_rank": null,
+      "source_snapshots": 3,
+      "valid_source_snapshots": 3,
+      "expected": {
+        "card_contains": [
+          "city=上海"
+        ],
+        "card_absent": [
+          "city=杭州"
+        ],
+        "fields": [
+          {
+            "field": "city",
+            "text": "上海",
+            "temporal_status": "current_field"
+          },
+          {
+            "field": "city",
+            "text": "杭州",
+            "temporal_status": "historical_field"
+          }
+        ],
+        "memory_sources": [
+          "preference"
+        ]
+      }
+    },
+    {
+      "id": "interaction-source-snapshot",
+      "label": "联系记录召回包含实际原文与人物",
+      "passed": true,
+      "failures": [],
+      "ranked_records": [
+        "visit"
+      ],
+      "top_k": 5,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "source_snapshots": 1,
+      "valid_source_snapshots": 1,
+      "expected": {
+        "ids": [
+          "visit"
+        ],
+        "only": true,
+        "contains": [
+          "秋季产品计划"
+        ]
+      }
+    },
+    {
+      "id": "multiple-relevant-records",
+      "label": "同一人物的活动记忆与联系原文共同召回",
+      "passed": true,
+      "failures": [],
+      "ranked_records": [
+        "visit",
+        "meeting"
+      ],
+      "top_k": 5,
+      "recall_at_k": 1.0,
+      "reciprocal_rank": 1.0,
+      "source_snapshots": 2,
+      "valid_source_snapshots": 2,
+      "expected": {
+        "ids": [
+          "meeting",
+          "visit"
+        ],
+        "only": true,
+        "contains": [
+          "产品交流会",
+          "秋季产品计划"
+        ]
+      }
+    },
+    {
+      "id": "unknown-person-no-global-fallback",
+      "label": "未知人物不退回全库召回",
+      "passed": true,
+      "failures": [],
+      "ranked_records": [],
+      "top_k": 5,
+      "recall_at_k": null,
+      "reciprocal_rank": null,
+      "source_snapshots": 0,
+      "valid_source_snapshots": 0,
+      "expected": {
+        "error": true
+      }
+    },
+    {
+      "id": "unrelated-query-no-hit",
+      "label": "无相关内容时返回空结果",
+      "passed": true,
+      "failures": [],
+      "ranked_records": [],
+      "top_k": 5,
+      "recall_at_k": null,
+      "reciprocal_rank": null,
+      "source_snapshots": 0,
+      "valid_source_snapshots": 0,
+      "expected": {
+        "ids": [],
+        "only": true
+      }
+    }
+  ]
+}

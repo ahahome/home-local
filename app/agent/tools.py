@@ -5,7 +5,9 @@
 from __future__ import annotations
 
 import json
+import re
 
+from app.agent.memory_sources import field_sources, memory_source
 from app.memory import compile_card, retrieve
 from app.money import amount_to_cents
 from app.store import repo
@@ -32,9 +34,13 @@ TOOLS = [
             "required": ["person", "field", "value"]}}},
     {"type": "function", "function": {
         "name": "query_memory",
-        "description": "跨全部记忆与互动做语义+全文检索（谁说过什么、发生过什么）。",
+        "description": "检索记忆与互动，返回带日期、来源与历史背景标记的结果。指定人物可限制范围，同名人物必须用 person_id。",
         "parameters": {"type": "object", "properties": {
-            "query": {"type": "string"}, "top_k": {"type": "integer", "default": 8}},
+            "query": {"type": "string"}, "top_k": {"type": "integer", "default": 8, "minimum": 1, "maximum": 100},
+            "person": {"type": "string", "description": "准确姓名或别名，同名时需要 person_id"},
+            "person_id": {"type": "string", "description": "已知人物 ID，限制检索该人物相关记忆与互动"},
+            "scope": {"type": "string", "enum": ["all", "personal"], "default": "all",
+                      "description": "all 为全部或指定人物，personal 仅个人记忆与未关联人物的资料，不能同时指定人物"}},
             "required": ["query"]}}},
     {"type": "function", "function": {
         "name": "create_promise",
@@ -119,6 +125,42 @@ def _resolve_person_id(conn, name: str | None, person_id: str | None = None) -> 
         return None
     from app.memory.writes import resolve_person
     return resolve_person(conn, name, person_id=person_id)
+
+
+def _query_person_hint(conn, query):
+    from app.memory.writes import AmbiguousPerson
+    rows = conn.execute('SELECT DISTINCT a.alias,p.id,p.display_name FROM person_alias a '
+                        "JOIN person p ON p.id=a.person_id WHERE p.deleted_at IS NULL AND p.status!='merged'").fetchall()
+    aliases = {row['alias'] for row in rows if len(row['alias']) >= 2}
+    matches = [(match.start(), match.end(), alias) for alias in aliases
+               for match in re.finditer(_alias_pattern(alias), query)]
+    longest = {alias for start, end, alias in matches if not any(
+        other_start <= start and other_end >= end and other_end - other_start > end - start
+        for other_start, other_end, _ in matches)}
+    people = set()
+    for alias in sorted(longest):
+        matches = [row for row in rows if row['alias'] == alias]
+        if len(matches) > 1:
+            raise AmbiguousPerson(alias, matches)
+        people.add(matches[0]['id'])
+    return next(iter(people)) if len(people) == 1 else None
+
+
+def _alias_pattern(alias):
+    if re.fullmatch(r'[A-Za-z0-9_ ]+', alias):
+        return r'(?<![A-Za-z0-9_])' + re.escape(alias) + r'(?![A-Za-z0-9_])'
+    return re.escape(alias)
+
+
+def _alias_in_query(alias, query):
+    return re.search(_alias_pattern(alias), query) is not None
+
+
+def _scoped_query(conn, query, person_id):
+    for alias in sorted(repo.aliases_of(conn, person_id), key=len, reverse=True):
+        if _alias_in_query(alias, query):
+            query = re.sub(_alias_pattern(alias), ' ', query)
+    return query.strip()
 
 
 def execute_tool(conn, name: str, args: dict, source_text: str | None = None,
@@ -230,14 +272,26 @@ def _execute_tool(conn, name: str, args: dict) -> dict:
             return {"ok": False, "error": f"没有找到「{args['name']}」的档案"}
         card = compile_card.build_card(conn, pid)
         p = repo.get_person(conn, pid)
+        sources = field_sources(conn, pid)
+        sources.extend(source for row in repo.memories_of(conn, pid, limit=10)
+                       if (source := memory_source(conn, row['id'])) is not None)
         return {"ok": True, "card": card, "person_id": pid,
-                "importance": p["importance"], "status": p["status"]}
+                "importance": p["importance"], "status": p["status"], "sources": sources}
 
     if name == "query_memory":
-        results = retrieve.hybrid_search(conn, args["query"], args.get("top_k", 8))
+        scope = args.get('scope', 'all')
+        pid = _resolve_person_id(conn, args.get('person'), args.get('person_id'))
+        inferred = False
+        if pid is None and scope == 'all':
+            pid = _query_person_hint(conn, args['query'])
+            inferred = pid is not None
+        query = _scoped_query(conn, args['query'], pid) if pid is not None else args['query']
+        results = retrieve.hybrid_search(conn, query, args.get("top_k", 8), person_id=pid, scope=scope)
         for r in results:
             r["when"] = ms_to_local_str(r["ts"])
-        return {"ok": True, "results": results}
+        person = repo.get_person(conn, pid) if pid else None
+        return {"ok": True, "results": results, "scope": scope, 'scope_inferred': inferred,
+                'scoped_person': {'id': pid, 'display_name': person['display_name']} if person else None}
 
     if name == "list_open_promises":
         pid = _resolve_person_id(conn, args.get("person"), args.get("person_id"))

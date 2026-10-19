@@ -44,10 +44,15 @@ class VectorIndex:
         return self._cache[owner_type]
 
     def search(self, conn, owner_type: str, query_vec: list[float], top_k: int = 5,
-               min_sim: float = 0.0) -> list[tuple[str, str, float]]:
+               min_sim: float = 0.0, allowed_ids: set[str] | None = None) -> list[tuple[str, str, float]]:
         ids, texts, mat = self._load(conn, owner_type)
         if mat.shape[0] == 0:
             return []
+        if allowed_ids is not None:
+            positions = [i for i, oid in enumerate(ids) if oid in allowed_ids]
+            if not positions:
+                return []
+            ids, texts, mat = [ids[i] for i in positions], [texts[i] for i in positions], mat[positions]
         q = np.asarray(query_vec, dtype=np.float32)
         n = np.linalg.norm(q)
         if n == 0:

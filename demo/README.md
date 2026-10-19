@@ -1,7 +1,7 @@
 # Portable Demo Data
 
 This directory contains the synthetic data used in the local QA workspace,
-updated on 2026-10-19 from `data/qa/answer-trust-v09-20261019/preview/`.
+updated on 2026-10-19 from `data/qa/answer-stability-v010-20261019/preview/`.
 All people, conversations, commitments, and transfers are fictional.
 
 The committed snapshot includes:
@@ -10,7 +10,7 @@ The committed snapshot includes:
 - `blobs/`: the three original attachments, stored by SHA-256.
 - 71 people (66 visible), 220 field versions, 347 interactions, 126 memories,
   69 commitments, 131 ledger entries, 32 confirmation records, 3 projects,
-  27 tasks (26 completed and one partial), and 8 conversations with 41 stored
+  30 tasks (29 completed and one partial), and 9 conversations with 47 stored
   messages (including five tool messages). The database uses schema version 9.
 - Three synthetic communication followups with four saved outcomes and four
   memory analyses, including five confirmed proposals and one discarded proposal.
@@ -47,12 +47,25 @@ The committed snapshot includes:
   created by these six turns. The extra natural statement corrects the QA input
   so the read-only hypothetical case is not mistaken for a normal mixed-input
   failure. Original wording issues, including a repeated `建议：`, are retained.
+- `0.10 记忆日期追问` retains a real gateway contact-preference query followed
+  by a deterministic date question. The new turn re-reads the same memory and
+  distinguishes its 2026-09-12 labelled date from its 2026-10-18 initial capture
+  and audited manual edit dates, with a fresh citation S1 and no model request
+  for the date answer. A separate explicit reanalysis of a failed v0.9 message
+  adds a linked user message and answer in that original conversation. The new
+  classifier reads its explicit fictional-example qualifier and keeps it
+  read-only; duplicate HTTP requests return the same task. All older messages
+  and source metadata remain unchanged. These three new turns are product
+  demonstrations, separate from the 47 formal evaluation answers.
 
-The snapshot retains all 2,394 application rows from the earlier demo, including
-the exact older conversation content and source metadata. A fresh restore passed
-SQLite integrity and foreign-key checks, attachment hash checks, and saved
-citation/evidence checks. Desktop and narrow-screen screenshots are available in
-`docs/assets/v09/`; other QA artifacts remain under the ignored local data folder.
+The snapshot retains all 2,627 application rows from the v0.9 demo when comparing
+without conversation update timestamps and reminder firing state. All 41 older
+messages retain their exact content and metadata. During preview, three existing
+overdue reminders fired normally; they were not added by a chat turn. A fresh
+restore passed SQLite integrity and foreign-key checks, three attachment hash
+checks, 410 checked evidence-field references and 15 saved citation snapshots.
+Desktop and narrow-screen screenshots are available in `docs/assets/v010/`;
+other QA artifacts remain under the ignored local data folder.
 
 After installing `requirements.txt`, restore a working copy from the repository
 root:

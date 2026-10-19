@@ -8,6 +8,7 @@ import base64
 import time
 from typing import Any, Iterable
 
+import httpx
 from openai import OpenAI
 
 from app.config import get_settings
@@ -15,16 +16,51 @@ from app.util import parse_json_loose
 
 
 class LLMError(RuntimeError):
-    pass
+    """Safe error text plus bounded diagnostics; provider bodies stay out of metadata."""
+
+    def __init__(self, message, *, category='request', retryable=False, status_code=None):
+        super().__init__(message)
+        self.category = category if category in {'request', 'config', 'timeout'} else 'request'
+        self.retryable = retryable is True and self.category != 'config'
+        self.status_code = status_code if type(status_code) is int and 100 <= status_code <= 599 else None
+
+
+def failure_metadata(error):
+    """Classify without serializing exception text, headers, request IDs, or bodies."""
+    if isinstance(error, LLMError):
+        return {'category': error.category, 'retryable': error.retryable,
+                'status_code': error.status_code}
+    status = getattr(error, 'status_code', None)
+    status = status if type(status) is int and 100 <= status <= 599 else None
+    if status in {400, 401, 403, 404, 405, 415, 422}:
+        return {'category': 'config', 'retryable': False, 'status_code': status}
+    if isinstance(error, (TimeoutError, httpx.TimeoutException)):
+        return {'category': 'timeout', 'retryable': True, 'status_code': status}
+    # OpenAI wraps httpx errors, but its public exception classes are stable.
+    from openai import APIConnectionError, APITimeoutError
+    if isinstance(error, APITimeoutError):
+        return {'category': 'timeout', 'retryable': True, 'status_code': status}
+    if status is not None:
+        return {'category': 'request', 'retryable': status in {408, 409, 425, 429} or status >= 500,
+                'status_code': status}
+    if isinstance(error, (ConnectionError, httpx.TransportError, APIConnectionError)):
+        return {'category': 'request', 'retryable': True, 'status_code': None}
+    return {'category': 'request', 'retryable': False, 'status_code': None}
 
 
 class LLM:
     def __init__(self):
-        s = get_settings()
+        try:
+            s = get_settings()
+        except Exception as error:
+            raise LLMError('模型配置无效', category='config') from error
         if not s.llm_api_key:
-            raise LLMError("HOME_LLM_API_KEY 未配置")
+            raise LLMError("HOME_LLM_API_KEY 未配置", category='config')
         self.s = s
-        self.client = OpenAI(base_url=s.llm_base_url, api_key=s.llm_api_key, timeout=120.0, max_retries=0)
+        try:
+            self.client = OpenAI(base_url=s.llm_base_url, api_key=s.llm_api_key, timeout=120.0, max_retries=0)
+        except Exception as error:
+            raise LLMError('模型客户端配置无效', category='config') from error
 
     def _model(self, tier: str) -> str:
         return {
@@ -35,19 +71,20 @@ class LLM:
             "vision": self.s.model_vision,
         }.get(tier, tier)
 
-    def _with_retry(self, fn, what: str):
+    def _with_retry(self, fn, what: str, *, max_attempts=4):
+        if type(max_attempts) is not int or not 1 <= max_attempts <= 4:
+            raise ValueError('max_attempts must be between 1 and 4')
         delay = 1.0
-        for attempt in range(4):
+        for attempt in range(max_attempts):
             try:
                 return fn()
             except Exception as e:  # noqa: BLE001
-                msg = str(e)
-                if getattr(e, "status_code", None) in {400, 401, 403, 404, 422}:
-                    raise LLMError(f"{what}: 请求配置或权限错误 — {msg}") from e
-                if "AccessDenied" in msg or "Access denied" in msg:
-                    raise LLMError(f"{what}: 模型无权限访问 — {msg}") from e
-                if attempt == 3:
-                    raise LLMError(f"{what}: 重试耗尽 — {msg}") from e
+                info = failure_metadata(e)
+                if not info['retryable'] or attempt == max_attempts - 1:
+                    label = {'config': '请求配置或权限错误', 'timeout': '请求超时',
+                             'request': '模型请求失败'}[info['category']]
+                    raise LLMError(f'{what}: {label}', category=info['category'],
+                                   retryable=info['retryable'], status_code=info['status_code']) from e
                 time.sleep(delay)
                 delay = min(delay * 2, 8.0)
 
@@ -59,6 +96,9 @@ class LLM:
         tools: list[dict] | None = None,
         temperature: float = 0.3,
         max_tokens: int = 3000,
+        *,
+        max_attempts: int = 4,
+        response_metadata: bool = False,
     ) -> dict:
         """返回 message dict：{role, content, tool_calls?}"""
         kwargs: dict[str, Any] = dict(
@@ -73,11 +113,12 @@ class LLM:
             kwargs["tool_choice"] = "auto"
 
         def call():
-            resp = self.client.chat.completions.create(**kwargs)
-            return resp.choices[0].message
+            return self.client.chat.completions.create(**kwargs)
 
-        msg = self._with_retry(call, f"chat[{tier}]")
-        out: dict[str, Any] = {"role": "assistant", "content": msg.content or ""}
+        resp = self._with_retry(call, f"chat[{tier}]", max_attempts=max_attempts)
+        choice = resp.choices[0] if resp.choices else None
+        msg = getattr(choice, 'message', None)
+        out: dict[str, Any] = {"role": "assistant", "content": getattr(msg, 'content', None) or ""}
         if getattr(msg, "tool_calls", None):
             out["tool_calls"] = [
                 {
@@ -87,6 +128,22 @@ class LLM:
                 }
                 for tc in msg.tool_calls
             ]
+        if response_metadata:
+            finish = getattr(choice, 'finish_reason', None)
+            usage, provider_usage = {}, getattr(resp, 'usage', None)
+            for key in ('prompt_tokens', 'completion_tokens', 'total_tokens'):
+                count = getattr(provider_usage, key, None)
+                if type(count) is int and 0 <= count <= 100_000_000:
+                    usage[key] = count
+            reasoning = getattr(getattr(provider_usage, 'completion_tokens_details', None), 'reasoning_tokens', None)
+            if type(reasoning) is int and 0 <= reasoning <= 100_000_000:
+                usage['reasoning_tokens'] = reasoning
+            out['response_metadata'] = {
+                'finish_reason': finish if isinstance(finish, str) and finish in {
+                    'stop', 'length', 'tool_calls', 'content_filter', 'function_call'} else None,
+                'usage': usage,
+                'model': kwargs['model'],
+            }
         return out
 
     def chat_json(self, messages: list[dict], tier: str = "mid", max_tokens: int = 3000, retries: int = 2) -> Any:

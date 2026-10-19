@@ -98,6 +98,27 @@ def list_tasks():
     return {"tasks": [tasks.read(c, r[0]) for r in c.execute("SELECT id FROM task ORDER BY created_at DESC LIMIT 100")]}
 
 
+@router.post('/conversations/{cid}/messages/{mid}/reanalyze', status_code=202)
+def reanalyze_message(cid: str, mid: str):
+    from app.jobs import chat_reanalysis
+    c = get_conn()
+    if not repo.get_conversation(c, cid):
+        raise HTTPException(404, '对话不存在')
+    try:
+        return chat_reanalysis.submit(c, cid, mid)
+    except LookupError as error:
+        raise HTTPException(404, str(error)) from None
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from None
+    except sqlite3.IntegrityError:
+        c.rollback()
+        existing = c.execute('SELECT id FROM task WHERE idempotency_key=?',
+                             (f'chat-reanalysis:{cid}:{mid}',)).fetchone()
+        if existing:
+            return tasks.read(c, existing[0])
+        raise HTTPException(409, '该对话已有回复任务，请等待或取消后再发') from None
+
+
 @router.get("/tasks/{tid}")
 def task_detail(tid: str):
     return task_or_404(tid)

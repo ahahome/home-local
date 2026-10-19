@@ -1,0 +1,47 @@
+/* The memory workspace keeps saved records and proposed updates distinct. */
+.memory-page-head{align-items:flex-start;margin-bottom:26px}
+.memory-page-head .eyebrow{margin-bottom:7px}
+.memory-page-head h1{margin:0;font-size:30px;line-height:1.35;letter-spacing:-.025em}
+.memory-page-head .actions{padding-top:12px}
+.memory-page-intro{margin:10px 0 0;color:var(--mut);font-size:13px;line-height:1.85}
+.memory-workspace{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:0 26px;min-width:0;overflow:hidden}
+.memory-workspace .memory-tabs{gap:26px;margin:0;border-bottom:1px solid var(--line)}
+.memory-workspace .memory-tabs button{min-height:61px;padding:20px 2px 17px;font-size:13px}
+.memory-view-guide{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:24px 0}
+.memory-view-guide>div{min-width:0;max-width:650px}
+.memory-view-guide h2{font-size:16px;line-height:1.6;font-weight:600;letter-spacing:-.01em;margin:0 0 5px}
+.memory-view-guide p{margin:0;color:var(--mut);font-size:12px;line-height:1.85;overflow-wrap:anywhere}
+.memory-pending-link{flex-shrink:0;text-decoration:none;color:var(--green);font-size:12px;line-height:1.7;padding:10px 0 10px 20px;border-left:1px solid var(--line)}
+.memory-pending-link small{display:block;color:var(--mut);font-size:10px;margin-top:3px}
+.memory-pending-link:hover{text-decoration:underline;text-underline-offset:4px}
+.memory-workspace .memory-filters{background:var(--bg);padding:16px;border:1px solid var(--line);border-radius:12px;margin:0 0 22px;gap:12px;grid-template-columns:minmax(180px,1.6fr) repeat(3,minmax(100px,1fr))}
+.memory-workspace .memory-filters>label,.memory-workspace .memory-filters>.form-field,.memory-workspace .memory-filters .form-field label{font-size:11px;color:var(--mut)}
+.memory-workspace .memory-filters input,.memory-workspace .memory-filters select{background:var(--card);border-radius:8px;min-height:40px;height:40px;font-size:12px}
+.memory-workspace .memory-search-control{height:40px}
+.memory-workspace .memory-search-control>button{background:var(--card);height:40px;min-height:40px;border-radius:8px;color:var(--green)}
+.memory-workspace .memory-count{padding-bottom:10px;font-size:11px;margin:0}
+.memory-workspace .memory-list{border-top:1px solid var(--line)}
+.memory-record-row{gap:24px;padding:24px 0;align-items:flex-start}
+.memory-record-heading{display:flex;align-items:center;gap:11px;min-width:0}
+.memory-record-heading>.avatar{width:36px;height:36px;flex:0 0 36px;font-size:14px;background:#edf0e7;color:var(--green);border-radius:11px}
+.memory-record-heading>div{min-width:0}
+.memory-record-heading strong{display:block;font-size:13px;font-weight:600;line-height:1.55;color:var(--ink);overflow-wrap:anywhere}
+.memory-record-heading .memory-row-meta{gap:6px;margin-top:3px;line-height:1.5}
+.memory-record-heading .tag{font-size:10px;padding:2px 7px;border-radius:5px;line-height:1.5}
+.memory-record-row .memory-list-text{margin:13px 0 0;font-size:14px;line-height:1.85;max-width:780px}
+.memory-row-footnote{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 18px;margin-top:11px;font-size:11px;line-height:1.8;color:var(--mut)}
+.memory-row-footnote>span{overflow-wrap:anywhere}
+.memory-row-footnote .memory-change-note{color:var(--accent)}
+.memory-record-row>.memory-open-button{display:inline-flex;align-items:center;justify-content:center;gap:11px;min-height:36px;padding:8px 12px;border-radius:8px;font-size:11px;white-space:nowrap;flex-shrink:0;margin-top:3px}
+.memory-record-row>.memory-open-button:not(.primary){color:var(--green);border-color:var(--line);background:transparent}
+.memory-record-row>.memory-open-button:not(.primary):hover{background:var(--bg);border-color:var(--green)}
+.memory-record-withdrawn .memory-list-text{color:var(--mut)}
+.memory-proposal-origin{display:flex;gap:10px;align-items:baseline;margin:12px 0 0;padding:9px 12px;border-left:2px solid var(--line);background:var(--bg);color:var(--mut);font-size:11px;line-height:1.8;overflow-wrap:anywhere;white-space:pre-wrap}
+.memory-proposal-origin>span{flex-shrink:0;font-size:10px}
+.memory-workspace .memory-pagination{padding:20px 0;min-height:68px}
+.memory-workspace .memory-page-status{padding:24px 0;line-height:1.9}
+.memory-workspace :is(button,input,select,a):focus-visible{outline:2px solid var(--green);outline-offset:3px}
+@media(max-width:1100px){.memory-workspace .memory-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.memory-view-guide{gap:20px}.memory-pending-link{max-width:155px}}
+@media(max-width:700px){.memory-workspace{padding:0 20px}.memory-view-guide{align-items:flex-start;gap:15px}.memory-pending-link{font-size:11px;padding-left:14px}.memory-record-row{gap:16px}.memory-record-row .memory-list-text{font-size:13px}.memory-record-row>.memory-open-button{gap:7px;padding:8px 10px}}
+@media(max-width:560px){.memory-page-head{margin-bottom:20px;gap:12px}.memory-page-head h1{font-size:27px}.memory-page-intro{font-size:12px;margin-top:8px}.memory-page-head .actions{padding-top:7px}.memory-workspace{border-radius:14px;padding:0 16px}.memory-workspace .memory-tabs{gap:24px}.memory-workspace .memory-tabs button{min-height:56px;font-size:12px;padding-top:18px;padding-bottom:16px}.memory-view-guide{padding:19px 0;display:block}.memory-view-guide h2{font-size:15px}.memory-view-guide p{font-size:11px}.memory-pending-link{display:block;border-left:0;padding:0;margin-top:11px;max-width:none;font-size:11px}.memory-pending-link small{display:inline;margin:0 0 0 8px;font-size:10px}.memory-workspace .memory-filters{padding:12px;gap:11px 10px;border-radius:10px;margin-bottom:18px}.memory-workspace .memory-filters>.form-field:first-child{grid-column:1/-1}.memory-workspace .memory-filters>label:last-child{grid-column:1/-1}.memory-workspace .memory-filters input,.memory-workspace .memory-filters select{font-size:12px}.memory-record-row{padding:20px 0;gap:13px}.memory-record-heading>.avatar{width:33px;height:33px;flex-basis:33px;border-radius:10px;font-size:13px}.memory-record-row .memory-list-text{margin-top:12px}.memory-record-row>.memory-open-button{align-self:flex-start;margin-top:0;min-height:36px}.memory-row-footnote{gap:3px 12px;font-size:10px;margin-top:10px}.memory-proposal-origin{display:block;padding:8px 10px;font-size:11px}.memory-proposal-origin>span{display:block;margin-bottom:2px}.memory-workspace .memory-pagination{padding:17px 0}}
+@media(prefers-reduced-motion:reduce){.memory-workspace *{scroll-behavior:auto}}

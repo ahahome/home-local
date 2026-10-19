@@ -10,13 +10,13 @@ from __future__ import annotations
 import json
 import re
 
-from app.agent import answer_review, conversation_scope, prompts, tools, turn_intent
+from app.agent import answer_review, conversation_scope, memory_focus, prompts, tools, turn_intent
 from app.agent.source_registry import SourceRegistry, compact_source
 from app.config import get_settings
 from app.llm import get_llm
 from app.memory import compile_card, extract
 from app.store import repo
-from app.util import clamp, now_ms, sha256_text, today_local
+from app.util import clamp, ms_to_local_str, now_ms, sha256_text
 
 _MAX_TOOL_ROUNDS = 10
 _KEEP_RECENT_MSGS = 12
@@ -31,17 +31,18 @@ def _mentioned_people(conn, text):
     return people, ambiguous
 
 
-def _context_blocks(conn, person_ids: list[str], registry=None, include_recent_people=True) -> str:
+def _context_blocks(conn, person_ids: list[str], registry=None, include_recent_people=True, budget_chars=None) -> str:
     from app.agent import memory_sources
     registry = registry or SourceRegistry(conn)
     blocks, size = [], 0
+    budget = get_settings().ctx_budget_chars // 2 if budget_chars is None else max(0, budget_chars)
 
     def add_source(source):
         nonlocal size
         if source is None:
             return
         line = json.dumps(compact_source(registry.preview(source)), ensure_ascii=False)
-        if size + len(line) + 2 > get_settings().ctx_budget_chars // 2:
+        if size + len(line) + 2 > budget:
             return
         registry.register(source)
         blocks.append(line)
@@ -50,7 +51,7 @@ def _context_blocks(conn, person_ids: list[str], registry=None, include_recent_p
     for pid in person_ids:
         card = compile_card.build_card(conn, pid)
         card_block = json.dumps({'person_id': pid, 'profile_context': card}, ensure_ascii=False)
-        if card and size + len(card_block) + 2 <= get_settings().ctx_budget_chars // 2:
+        if card and size + len(card_block) + 2 <= budget:
             blocks.append(card_block)
             registry.register_profile(pid, card)
             size += len(card_block) + 2
@@ -135,9 +136,9 @@ def _history_messages(conn, conversation_id: str, through_user_message_id=None) 
             {"role": "assistant", "content": "好的，我记得之前的内容。"}] + recent
 
 
-def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message_id=None) -> dict:
+def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message_id=None,
+             context_message_id=None) -> dict:
     s = get_settings()
-    llm = get_llm()
 
     conv = repo.get_conversation(conn, conversation_id)
     if not conv:
@@ -149,20 +150,53 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
 
     user_msg_id = user_message_id or repo.add_message(conn, conversation_id, "user", user_text)
     conn.commit()
-    read_scope = conversation_scope.for_user_message(conn, conversation_id, user_msg_id, user_text)
+    context_id = context_message_id or user_msg_id
+    if context_id != user_msg_id:
+        from app.jobs.chat_reanalysis import context_scope
+        original, read_scope = context_scope(conn, conversation_id, context_id)
+        if original['content'] != user_text:
+            raise ValueError('重新分析原文与原消息不一致')
+        context_id = original['id']
+    else:
+        read_scope = conversation_scope.for_user_message(conn, conversation_id, context_id, user_text)
+    focus = memory_focus.for_user_message(conn, conversation_id, context_id, user_text, read_scope,
+                                          persist=context_id == user_msg_id)
+    read_scope = {**focus['read_scope'], 'user_message_id': user_msg_id}
+    if context_id != user_msg_id:
+        read_scope['context_message_id'] = context_id
+    try:
+        llm = get_llm()
+    except Exception:
+        llm = None
 
     emit = emit or (lambda kind, data: None)
     emit("progress", {"message": "判断查询与记事范围"})
-    intent = turn_intent.for_user_message(conn, conversation_id, user_msg_id, user_text, llm=llm)
+    date_policy = memory_focus.is_date_question(user_text) and focus['status'] != 'not_applicable'
+    intent = turn_intent.for_user_message(conn, conversation_id, user_msg_id, user_text, llm=llm,
+                                        readonly_reason='memory_date_question' if date_policy else None)
+    user_row = conn.execute('SELECT tool_calls FROM message WHERE id=?', (user_msg_id,)).fetchone()
+    user_metadata = json.loads(user_row['tool_calls'])
+    user_metadata['conversation_scope'] = read_scope
+    if focus.get('binding'):
+        user_metadata['memory_focus'] = focus['binding']
+    conn.execute('UPDATE message SET tool_calls=? WHERE id=?',
+                 (json.dumps(user_metadata, ensure_ascii=False), user_msg_id))
+    conn.commit()
     outcomes, pending_ids = [], []
     try:
         record_text = turn_intent.write_text(intent, user_text)
-        if record_text is None:
+        if read_scope['blocked'] or date_policy:
+            outcomes = [turn_intent.readonly_outcome(intent) if record_text is None else
+                        {'kind': 'intent', 'status': 'skipped', 'detail': '需先明确人物或记忆，本轮未保存新记忆。'}]
+        elif record_text is None:
             outcomes = [turn_intent.readonly_outcome(intent)]
         else:
+            if llm is None:
+                raise ValueError('模型服务配置不可用，记事尚未保存，请检查设置后重试。')
             emit("progress", {"message": "提取记事原文并检查身份与来源"})
             known = [p["display_name"] for p in repo.all_active_persons(conn)][:100]
-            extraction = extract.extract_from_text(record_text, known, today_local())
+            anchor_ts = conn.execute('SELECT created_at FROM message WHERE id=?', (context_id,)).fetchone()[0]
+            extraction = extract.extract_from_text(record_text, known, ms_to_local_str(anchor_ts)[:10])
             from app.memory import apply as apply_mod
             applied = apply_mod.apply_extraction(conn, extraction, user_msg_id, record_text,
                                                 evidence_id=intent['evidence_id'])
@@ -182,8 +216,18 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
 
     person_ids = read_scope['person_ids']
     registry = SourceRegistry(conn)
-    memory_block = '' if read_scope['blocked'] else _context_blocks(
-        conn, person_ids, registry, include_recent_people=read_scope['mode'] in {'single', 'multiple', 'global'})
+    registration = memory_focus.register_source(focus, registry, s.ctx_budget_chars // 2)
+    deterministic_answer = focus['clarification'] if focus['status'] == 'clarify' else None
+    if registration['status'] == 'budget_exceeded':
+        deterministic_answer = '这条记忆超过本轮资料预算，请缩小范围后重试。'
+    elif registration['source_id']:
+        deterministic_answer = memory_focus.date_answer(focus, registration['source_id'], user_text)
+    memory_block = registration['context']
+    if not read_scope['blocked'] and deterministic_answer is None:
+        extra = _context_blocks(conn, person_ids, registry,
+            include_recent_people=read_scope['mode'] in {'single', 'multiple', 'global'},
+            budget_chars=s.ctx_budget_chars // 2 - len(memory_block) - 2)
+        memory_block = '\n\n'.join(block for block in (memory_block, extra) if block)
 
     messages: list[dict] = [{"role": "system", "content": prompts.build_system(gap_days)}]
     if memory_block:
@@ -194,8 +238,8 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
         project = conn.execute("SELECT * FROM project WHERE id=?", (conv["project_id"],)).fetchone()
         if project:
             messages.append({"role": "system", "content": f"当前项目：{project['name']}\n{project['description']}"})
-    if not read_scope['blocked']:
-        messages += _history_messages(conn, conversation_id, through_user_message_id=user_msg_id)
+    if not read_scope['blocked'] and deterministic_answer is None and llm is not None:
+        messages += _history_messages(conn, conversation_id, through_user_message_id=context_id)
     messages.insert(1, {"role": "system", "content": "本轮实际记忆处理回执：" +
         json.dumps(outcomes, ensure_ascii=False) + "。仅成功项可称已记录；待确认和失败必须如实说明。"})
     messages.insert(2, {'role': 'system', 'content': '本轮查询与记事边界：' +
@@ -207,8 +251,14 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
     answer = ""
     read_tools_used = False
     for _ in range(_MAX_TOOL_ROUNDS):
+        if deterministic_answer is not None:
+            answer = deterministic_answer
+            break
         if read_scope['blocked']:
             answer = conversation_scope.clarification(read_scope)
+            break
+        if llm is None:
+            answer = '模型服务当前不可用，消息与处理回执已保留。请检查设置后重试。'
             break
         emit("progress", {"message": "正在整理回答"})
         if hasattr(llm, "chat_stream"):
@@ -264,19 +314,28 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
     # Keep the original warning for fabricated references even if the edit removes them.
     draft = answer
     _, _, draft_warnings = registry.citations(draft)
-    if read_scope['blocked']:
+    if read_scope['blocked'] or deterministic_answer is not None or llm is None:
         review = {'answer': draft, 'metadata': {'version': 1, 'status': 'not_needed',
-                  'reason': 'deterministic_clarification', 'semantic_verified': False}, 'warnings': []}
+                  'reason': 'memory_date_answer' if date_policy and focus['status'] == 'selected' else
+                            'model_unavailable' if llm is None and deterministic_answer is None else
+                            'deterministic_clarification', 'semantic_verified': False}, 'warnings': []}
     else:
+        aliases = {}
+        for alias in repo.alias_rows(conn):
+            if alias['person_id'] in person_ids:
+                aliases.setdefault(alias['person_id'], []).append(alias['alias'])
+        identity = {'status': read_scope['mode'], 'people': [
+            {'id': pid, 'name': repo.get_person(conn, pid)['display_name'], 'aliases': sorted(set(aliases.get(pid, [])))}
+            for pid in person_ids]}
         emit('progress', {'message': '核对资料、日期与事实引用'})
         review = answer_review.review_answer(llm, user_text, draft, registry.sources,
             context={'outcomes': outcomes, 'receipts': receipts, 'pending_ids': pending_ids,
-                     'intent': intent['intent'], 'read_scope': read_scope})
+                     'intent': intent['intent'], 'read_scope': read_scope, 'confirmed_identity': identity})
     answer = review['answer']
     reviewed_no_answer = (review['metadata'].get('status') == 'completed'
                           and review['metadata'].get('answer_type') == 'no_answer')
     answer, sources, source_warnings = registry.citations(
-        answer, require_citations=not reviewed_no_answer and (bool(person_ids) or read_tools_used))
+        answer, require_citations=not reviewed_no_answer and llm is not None and (bool(person_ids) or read_tools_used))
     extra_warnings = [warning for warning in draft_warnings if warning['code'] == 'invalid_citation']
     for warning in [*review['warnings'], *extra_warnings]:
         if warning not in source_warnings:
@@ -291,7 +350,9 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
                 "failed": failed, "pending_ids": list(dict.fromkeys(pending_ids)),
                 'sources': sources, 'source_warnings': source_warnings,
                 'source_dependencies': registry.dependencies, 'conversation_scope': read_scope,
-                'turn_intent': intent, 'answer_review': review['metadata']}
+                'turn_intent': intent, 'answer_review': review['metadata'],
+                'memory_focus': {key: focus[key] for key in ('status', 'reason', 'binding')}}
+    metadata['memory_focus']['registration'] = {key: registration[key] for key in ('status', 'source_id')}
     assistant_message_id = registry.save_answer(lambda: repo.add_message(
         conn, conversation_id, 'assistant', answer, json.dumps(metadata, ensure_ascii=False)))
 

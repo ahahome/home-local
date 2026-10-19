@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
@@ -77,12 +78,23 @@ def _run(tid):
         p = t["payload"]
         if t["kind"] == "chat":
             from app.agent.harness import run_turn
+            context = {}
+            if p.get('reanalysis_of'):
+                from app.jobs.chat_reanalysis import source_message
+                from app.util import sha256_text
+                original = source_message(conn, p['conversation_id'], p['reanalysis_of'])
+                if original['content'] != p['text'] or sha256_text(p['text']) != p['source_sha256']:
+                    raise ValueError('原消息内容已变化，请重新核对')
+                context['context_message_id'] = original['id']
             if not p.get("user_message_id"):
-                p["user_message_id"] = repo.add_message(conn, p["conversation_id"], "user", p["text"])
+                metadata = {'reanalysis': {'source_user_message_id': p['reanalysis_of'],
+                                          'source_sha256': p['source_sha256']}} if context else None
+                p["user_message_id"] = repo.add_message(conn, p["conversation_id"], "user", p["text"],
+                    json.dumps(metadata, ensure_ascii=False) if metadata else None)
                 conn.execute("UPDATE task SET payload=? WHERE id=?", (json.dumps(p, ensure_ascii=False), tid))
                 conn.commit()
             result = run_turn(conn, p["conversation_id"], p["text"], emit=emit,
-                              user_message_id=p["user_message_id"])
+                              user_message_id=p["user_message_id"], **context)
         elif t["kind"] in {"file", "chatlog", "url"}:
             from app.ingest import normalize, chatlog
             emit("progress", {"message": "解析内容并提取人物信息"})
@@ -155,11 +167,21 @@ def retry(conn, tid):
     with _lock:
         if tid in _running:
             raise ValueError("任务仍在结束中，请稍后重试")
+    cursor = conn.execute('SELECT COALESCE(MAX(seq),0) FROM task_event WHERE task_id=?', (tid,)).fetchone()[0]
     t = read(conn, tid)
     if t["status"] not in {"failed", "cancelled", "interrupted", "partial"}:
         raise ValueError("仅失败、取消、中断或部分完成的任务可以重试")
-    conn.execute("UPDATE task SET status='queued',cancel_requested=0,error=NULL,result=NULL,updated_at=? WHERE id=?",
-                 (now_ms(), tid))
+    try:
+        changed = conn.execute("UPDATE task SET status='queued',cancel_requested=0,error=NULL,result=NULL,updated_at=? "
+            "WHERE id=? AND status=? AND updated_at=? AND "
+            "(SELECT COALESCE(MAX(seq),0) FROM task_event WHERE task_id=?)=?",
+            (now_ms(), tid, t['status'], t['updated_at'], tid, cursor)).rowcount
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        raise ValueError('该对话已有回复任务，请等待或取消后再重试') from None
+    if not changed:
+        conn.rollback()
+        raise ValueError('任务状态已变化，请刷新后再重试')
     conn.commit()
     event(conn, tid, "queued", {"message": "正在重试，已保存内容不会重复写入"})
     start(tid)

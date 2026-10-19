@@ -1,0 +1,232 @@
+{
+  "version": "0.10.0-acceptance-1",
+  "provenance": "fictional_records_with_natural_questions",
+  "description": "v0.10正式运行前冻结的虚构开发验收语料。沿用v0.9人物与记录，使用新增自然问法覆盖身份、记忆焦点、分类器和回答边界；不是独立真实用户分布或未见语义基准，语义逐轮待人工审阅，不根据本次模型结果改写语料。",
+  "time_anchor": "2026-10-19T09:00:00+08:00",
+  "top_k": 5,
+  "persons": [
+    {"key": "tang", "name": "唐宁", "aliases": ["糖糖"]},
+    {"key": "xu", "name": "许澄", "aliases": ["小许"]},
+    {"key": "gu", "name": "顾舟", "aliases": ["顾工"]}
+  ],
+  "fields": [
+    {"key": "tang_city", "person": "tang", "field": "city", "value": "南京", "valid_from": 1756684800000},
+    {"key": "xu_company", "person": "xu", "field": "company", "value": "远帆设计", "valid_from": 1756684800000},
+    {"key": "gu_city", "person": "gu", "field": "city", "value": "天津", "valid_from": 1756684800000}
+  ],
+  "memories": [
+    {"key": "tang_contact", "person": "tang", "text": "唐宁说工作联系先发短信，收到后再约通话。", "ts": 1757552400000},
+    {"key": "xu_phone", "person": "xu", "text": "许澄说周三午休方便接电话，其他时候先留言。", "ts": 1757638800000},
+    {"key": "xu_email", "person": "xu", "text": "许澄说项目事项都写邮件，不要直接给他打电话。", "ts": 1757725200000},
+    {"key": "gu_food", "person": "gu", "text": "顾舟吃饭不吃花生，口味偏清淡。", "ts": 1757811600000}
+  ],
+  "interactions": [],
+  "retrieval_cases": [
+    {"id": "alias-contact-background", "question": "联系 发短信 通话", "args": {"person": "糖糖"}, "expect": {"relevant": ["tang_contact"], "excluded_persons": ["xu", "gu"]}}
+  ],
+  "dialogues": [
+    {
+      "id": "alias-restored-quote-and-edit-focus",
+      "tags": ["acceptance", "alias", "lifecycle", "temporal", "memory_focus"],
+      "turns": [
+        {
+          "question": "我刚恢复的糖糖那条联系偏好，你现在查到的原文是哪一句？",
+          "actions": [
+            {"op": "edit", "memory": "tang_contact", "text": "唐宁说工作联系统一发邮件，急事也先留言，不直接打电话。"},
+            {"op": "withdraw", "memory": "tang_contact"},
+            {"op": "restore", "memory": "tang_contact"}
+          ],
+          "expect": {
+            "intent": "query", "no_memory_writes": true,
+            "source_records": ["tang_contact"], "allowed_persons": ["tang"],
+            "forbidden_source_records": ["xu_phone", "xu_email", "gu_food"],
+            "review_points": [
+              "糖糖与唐宁是系统已确认的同一人，不因原文只写唐宁就否认身份或建议新建人物",
+              "呈现编辑后的原话并就近引用，不沿用恢复前的旧文本",
+              "记录已恢复可读取，不要求再次恢复；记录可用不证明偏好现今必然成立"
+            ]
+          }
+        },
+        {
+          "question": "这条记忆是什么时候被我修改的？",
+          "expect": {
+            "intent": "query", "no_memory_writes": true,
+            "source_records": ["tang_contact"], "allowed_persons": ["tang"],
+            "memory_focus": {"status": "selected", "registration_status": "registered"},
+            "review_points": [
+              "沿用上一回答唯一记忆的持久绑定，重新读取当前资料，不由语言模型猜记忆",
+              "人工编辑日期来自该记忆的编辑审计；不得把9月记忆所标日期当作修改日期",
+              "人工编辑与恢复操作分别说明；具体日期有本轮来源"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "conflict-does-not-imply-private-channel",
+      "tags": ["acceptance", "conflict", "grounding"],
+      "turns": [
+        {
+          "question": "把许澄关于电话和邮件的两条原话一起找出来，我想对照一下。",
+          "expect": {
+            "intent": "query", "no_memory_writes": true,
+            "source_records": ["xu_phone", "xu_email"], "allowed_persons": ["xu"],
+            "review_points": [
+              "分别呈现电话与邮件记录的原话和各自来源，不把两条混成单一偏好",
+              "不因邮件记录较新就擅自撤销电话记录，也不从公司档案发明适用场景"
+            ]
+          }
+        },
+        {
+          "question": "这些记录能证明工作走邮件、私事打电话吗？",
+          "expect": {
+            "intent": "query", "no_memory_writes": true,
+            "source_records": ["xu_phone", "xu_email"], "allowed_persons": ["xu"],
+            "review_points": [
+              "明确现有资料不能证明工作与私事的完整渠道划分，尤其电话记录未限定私事",
+              "不能将无来源的划分转移到建议或澄清问句中继续暗示为真",
+              "不发明搬家、岗位变化等冲突成因；必要建议只询问两条原话各自适用范围"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "missing-blood-type-stays-brief",
+      "tags": ["acceptance", "no_answer", "relevance"],
+      "turns": [
+        {
+          "question": "糖糖的血型有没有可靠记录？我只想核实这一项。",
+          "expect": {
+            "intent": "query", "no_memory_writes": true,
+            "source_records": [], "allowed_persons": ["tang"],
+            "forbidden_source_records": ["gu_food", "xu_phone", "xu_email"],
+            "review_points": [
+              "简短说明没有可核验的血型记录，不编造血型、过敏或医学结论",
+              "不附上无关城市、联系方式或其他人物资料，即使有真实来源也不填充答案",
+              "纯缺资料说明不硬贴无关引用，不重复建议前缀，不创建糖糖的第二个人物"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "query-without-punctuation-remains-readonly",
+      "tags": ["acceptance", "query", "write_boundary"],
+      "turns": [
+        {
+          "question": "帮我查查顾工那条吃饭忌口，直接说资料里写了什么",
+          "expect": {
+            "intent": "query", "no_memory_writes": true,
+            "source_records": ["gu_food"], "allowed_persons": ["gu"],
+            "review_points": [
+              "没有问号仍是查询，不把查资料的请求保存成新人物事实或用户意图记忆",
+              "顾工解析到顾舟，引用不吃花生与清淡口味原文，不提升为诊断"
+            ]
+          }
+        },
+        {
+          "question": "那能据此认定他对花生过敏吗",
+          "expect": {
+            "intent": "query", "no_memory_writes": true,
+            "source_records": ["gu_food"], "allowed_persons": ["gu"],
+            "review_points": [
+              "不吃花生不能证明过敏，明确缺少过敏依据",
+              "只解释这条资料的证据边界，不补无关城市或联系偏好，不保存问句为过敏事实"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "explicit-record-prefix-with-conditional-tail",
+      "tags": ["acceptance", "record", "conditional", "write_boundary"],
+      "turns": [
+        {
+          "question": "请记住：顾舟目前住青岛；以后如果他再搬家，我会另行补充。",
+          "expect": {
+            "intent": "record", "no_memory_writes": false,
+            "source_records": [], "allowed_persons": ["gu"],
+            "saved_fields": [{"person": "gu", "field": "city", "value": "青岛"}],
+            "review_points": [
+              "明确记事前缀下的当前城市是真实断言，条件尾句不能把整条变成只读假设",
+              "实际当前city字段必须保存青岛，模型口头声称或待确认项不能替代实际落库",
+              "未来搬家未发生，不保存其他城市，不把用户未来补充承诺归给顾舟"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "mixed-city-update-keeps-query-separate",
+      "tags": ["acceptance", "mixed", "write_boundary"],
+      "turns": [
+        {
+          "question": "唐宁已经搬到苏州住了。再帮我查下他之前留的联系偏好。",
+          "expect": {
+            "intent": "mixed", "no_memory_writes": false,
+            "source_records": ["tang_contact"], "allowed_persons": ["tang"],
+            "saved_fields": [{"person": "tang", "field": "city", "value": "苏州"}],
+            "review_points": [
+              "真实新城市实际保存苏州；查联系方式的半句不能生成新的意图或偏好记忆",
+              "联系偏好仍以本轮实际读取的短信/通话原文为依据并引用，不能沿用其他场景编辑后的邮件版本",
+              "不把搬家推成偏好变化的原因，成功与待确认/失败以实际回执为准"
+            ]
+          }
+        },
+        {
+          "question": "只核对他的当前城市，不用重新记一遍。",
+          "expect": {
+            "intent": "query", "no_memory_writes": true,
+            "source_records": [], "allowed_persons": ["tang"],
+            "saved_fields": [{"person": "tang", "field": "city", "value": "苏州"}],
+            "review_points": [
+              "重新读取当前苏州字段并引用本轮有效来源，不仅复述上条助手文本",
+              "不把南京历史版本当成现状，不重复保存同一城市"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "multiple-memory-date-followup-needs-selection",
+      "tags": ["acceptance", "memory_focus", "ambiguity", "temporal"],
+      "turns": [
+        {
+          "question": "小许有哪两条联系记录？请把两条原话都列出来。",
+          "expect": {
+            "intent": "query", "no_memory_writes": true,
+            "source_records": ["xu_phone", "xu_email"], "allowed_persons": ["xu"],
+            "review_points": [
+              "小许与许澄身份一致，电话和邮件两条记忆均需可核查，不只选一条",
+              "分别引用原话，保留两条来源各自身份，不发明二者适用场景"
+            ]
+          }
+        },
+        {
+          "question": "这条记忆是什么时候被我修改的？",
+          "expect": {
+            "intent": "query", "no_memory_writes": true,
+            "source_records": [], "allowed_persons": ["xu"],
+            "memory_focus": {"status": "clarify", "reason": "ambiguous_memory"},
+            "review_points": [
+              "上一回答涉及两条记忆，必须请用户选具体原话或上一回答资料编号，不猜其中一条",
+              "澄清前不报任意记忆的修改日期，不把9月记忆日期冒充人工编辑日期",
+              "不借澄清扩大人物范围，也不产生任何领域写入"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "human_review_rubric": [
+    "身份：系统已确认的姓名与别名相同人物，不凭资料文字缺少别名重新否认身份。",
+    "焦点：上一回答唯一记忆可绑定并重新读源，多条记忆日期追问必须先澄清。",
+    "时间：记忆所标日期、人工编辑审计和撤销/恢复操作不得互相冒充。",
+    "分类：无问号查询仍只读，明确记事前缀允许条件尾句中的真实断言，mixed仅保存断言部分。",
+    "写入：检查真实领域表变化和当前字段值，分类器标签与模型成功声称均不能替代实际落库。",
+    "冲突：保留原话和来源，不发明工作/私事渠道划分或搬家等变化成因，不转移到建议/澄清中。",
+    "相关性：缺资料时简短诚实，不补无关背景，不把不吃花生推断成过敏。",
+    "边界：以上虚构开发语料不是语义准确率基准；协议、来源和字符串检查与逐轮人工语义审阅分别报告。"
+  ]
+}

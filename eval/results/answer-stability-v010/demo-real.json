@@ -1,0 +1,956 @@
+{
+  "conversation_id": "7acfe7e113ba4ec9",
+  "runs": [
+    {
+      "id": "bbda72ad4f5f4fb8",
+      "kind": "chat",
+      "title": "沈知遥当前保存的联系偏好原文是什么？",
+      "payload": {
+        "conversation_id": "7acfe7e113ba4ec9",
+        "text": "沈知遥当前保存的联系偏好原文是什么？",
+        "user_message_id": "e7c2d69360a9406a"
+      },
+      "status": "done",
+      "result": {
+        "answer": "2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。这是一条有日期的背景记录（标注日期为2026年9月12日），记录未撤销，但当前是否仍成立尚未核实。 [[S3]]\n\n建议：如果你最近和她确认过偏好是否有变化，可以告诉我，我来更新。",
+        "conversation_id": "7acfe7e113ba4ec9",
+        "assistant_message_id": "970204c48eb54bae",
+        "receipts": [],
+        "outcomes": [
+          {
+            "kind": "intent",
+            "status": "skipped",
+            "detail": "本轮为查询，保留对话与审计原文，未保存新记忆或执行写入。",
+            "failure_category": null,
+            "retryable": false,
+            "attempt_count": 1
+          }
+        ],
+        "saved": [],
+        "pending": [],
+        "failed": [],
+        "pending_ids": [],
+        "sources": [
+          {
+            "type": "memory",
+            "entity_id": "d796f005e15041dd",
+            "person": {
+              "id": "d3648ba66c9a4b10",
+              "display_name": "沈知遥"
+            },
+            "text": "2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。",
+            "date": 1789142400000,
+            "temporal_status": "historical_background",
+            "revision": 1,
+            "ts": 1789142400000,
+            "kind": "semantic",
+            "evidence": {
+              "id": "1d9d0e4576c749f8",
+              "kind": "text",
+              "excerpt": "{\"correction_id\":\"64a41963fbe545b9\",\"edited_by_user\":true,\"memory_id\":\"d796f005e15041dd\",\"origin_evidence_id\":\"4cafdc7835b24d7d\",\"previous_evidence_id\":\"4cafdc7835b24d7d\",\"reason\":\"核对虚构资料：回复时间应为周四\",\"user_correction\":{\"person_id\":\"d3648ba66c9a4b10\",\"text\":\"2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。\",\"valid_from\":\"2026-09-12\"}}",
+              "source_ref": "memory-correction:64a41963fbe545b9",
+              "blob_hash": null,
+              "created_at": 1792297049209
+            },
+            "captured_at": 1792390901882,
+            "record_context": {
+              "status": "active",
+              "recorded_at": 1792296861022,
+              "last_user_edit_at": 1792297049208,
+              "last_lifecycle_change": null
+            },
+            "origin_source": {
+              "id": "4cafdc7835b24d7d",
+              "kind": "text",
+              "excerpt": "2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周三集中回复；紧急事项再电话联系。",
+              "source_ref": "demo:v07-communication",
+              "blob_hash": null,
+              "created_at": 1792296861022
+            },
+            "id": "S3"
+          }
+        ],
+        "source_warnings": [
+          {
+            "code": "historical_context",
+            "message": "引用包含有日期的历史背景，当前是否仍适用需要核实。"
+          }
+        ],
+        "source_dependencies": [
+          {
+            "type": "field",
+            "entity_id": "[\"d3648ba66c9a4b10\",\"city\",1788537600000]",
+            "person": {
+              "id": "d3648ba66c9a4b10",
+              "display_name": "沈知遥"
+            },
+            "text": "上海",
+            "field": "city",
+            "date": 1788537600000,
+            "valid_from": 1788537600000,
+            "valid_to": null,
+            "recorded_at": 1792296861022,
+            "temporal_status": "current_field",
+            "evidence": {
+              "id": "3af8728b49f841c0",
+              "kind": "text",
+              "excerpt": "2026-09-05 沈知遥告知她在上海工作。",
+              "source_ref": "demo:v07-city:2026-09-05",
+              "blob_hash": null,
+              "created_at": 1792296861022
+            },
+            "captured_at": 1792390901881,
+            "record_context": {
+              "recorded_at": 1792296861022
+            },
+            "origin_source": {
+              "id": "3af8728b49f841c0",
+              "kind": "text",
+              "excerpt": "2026-09-05 沈知遥告知她在上海工作。",
+              "source_ref": "demo:v07-city:2026-09-05",
+              "blob_hash": null,
+              "created_at": 1792296861022
+            },
+            "id": "S1"
+          },
+          {
+            "type": "field",
+            "entity_id": "[\"d3648ba66c9a4b10\",\"city\",1749484800000]",
+            "person": {
+              "id": "d3648ba66c9a4b10",
+              "display_name": "沈知遥"
+            },
+            "text": "杭州",
+            "field": "city",
+            "date": 1749484800000,
+            "valid_from": 1749484800000,
+            "valid_to": 1788537600000,
+            "recorded_at": 1792296861022,
+            "temporal_status": "historical_field",
+            "evidence": {
+              "id": "c8d6b66c3f3b40df",
+              "kind": "text",
+              "excerpt": "2025-06-10 沈知遥告知她在杭州工作。",
+              "source_ref": "demo:v07-city:2025-06-10",
+              "blob_hash": null,
+              "created_at": 1792296861022
+            },
+            "captured_at": 1792390901881,
+            "record_context": {
+              "recorded_at": 1792296861022
+            },
+            "origin_source": {
+              "id": "c8d6b66c3f3b40df",
+              "kind": "text",
+              "excerpt": "2025-06-10 沈知遥告知她在杭州工作。",
+              "source_ref": "demo:v07-city:2025-06-10",
+              "blob_hash": null,
+              "created_at": 1792296861022
+            },
+            "id": "S2"
+          },
+          {
+            "type": "memory",
+            "entity_id": "d796f005e15041dd",
+            "person": {
+              "id": "d3648ba66c9a4b10",
+              "display_name": "沈知遥"
+            },
+            "text": "2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。",
+            "date": 1789142400000,
+            "temporal_status": "historical_background",
+            "revision": 1,
+            "ts": 1789142400000,
+            "kind": "semantic",
+            "evidence": {
+              "id": "1d9d0e4576c749f8",
+              "kind": "text",
+              "excerpt": "{\"correction_id\":\"64a41963fbe545b9\",\"edited_by_user\":true,\"memory_id\":\"d796f005e15041dd\",\"origin_evidence_id\":\"4cafdc7835b24d7d\",\"previous_evidence_id\":\"4cafdc7835b24d7d\",\"reason\":\"核对虚构资料：回复时间应为周四\",\"user_correction\":{\"person_id\":\"d3648ba66c9a4b10\",\"text\":\"2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。\",\"valid_from\":\"2026-09-12\"}}",
+              "source_ref": "memory-correction:64a41963fbe545b9",
+              "blob_hash": null,
+              "created_at": 1792297049209
+            },
+            "captured_at": 1792390901882,
+            "record_context": {
+              "status": "active",
+              "recorded_at": 1792296861022,
+              "last_user_edit_at": 1792297049208,
+              "last_lifecycle_change": null
+            },
+            "origin_source": {
+              "id": "4cafdc7835b24d7d",
+              "kind": "text",
+              "excerpt": "2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周三集中回复；紧急事项再电话联系。",
+              "source_ref": "demo:v07-communication",
+              "blob_hash": null,
+              "created_at": 1792296861022
+            },
+            "id": "S3"
+          },
+          {
+            "type": "memory",
+            "entity_id": "d9f41a328fb446ce",
+            "person": null,
+            "text": "没有给陈岚转账，也没有答应发合同，暂时只是讨论",
+            "date": 1791879985894,
+            "temporal_status": "historical_background",
+            "revision": 0,
+            "ts": 1791879985894,
+            "kind": "episodic",
+            "evidence": {
+              "id": "88588d48d45c4ce1",
+              "kind": "text",
+              "excerpt": "我没有给陈岚转账，也没有答应发合同，暂时只是讨论。",
+              "source_ref": "mock-live:negated",
+              "blob_hash": null,
+              "created_at": 1791879985894
+            },
+            "captured_at": 1792390901883,
+            "record_context": {
+              "status": "active",
+              "recorded_at": 1791879985894,
+              "last_user_edit_at": null,
+              "last_lifecycle_change": null
+            },
+            "origin_source": {
+              "id": "88588d48d45c4ce1",
+              "kind": "text",
+              "excerpt": "我没有给陈岚转账，也没有答应发合同，暂时只是讨论。",
+              "source_ref": "mock-live:negated",
+              "blob_hash": null,
+              "created_at": 1791879985894
+            },
+            "id": "S4"
+          },
+          {
+            "type": "profile_context",
+            "entity_id": "d3648ba66c9a4b10",
+            "text": "人物：沈知遥\n字段：city=上海"
+          }
+        ],
+        "conversation_scope": {
+          "version": 1,
+          "mode": "single",
+          "person_ids": [
+            "d3648ba66c9a4b10"
+          ],
+          "blocked": false,
+          "reason": "explicit_name",
+          "candidates": [
+            {
+              "person_id": "d3648ba66c9a4b10",
+              "display_name": "沈知遥",
+              "summary": "上海"
+            }
+          ],
+          "origin_message_id": "e7c2d69360a9406a",
+          "conversation_id": "7acfe7e113ba4ec9",
+          "user_message_id": "e7c2d69360a9406a"
+        },
+        "turn_intent": {
+          "version": 1,
+          "intent": "query",
+          "record_spans": [],
+          "extraction_text": "",
+          "allow_writes": false,
+          "reason": "用户仅询问已保存资料的原文内容，属于纯查询意图，未包含新事实断言或记录指令。",
+          "status": "classified",
+          "source_sha256": "1c109879b2fa9d801f4c1cab0d8b7d66547efe3ae4bfd4f4419f96a26788ef84",
+          "classifier": {
+            "tier": "mini",
+            "max_attempts": 2,
+            "request_count": 1,
+            "attempts": [
+              {
+                "attempt": 1,
+                "max_tokens": 1800,
+                "request_started": true,
+                "content_chars": 86,
+                "finish_reason": "stop",
+                "model": "qwen3.7-flash",
+                "usage": {
+                  "prompt_tokens": 695,
+                  "completion_tokens": 507,
+                  "total_tokens": 1202,
+                  "reasoning_tokens": 467
+                },
+                "status": "succeeded",
+                "failure_category": null,
+                "retryable": false
+              }
+            ],
+            "failure_category": null,
+            "retryable": false
+          },
+          "evidence_id": "f7992659e1c54a63"
+        },
+        "answer_review": {
+          "version": 1,
+          "status": "completed",
+          "method": "single_model_revision",
+          "semantic_verified": false,
+          "original_answer": "沈知遥的联系偏好原文如下：\n\n> 2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。[[S3]]\n\n这是一条有日期的背景记录（标注日期为 2026 年 9 月 12 日），记录未撤销，但当前是否仍成立尚未核实。如果你最近和她确认过偏好是否有变化，可以告诉我，我来更新。",
+          "revised_answer": "2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。这是一条有日期的背景记录（标注日期为2026年9月12日），记录未撤销，但当前是否仍成立尚未核实。 [[S3]]\n\n建议：如果你最近和她确认过偏好是否有变化，可以告诉我，我来更新。",
+          "changed": true,
+          "answer_type": "mixed",
+          "issues": [
+            {
+              "code": "fact_advice_boundary",
+              "quote": "如果你最近和她确认过偏好是否有变化，可以告诉我，我来更新。",
+              "detail": "事实与建议未拆段，建议部分应单独成段。",
+              "source_ids": [],
+              "quote_status": "matched"
+            }
+          ],
+          "raw_issues": [
+            {
+              "code": "fact_advice_boundary",
+              "quote": "如果你最近和她确认过偏好是否有变化，可以告诉我，我来更新。",
+              "detail": "事实与建议未拆段，建议部分应单独成段。",
+              "source_ids": []
+            }
+          ],
+          "segments": [
+            {
+              "kind": "fact",
+              "text": "2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。这是一条有日期的背景记录（标注日期为2026年9月12日），记录未撤销，但当前是否仍成立尚未核实。",
+              "source_ids": [
+                "S3"
+              ]
+            },
+            {
+              "kind": "advice",
+              "text": "如果你最近和她确认过偏好是否有变化，可以告诉我，我来更新。",
+              "source_ids": []
+            }
+          ],
+          "raw_response": "{\n  \"answer_type\": \"mixed\",\n  \"segments\": [\n    {\n      \"kind\": \"fact\",\n      \"text\": \"2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。这是一条有日期的背景记录（标注日期为2026年9月12日），记录未撤销，但当前是否仍成立尚未核实。\",\n      \"source_ids\": [\n        \"S3\"\n      ]\n    },\n    {\n      \"kind\": \"advice\",\n      \"text\": \"如果你最近和她确认过偏好是否有变化，可以告诉我，我来更新。\",\n      \"source_ids\": []\n    }\n  ],\n  \"issues\": [\n    {\n      \"code\": \"fact_advice_boundary\",\n      \"quote\": \"如果你最近和她确认过偏好是否有变化，可以告诉我，我来更新。\",\n      \"detail\": \"事实与建议未拆段，建议部分应单独成段。\",\n      \"source_ids\": []\n    }\n  ]\n}",
+          "original_references": [
+            "S3"
+          ],
+          "source_ids": [
+            "S1",
+            "S2",
+            "S3",
+            "S4"
+          ],
+          "invalid_original_references": [],
+          "source_snapshot_sha256": "02ba36c39644a1a0327de7d68416d50960954af6e2375e2f150a45e7c2f1d9c9",
+          "input_sha256": "6d9ed93e9c203fab06cbde8e5871f4c0b2aab4a72a5b5231ad63299402e73da6",
+          "unavailable_reason": null,
+          "raw_response_sha256": "7a9685e92cfa9a255743340e9a1b81867f7da2421cb9e4e77971d6fc2925648f",
+          "raw_response_truncated": false
+        },
+        "memory_focus": {
+          "status": "not_applicable",
+          "reason": "no_explicit_memory_reference",
+          "binding": null,
+          "registration": {
+            "status": "not_selected",
+            "source_id": null
+          }
+        }
+      },
+      "error": null,
+      "cancel_requested": 0,
+      "idempotency_key": "chat:7acfe7e113ba4ec9:v010-demo-0",
+      "created_at": 1792390893944,
+      "updated_at": 1792390935056,
+      "progress": "核对资料、日期与事实引用"
+    },
+    {
+      "id": "b824a7d23b054b40",
+      "kind": "chat",
+      "title": "这条记忆是什么时候被我修改的？",
+      "payload": {
+        "conversation_id": "7acfe7e113ba4ec9",
+        "text": "这条记忆是什么时候被我修改的？",
+        "user_message_id": "5380471af2554df5"
+      },
+      "status": "done",
+      "result": {
+        "answer": "这条记忆所标的日期是 2026-09-12，首次录入日期是 2026-10-18。[[S1]]\n\n实际人工编辑日期是 2026-10-18。[[S1]]",
+        "conversation_id": "7acfe7e113ba4ec9",
+        "assistant_message_id": "b2a2780e0d75481e",
+        "receipts": [],
+        "outcomes": [
+          {
+            "kind": "intent",
+            "status": "skipped",
+            "detail": "本轮为查询，保留对话与审计原文，未保存新记忆或执行写入。",
+            "failure_category": null,
+            "retryable": false,
+            "attempt_count": 0
+          }
+        ],
+        "saved": [],
+        "pending": [],
+        "failed": [],
+        "pending_ids": [],
+        "sources": [
+          {
+            "type": "memory",
+            "entity_id": "d796f005e15041dd",
+            "person": {
+              "id": "d3648ba66c9a4b10",
+              "display_name": "沈知遥"
+            },
+            "text": "2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。",
+            "date": 1789142400000,
+            "temporal_status": "historical_background",
+            "revision": 1,
+            "ts": 1789142400000,
+            "kind": "semantic",
+            "evidence": {
+              "id": "1d9d0e4576c749f8",
+              "kind": "text",
+              "excerpt": "{\"correction_id\":\"64a41963fbe545b9\",\"edited_by_user\":true,\"memory_id\":\"d796f005e15041dd\",\"origin_evidence_id\":\"4cafdc7835b24d7d\",\"previous_evidence_id\":\"4cafdc7835b24d7d\",\"reason\":\"核对虚构资料：回复时间应为周四\",\"user_correction\":{\"person_id\":\"d3648ba66c9a4b10\",\"text\":\"2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。\",\"valid_from\":\"2026-09-12\"}}",
+              "source_ref": "memory-correction:64a41963fbe545b9",
+              "blob_hash": null,
+              "created_at": 1792297049209
+            },
+            "captured_at": 1792390935315,
+            "record_context": {
+              "status": "active",
+              "recorded_at": 1792296861022,
+              "last_user_edit_at": 1792297049208,
+              "last_lifecycle_change": null
+            },
+            "origin_source": {
+              "id": "4cafdc7835b24d7d",
+              "kind": "text",
+              "excerpt": "2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周三集中回复；紧急事项再电话联系。",
+              "source_ref": "demo:v07-communication",
+              "blob_hash": null,
+              "created_at": 1792296861022
+            },
+            "id": "S1"
+          }
+        ],
+        "source_warnings": [
+          {
+            "code": "historical_context",
+            "message": "引用包含有日期的历史背景，当前是否仍适用需要核实。"
+          }
+        ],
+        "source_dependencies": [
+          {
+            "type": "memory",
+            "entity_id": "d796f005e15041dd",
+            "person": {
+              "id": "d3648ba66c9a4b10",
+              "display_name": "沈知遥"
+            },
+            "text": "2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。",
+            "date": 1789142400000,
+            "temporal_status": "historical_background",
+            "revision": 1,
+            "ts": 1789142400000,
+            "kind": "semantic",
+            "evidence": {
+              "id": "1d9d0e4576c749f8",
+              "kind": "text",
+              "excerpt": "{\"correction_id\":\"64a41963fbe545b9\",\"edited_by_user\":true,\"memory_id\":\"d796f005e15041dd\",\"origin_evidence_id\":\"4cafdc7835b24d7d\",\"previous_evidence_id\":\"4cafdc7835b24d7d\",\"reason\":\"核对虚构资料：回复时间应为周四\",\"user_correction\":{\"person_id\":\"d3648ba66c9a4b10\",\"text\":\"2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。\",\"valid_from\":\"2026-09-12\"}}",
+              "source_ref": "memory-correction:64a41963fbe545b9",
+              "blob_hash": null,
+              "created_at": 1792297049209
+            },
+            "captured_at": 1792390935315,
+            "record_context": {
+              "status": "active",
+              "recorded_at": 1792296861022,
+              "last_user_edit_at": 1792297049208,
+              "last_lifecycle_change": null
+            },
+            "origin_source": {
+              "id": "4cafdc7835b24d7d",
+              "kind": "text",
+              "excerpt": "2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周三集中回复；紧急事项再电话联系。",
+              "source_ref": "demo:v07-communication",
+              "blob_hash": null,
+              "created_at": 1792296861022
+            },
+            "id": "S1"
+          }
+        ],
+        "conversation_scope": {
+          "version": 1,
+          "mode": "single",
+          "person_ids": [
+            "d3648ba66c9a4b10"
+          ],
+          "blocked": false,
+          "reason": "memory_reference",
+          "candidates": [
+            {
+              "person_id": "d3648ba66c9a4b10",
+              "display_name": "沈知遥",
+              "summary": "上海"
+            }
+          ],
+          "origin_message_id": "5380471af2554df5",
+          "conversation_id": "7acfe7e113ba4ec9",
+          "user_message_id": "5380471af2554df5"
+        },
+        "turn_intent": {
+          "version": 1,
+          "intent": "query",
+          "record_spans": [],
+          "extraction_text": "",
+          "allow_writes": false,
+          "reason": "memory_date_question",
+          "status": "ok",
+          "source_sha256": "602b263098c987cfc19a1f050d7e3f36e3657c9db4bd889530ea3f6983ae0e5f",
+          "classifier": {
+            "tier": "mini",
+            "max_attempts": 2,
+            "request_count": 0,
+            "attempts": [],
+            "failure_category": null,
+            "retryable": false,
+            "method": "deterministic_readonly"
+          },
+          "evidence_id": "c0d6a245505f48e3"
+        },
+        "answer_review": {
+          "version": 1,
+          "status": "not_needed",
+          "reason": "memory_date_answer",
+          "semantic_verified": false
+        },
+        "memory_focus": {
+          "status": "selected",
+          "reason": "unique_cited_memory",
+          "binding": {
+            "version": 1,
+            "conversation_id": "7acfe7e113ba4ec9",
+            "user_message_id": "5380471af2554df5",
+            "source_sha256": "602b263098c987cfc19a1f050d7e3f36e3657c9db4bd889530ea3f6983ae0e5f",
+            "status": "selected",
+            "reason": "unique_cited_memory",
+            "anchor_assistant_message_id": "970204c48eb54bae",
+            "reference_snapshot": {
+              "type": "memory",
+              "entity_id": "d796f005e15041dd",
+              "person": {
+                "id": "d3648ba66c9a4b10",
+                "display_name": "沈知遥"
+              },
+              "text": "2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。",
+              "date": 1789142400000,
+              "temporal_status": "historical_background",
+              "revision": 1,
+              "ts": 1789142400000,
+              "kind": "semantic",
+              "evidence": {
+                "id": "1d9d0e4576c749f8",
+                "kind": "text",
+                "excerpt": "{\"correction_id\":\"64a41963fbe545b9\",\"edited_by_user\":true,\"memory_id\":\"d796f005e15041dd\",\"origin_evidence_id\":\"4cafdc7835b24d7d\",\"previous_evidence_id\":\"4cafdc7835b24d7d\",\"reason\":\"核对虚构资料：回复时间应为周四\",\"user_correction\":{\"person_id\":\"d3648ba66c9a4b10\",\"text\":\"2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。\",\"valid_from\":\"2026-09-12\"}}",
+                "source_ref": "memory-correction:64a41963fbe545b9",
+                "blob_hash": null,
+                "created_at": 1792297049209
+              },
+              "captured_at": 1792390901882,
+              "record_context": {
+                "status": "active",
+                "recorded_at": 1792296861022,
+                "last_user_edit_at": 1792297049208,
+                "last_lifecycle_change": null
+              },
+              "origin_source": {
+                "id": "4cafdc7835b24d7d",
+                "kind": "text",
+                "excerpt": "2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周三集中回复；紧急事项再电话联系。",
+                "source_ref": "demo:v07-communication",
+                "blob_hash": null,
+                "created_at": 1792296861022
+              },
+              "id": "S3"
+            }
+          },
+          "registration": {
+            "status": "registered",
+            "source_id": "S1"
+          }
+        }
+      },
+      "error": null,
+      "cancel_requested": 0,
+      "idempotency_key": "chat:7acfe7e113ba4ec9:v010-demo-1",
+      "created_at": 1792390935307,
+      "updated_at": 1792390935318,
+      "progress": "判断查询与记事范围"
+    },
+    {
+      "id": "74f84d80fbbc4538",
+      "kind": "chat",
+      "title": "重新分析：【以下为虚构演示更新】顾予澄现在在云栈演示科技工",
+      "payload": {
+        "conversation_id": "36c7cbb9f7b24e7e",
+        "text": "【以下为虚构演示更新】顾予澄现在在云栈演示科技工作，常驻苏州，请记住这两项。沈知遥现在保存的沟通偏好是什么？",
+        "reanalysis_of": "fefcd5ec2fb84e5d",
+        "source_sha256": "1f2fa8763b7bc56514ce816318f667cd29864b68aaceb9b990d823bf4796cb87",
+        "user_message_id": "e16138bb917f4eb1"
+      },
+      "status": "done",
+      "result": {
+        "answer": "当前可核查资料不足以回答这个问题。\n\n2026年9月12日沈知遥表示：项目方案请优先发邮件，她通常会在周四集中回复；紧急事项再电话联系。 [[S3]]\n\n建议：这是一条有日期的背景记录，当前事实是否仍成立尚未核实。如果您近期需要联系她，建议顺便确认该偏好是否依然适用。",
+        "conversation_id": "36c7cbb9f7b24e7e",
+        "assistant_message_id": "bd3c6eeb13da461e",
+        "receipts": [],
+        "outcomes": [
+          {
+            "kind": "intent",
+            "status": "skipped",
+            "detail": "本轮为查询，保留对话与审计原文，未保存新记忆或执行写入。",
+            "failure_category": null,
+            "retryable": false,
+            "attempt_count": 1
+          }
+        ],
+        "saved": [],
+        "pending": [],
+        "failed": [],
+        "pending_ids": [],
+        "sources": [
+          {
+            "type": "memory",
+            "entity_id": "d796f005e15041dd",
+            "person": {
+              "id": "d3648ba66c9a4b10",
+              "display_name": "沈知遥"
+            },
+            "text": "2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。",
+            "date": 1789142400000,
+            "temporal_status": "historical_background",
+            "revision": 1,
+            "ts": 1789142400000,
+            "kind": "semantic",
+            "evidence": {
+              "id": "1d9d0e4576c749f8",
+              "kind": "text",
+              "excerpt": "{\"correction_id\":\"64a41963fbe545b9\",\"edited_by_user\":true,\"memory_id\":\"d796f005e15041dd\",\"origin_evidence_id\":\"4cafdc7835b24d7d\",\"previous_evidence_id\":\"4cafdc7835b24d7d\",\"reason\":\"核对虚构资料：回复时间应为周四\",\"user_correction\":{\"person_id\":\"d3648ba66c9a4b10\",\"text\":\"2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。\",\"valid_from\":\"2026-09-12\"}}",
+              "source_ref": "memory-correction:64a41963fbe545b9",
+              "blob_hash": null,
+              "created_at": 1792297049209
+            },
+            "captured_at": 1792390958197,
+            "record_context": {
+              "status": "active",
+              "recorded_at": 1792296861022,
+              "last_user_edit_at": 1792297049208,
+              "last_lifecycle_change": null
+            },
+            "origin_source": {
+              "id": "4cafdc7835b24d7d",
+              "kind": "text",
+              "excerpt": "2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周三集中回复；紧急事项再电话联系。",
+              "source_ref": "demo:v07-communication",
+              "blob_hash": null,
+              "created_at": 1792296861022
+            },
+            "id": "S3"
+          }
+        ],
+        "source_warnings": [
+          {
+            "code": "historical_context",
+            "message": "引用包含有日期的历史背景，当前是否仍适用需要核实。"
+          }
+        ],
+        "source_dependencies": [
+          {
+            "type": "field",
+            "entity_id": "[\"d3648ba66c9a4b10\",\"city\",1788537600000]",
+            "person": {
+              "id": "d3648ba66c9a4b10",
+              "display_name": "沈知遥"
+            },
+            "text": "上海",
+            "field": "city",
+            "date": 1788537600000,
+            "valid_from": 1788537600000,
+            "valid_to": null,
+            "recorded_at": 1792296861022,
+            "temporal_status": "current_field",
+            "evidence": {
+              "id": "3af8728b49f841c0",
+              "kind": "text",
+              "excerpt": "2026-09-05 沈知遥告知她在上海工作。",
+              "source_ref": "demo:v07-city:2026-09-05",
+              "blob_hash": null,
+              "created_at": 1792296861022
+            },
+            "captured_at": 1792390958196,
+            "record_context": {
+              "recorded_at": 1792296861022
+            },
+            "origin_source": {
+              "id": "3af8728b49f841c0",
+              "kind": "text",
+              "excerpt": "2026-09-05 沈知遥告知她在上海工作。",
+              "source_ref": "demo:v07-city:2026-09-05",
+              "blob_hash": null,
+              "created_at": 1792296861022
+            },
+            "id": "S1"
+          },
+          {
+            "type": "field",
+            "entity_id": "[\"d3648ba66c9a4b10\",\"city\",1749484800000]",
+            "person": {
+              "id": "d3648ba66c9a4b10",
+              "display_name": "沈知遥"
+            },
+            "text": "杭州",
+            "field": "city",
+            "date": 1749484800000,
+            "valid_from": 1749484800000,
+            "valid_to": 1788537600000,
+            "recorded_at": 1792296861022,
+            "temporal_status": "historical_field",
+            "evidence": {
+              "id": "c8d6b66c3f3b40df",
+              "kind": "text",
+              "excerpt": "2025-06-10 沈知遥告知她在杭州工作。",
+              "source_ref": "demo:v07-city:2025-06-10",
+              "blob_hash": null,
+              "created_at": 1792296861022
+            },
+            "captured_at": 1792390958196,
+            "record_context": {
+              "recorded_at": 1792296861022
+            },
+            "origin_source": {
+              "id": "c8d6b66c3f3b40df",
+              "kind": "text",
+              "excerpt": "2025-06-10 沈知遥告知她在杭州工作。",
+              "source_ref": "demo:v07-city:2025-06-10",
+              "blob_hash": null,
+              "created_at": 1792296861022
+            },
+            "id": "S2"
+          },
+          {
+            "type": "memory",
+            "entity_id": "d796f005e15041dd",
+            "person": {
+              "id": "d3648ba66c9a4b10",
+              "display_name": "沈知遥"
+            },
+            "text": "2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。",
+            "date": 1789142400000,
+            "temporal_status": "historical_background",
+            "revision": 1,
+            "ts": 1789142400000,
+            "kind": "semantic",
+            "evidence": {
+              "id": "1d9d0e4576c749f8",
+              "kind": "text",
+              "excerpt": "{\"correction_id\":\"64a41963fbe545b9\",\"edited_by_user\":true,\"memory_id\":\"d796f005e15041dd\",\"origin_evidence_id\":\"4cafdc7835b24d7d\",\"previous_evidence_id\":\"4cafdc7835b24d7d\",\"reason\":\"核对虚构资料：回复时间应为周四\",\"user_correction\":{\"person_id\":\"d3648ba66c9a4b10\",\"text\":\"2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周四集中回复；紧急事项再电话联系。\",\"valid_from\":\"2026-09-12\"}}",
+              "source_ref": "memory-correction:64a41963fbe545b9",
+              "blob_hash": null,
+              "created_at": 1792297049209
+            },
+            "captured_at": 1792390958197,
+            "record_context": {
+              "status": "active",
+              "recorded_at": 1792296861022,
+              "last_user_edit_at": 1792297049208,
+              "last_lifecycle_change": null
+            },
+            "origin_source": {
+              "id": "4cafdc7835b24d7d",
+              "kind": "text",
+              "excerpt": "2026年9月12日沈知遥说：项目方案请优先发邮件，我通常会在周三集中回复；紧急事项再电话联系。",
+              "source_ref": "demo:v07-communication",
+              "blob_hash": null,
+              "created_at": 1792296861022
+            },
+            "id": "S3"
+          },
+          {
+            "type": "memory",
+            "entity_id": "d9f41a328fb446ce",
+            "person": null,
+            "text": "没有给陈岚转账，也没有答应发合同，暂时只是讨论",
+            "date": 1791879985894,
+            "temporal_status": "historical_background",
+            "revision": 0,
+            "ts": 1791879985894,
+            "kind": "episodic",
+            "evidence": {
+              "id": "88588d48d45c4ce1",
+              "kind": "text",
+              "excerpt": "我没有给陈岚转账，也没有答应发合同，暂时只是讨论。",
+              "source_ref": "mock-live:negated",
+              "blob_hash": null,
+              "created_at": 1791879985894
+            },
+            "captured_at": 1792390958197,
+            "record_context": {
+              "status": "active",
+              "recorded_at": 1791879985894,
+              "last_user_edit_at": null,
+              "last_lifecycle_change": null
+            },
+            "origin_source": {
+              "id": "88588d48d45c4ce1",
+              "kind": "text",
+              "excerpt": "我没有给陈岚转账，也没有答应发合同，暂时只是讨论。",
+              "source_ref": "mock-live:negated",
+              "blob_hash": null,
+              "created_at": 1791879985894
+            },
+            "id": "S4"
+          },
+          {
+            "type": "profile_context",
+            "entity_id": "d3648ba66c9a4b10",
+            "text": "人物：沈知遥\n字段：city=上海"
+          }
+        ],
+        "conversation_scope": {
+          "version": 1,
+          "mode": "single",
+          "person_ids": [
+            "d3648ba66c9a4b10"
+          ],
+          "blocked": false,
+          "reason": "explicit_name",
+          "candidates": [
+            {
+              "person_id": "d3648ba66c9a4b10",
+              "display_name": "沈知遥",
+              "summary": "上海"
+            }
+          ],
+          "origin_message_id": "fefcd5ec2fb84e5d",
+          "conversation_id": "36c7cbb9f7b24e7e",
+          "user_message_id": "e16138bb917f4eb1",
+          "context_message_id": "fefcd5ec2fb84e5d"
+        },
+        "turn_intent": {
+          "version": 1,
+          "intent": "query",
+          "record_spans": [],
+          "extraction_text": "",
+          "allow_writes": false,
+          "reason": "消息开头明确标注“虚构演示更新”，表明所述内容属示例/假设而非真实新事实，不符合record条件；后半句为对已有资料的直接查询，整体归类为query。",
+          "status": "classified",
+          "source_sha256": "1f2fa8763b7bc56514ce816318f667cd29864b68aaceb9b990d823bf4796cb87",
+          "classifier": {
+            "tier": "mini",
+            "max_attempts": 2,
+            "request_count": 1,
+            "attempts": [
+              {
+                "attempt": 1,
+                "max_tokens": 1800,
+                "request_started": true,
+                "content_chars": 123,
+                "finish_reason": "stop",
+                "model": "qwen3.7-flash",
+                "usage": {
+                  "prompt_tokens": 719,
+                  "completion_tokens": 1635,
+                  "total_tokens": 2354,
+                  "reasoning_tokens": 1580
+                },
+                "status": "succeeded",
+                "failure_category": null,
+                "retryable": false
+              }
+            ],
+            "failure_category": null,
+            "retryable": false
+          },
+          "evidence_id": "d51f96b065544bdc"
+        },
+        "answer_review": {
+          "version": 1,
+          "status": "completed",
+          "method": "single_model_revision",
+          "semantic_verified": false,
+          "original_answer": "当前会话边界不允许新增或修改记忆，因此我无法为您记录顾予澄的工作和常驻城市信息。\n\n关于沈知遥的沟通偏好：\n根据记录，2026年9月12日沈知遥表示：项目方案请优先发邮件，她通常会在周四集中回复；紧急事项再电话联系[[S3]]。\n\n这是一条有日期的背景记录，当前事实是否仍成立尚未核实。如果您近期需要联系她，建议顺便确认该偏好是否依然适用。",
+          "revised_answer": "当前可核查资料不足以回答这个问题。\n\n2026年9月12日沈知遥表示：项目方案请优先发邮件，她通常会在周四集中回复；紧急事项再电话联系。 [[S3]]\n\n建议：这是一条有日期的背景记录，当前事实是否仍成立尚未核实。如果您近期需要联系她，建议顺便确认该偏好是否依然适用。",
+          "changed": true,
+          "answer_type": "mixed",
+          "issues": [
+            {
+              "code": "other",
+              "quote": "当前会话边界不允许新增或修改记忆，因此我无法为您记录顾予澄的工作和常驻城市信息。",
+              "detail": "规则禁止自行复述或声称任何写入状态，且skipped回执不满足显示条件。资料中无顾予澄信息，应使用no_answer段处理。",
+              "source_ids": [],
+              "quote_status": "matched"
+            }
+          ],
+          "raw_issues": [
+            {
+              "code": "other",
+              "quote": "当前会话边界不允许新增或修改记忆，因此我无法为您记录顾予澄的工作和常驻城市信息。",
+              "detail": "规则禁止自行复述或声称任何写入状态，且skipped回执不满足显示条件。资料中无顾予澄信息，应使用no_answer段处理。",
+              "source_ids": []
+            }
+          ],
+          "segments": [
+            {
+              "kind": "no_answer",
+              "text": "",
+              "source_ids": []
+            },
+            {
+              "kind": "fact",
+              "text": "2026年9月12日沈知遥表示：项目方案请优先发邮件，她通常会在周四集中回复；紧急事项再电话联系。",
+              "source_ids": [
+                "S3"
+              ]
+            },
+            {
+              "kind": "advice",
+              "text": "这是一条有日期的背景记录，当前事实是否仍成立尚未核实。如果您近期需要联系她，建议顺便确认该偏好是否依然适用。",
+              "source_ids": []
+            }
+          ],
+          "raw_response": "{\n  \"answer_type\": \"mixed\",\n  \"segments\": [\n    {\n      \"kind\": \"no_answer\",\n      \"text\": \"\",\n      \"source_ids\": []\n    },\n    {\n      \"kind\": \"fact\",\n      \"text\": \"2026年9月12日沈知遥表示：项目方案请优先发邮件，她通常会在周四集中回复；紧急事项再电话联系。\",\n      \"source_ids\": [\n        \"S3\"\n      ]\n    },\n    {\n      \"kind\": \"advice\",\n      \"text\": \"这是一条有日期的背景记录，当前事实是否仍成立尚未核实。如果您近期需要联系她，建议顺便确认该偏好是否依然适用。\",\n      \"source_ids\": []\n    }\n  ],\n  \"issues\": [\n    {\n      \"code\": \"other\",\n      \"quote\": \"当前会话边界不允许新增或修改记忆，因此我无法为您记录顾予澄的工作和常驻城市信息。\",\n      \"detail\": \"规则禁止自行复述或声称任何写入状态，且skipped回执不满足显示条件。资料中无顾予澄信息，应使用no_answer段处理。\",\n      \"source_ids\": []\n    }\n  ]\n}",
+          "original_references": [
+            "S3"
+          ],
+          "source_ids": [
+            "S1",
+            "S2",
+            "S3",
+            "S4"
+          ],
+          "invalid_original_references": [],
+          "source_snapshot_sha256": "6f900906efbcde5ceaf26b6f8356e3272b3ac55107b0335775c2609a2ec654bb",
+          "input_sha256": "a4413d41574a2b2be113bb6f8994bae1f25ad3a414486ad3e5bba2d8beaf2b5c",
+          "unavailable_reason": null,
+          "raw_response_sha256": "10aed245b2ae114eac2b35c42de67e4ac170004773109eda12d381583cbffe54",
+          "raw_response_truncated": false
+        },
+        "memory_focus": {
+          "status": "not_applicable",
+          "reason": "no_explicit_memory_reference",
+          "binding": null,
+          "registration": {
+            "status": "not_selected",
+            "source_id": null
+          }
+        }
+      },
+      "error": null,
+      "cancel_requested": 0,
+      "idempotency_key": "chat-reanalysis:36c7cbb9f7b24e7e:fefcd5ec2fb84e5d",
+      "created_at": 1792390936334,
+      "updated_at": 1792391014966,
+      "progress": "核对资料、日期与事实引用"
+    }
+  ],
+  "provenance": "fictional_demo_real_gateway",
+  "reanalysis_source": {
+    "conversation_id": "36c7cbb9f7b24e7e",
+    "user_message_id": "fefcd5ec2fb84e5d",
+    "duplicate_request_same_task": true
+  }
+}

@@ -1,4 +1,5 @@
 """Turn-local references are assigned only to records read from storage."""
+from collections import Counter
 from copy import deepcopy
 from html.parser import HTMLParser
 import json
@@ -9,7 +10,7 @@ from markdown_it import MarkdownIt
 from app.agent.followup import _atomic
 from app.agent.memory_sources import source_state
 
-_REFERENCE = re.compile(r'\[\[(S\d+)\]\]')
+_REFERENCE = re.compile(r'\[\[([A-Za-z0-9_][A-Za-z0-9_.:-]*)\]\]')
 _MARKDOWN = MarkdownIt('gfm-like')
 
 
@@ -36,11 +37,15 @@ class _CitationText(HTMLParser):
             self.references.extend(_REFERENCE.findall(data))
 
 
-def _prose_references(answer):
+def _prose_reference_occurrences(answer):
     parser = _CitationText()
     parser.feed(_MARKDOWN.render(answer))
     parser.close()
-    return list(dict.fromkeys(parser.references))
+    return parser.references
+
+
+def _prose_references(answer):
+    return list(dict.fromkeys(_prose_reference_occurrences(answer)))
 
 
 class SourceChangedError(ValueError):
@@ -120,13 +125,20 @@ class SourceRegistry:
         return output
 
     def citations(self, answer, require_citations=False):
-        referenced = _prose_references(answer)
+        occurrences = _prose_reference_occurrences(answer)
+        referenced = list(dict.fromkeys(occurrences))
         used = [sid for sid in referenced if sid in self.sources]
         invalid = set(referenced) - self.sources.keys()
-        answer = _REFERENCE.sub(lambda match: '' if match.group(1) in invalid else match.group(0), answer)
+        prose_counts = Counter(occurrences)
+        raw_counts = Counter(_REFERENCE.findall(answer))
+        # Remove an identifier only when every occurrence is visible prose.
+        # Escapes/entities can synthesize markers and make these counts ambiguous.
+        removable = {sid for sid in invalid if raw_counts[sid] == prose_counts[sid]} if not (
+            '\\' in answer or '&' in answer) else set()
+        answer = _REFERENCE.sub(lambda match: '' if match.group(1) in removable else match.group(0), answer)
         warnings = []
         if invalid:
-            warnings.append({'code': 'invalid_citation', 'message': '部分资料引用无法核验，已移除引用标记，请核对回答。'})
+            warnings.append({'code': 'invalid_citation', 'message': '部分资料引用无法核验，未列为资料来源，请核对回答。'})
         if not used and require_citations and self.sources:
             warnings.append({'code': 'uncited', 'message': '本条回答未附可核查的资料引用，请核对其中的人物信息。'})
         if any(self.sources[sid]['temporal_status'] in {'historical_background', 'historical_field'} for sid in used):

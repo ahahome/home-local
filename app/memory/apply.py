@@ -16,7 +16,7 @@ from typing import Any
 from app.config import get_settings, tz
 from app.memory import disambiguate
 from app.memory.writes import (ledger_key, promise_key, resolve_person, AmbiguousPerson, discard_key,
-                              matching_promise, explicit_transfer_direction)
+                              matching_promise, explicit_transfer_direction, archived_only_aliases)
 from app.memory.extract import is_role_person, is_task_note
 from app.store import repo
 from app.store.db import savepoint
@@ -99,6 +99,10 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
         if name in forced:
             person_id = forced[name]
         else:
+            if {name, p.get('name')} & archived_only_aliases(conn):
+                outcomes.append(Outcome('person', 'skipped',
+                                        f'{name} 对应已归档人物，不自动建档或更新，请先恢复或明确另建人物'))
+                continue
             res = disambiguate.resolve(conn, name)
             if res.kind == "confirm":
                 # 存疑必回问（P1）：整条 patch 挂起，等用户确认身份后再应用

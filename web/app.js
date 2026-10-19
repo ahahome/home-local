@@ -27,6 +27,27 @@ function validChatSource(source){return !!source&&typeof source==='object'&&/^S[
 function chatSourceAttrs(cid,mid,sid){return `data-cid="${esc(cid)}" data-mid="${esc(mid)}" data-sid="${esc(sid)}"`;}
 function chatSourceLabel(source){return [source.person?.display_name,chatSourceTemporal[source.temporal_status]||chatSourceKinds[source.type],source.date?memoryDate(source.date):''].filter(Boolean).join(' · ');}
 function chatSourceWarnings(meta){const warnings=[...new Set((Array.isArray(meta?.source_warnings)?meta.source_warnings:[]).map(item=>typeof item?.message==='string'?item.message.trim():'').filter(Boolean))];return warnings.length?`<div class="chat-source-warnings" role="note">${warnings.map(text=>`<p>${esc(text)}</p>`).join('')}</div>`:'';}
+function chatPersonChoices(meta,mid,cid){
+  const scope=meta?.conversation_scope;if(scope?.mode!=='clarify'||!mid||!cid)return '';
+  const seen=new Set(),candidates=(Array.isArray(scope.candidates)?scope.candidates:[]).filter(person=>{if(typeof person?.person_id!=='string'||!person.person_id||typeof person.display_name!=='string'||seen.has(person.person_id))return false;seen.add(person.person_id);return true;}).slice(0,20);
+  return candidates.length?`<section class="chat-person-choices" aria-label="选择人物"><p>选择人物</p><div>${candidates.map(person=>btn(`<strong>${esc(person.display_name)}</strong>${typeof person.summary==='string'&&person.summary?`<span>${esc(person.summary)}</span>`:''}`,'chat-choose-person',`data-cid="${esc(cid)}" data-mid="${esc(mid)}" data-person-id="${esc(person.person_id)}"`)).join('')}</div></section>`:'';
+}
+async function chooseChatPerson(data){
+  if(state.page!=='chat'||state.cid!==data.cid)return;
+  const cid=state.cid,{messages}=await api(`/conversations/${encodeURIComponent(cid)}/messages`);
+  if(state.page!=='chat'||state.cid!==cid)return;
+  const answer=messages.find(message=>message.id===data.mid&&message.role==='assistant'),scope=answer?.metadata?.conversation_scope;
+  const person=scope?.mode==='clarify'&&(Array.isArray(scope.candidates)?scope.candidates:[]).find(candidate=>candidate?.person_id===data.personId&&typeof candidate.display_name==='string');
+  const question=messages.find(message=>message.id===scope?.user_message_id&&message.role==='user');
+  if(!person||!question)throw new Error('人物选择已不可用，请重新提问。');
+  const text=`人物 ID: ${person.person_id}\n${question.content}`;
+  await sendChat(text,chatUserText(text,{conversation_scope:{mode:'single',person_ids:[person.person_id],candidates:[person]}}));
+}
+function chatUserText(text,meta){
+  const scope=meta?.conversation_scope,match=/^人物 ID: ([A-Za-z0-9_-]+)\n/.exec(text||'');
+  const person=scope?.mode==='single'&&scope.person_ids?.length===1&&scope.person_ids[0]===match?.[1]&&(Array.isArray(scope.candidates)?scope.candidates:[]).find(candidate=>candidate?.person_id===match[1]&&typeof candidate.display_name==='string');
+  return person?`已选择：${person.display_name}${typeof person.summary==='string'&&person.summary?`（${person.summary}）`:''}\n${text.slice(match[0].length)}`:text;
+}
 function chatAnswer(text,meta,mid,cid){
   const host=document.createElement('div');host.innerHTML=md(text,true);
   const sources=new Map();for(const source of Array.isArray(meta?.sources)?meta.sources:[])if(validChatSource(source)&&!sources.has(source.id))sources.set(source.id,source);
@@ -40,9 +61,9 @@ function chatAnswer(text,meta,mid,cid){
     }
   }
   const list=[...used].map(id=>sources.get(id));
-  return host.innerHTML+chatSourceWarnings(meta)+(list.length?`<details class="chat-sources"><summary>引用资料（${list.length}）</summary><ol class="chat-source-list">${list.map(source=>`<li>${btn(`${esc(source.id)} <span>${esc(chatSourceLabel(source))}</span>`,'chat-source',chatSourceAttrs(cid,mid,source.id),'chat-source-link')}<p class="chat-source-preview">${esc(memoryPreview(source.text,130))}</p></li>`).join('')}</ol></details>`:'');
+  return host.innerHTML+chatSourceWarnings(meta)+chatPersonChoices(meta,mid,cid)+(list.length?`<details class="chat-sources"><summary>引用资料（${list.length}）</summary><ol class="chat-source-list">${list.map(source=>`<li>${btn(`${esc(source.id)} <span>${esc(chatSourceLabel(source))}</span>`,'chat-source',chatSourceAttrs(cid,mid,source.id),'chat-source-link')}<p class="chat-source-preview">${esc(memoryPreview(source.text,130))}</p></li>`).join('')}</ol></details>`:'');
 }
-function message(role,text,meta,mid=null,cid=state.cid){return `<div class="message ${role}"${mid?` data-message-id="${esc(mid)}"`:''}>${avatar(role==='user'?'我':'h')}<div class="message-content ${role==='assistant'?'markdown':''}">${role==='assistant'?chatAnswer(text,meta,mid,cid):esc(text)}${role==='assistant'?receipts(meta):''}</div></div>`;}
+function message(role,text,meta,mid=null,cid=state.cid){return `<div class="message ${role}"${mid?` data-message-id="${esc(mid)}"`:''}>${avatar(role==='user'?'我':'h')}<div class="message-content ${role==='assistant'?'markdown':''}">${role==='assistant'?chatAnswer(text,meta,mid,cid):esc(chatUserText(text,meta))}${role==='assistant'?receipts(meta):''}</div></div>`;}
 async function go(page){history.pushState(null,'','#/'+page);await route();}
 async function route(){state.page=location.hash.replace('#/','').split(/[/?]/)[0]||'home';if(!labels[state.page])state.page='home';$('.sidebar').classList.remove('open');close();document.querySelectorAll('[data-page]').forEach(a=>a.classList.toggle('active',a.dataset.page===state.page));$('#breadcrumb').textContent=labels[state.page];$('#main').innerHTML='<div class="loading">正在读取…</div>';try{await pages[state.page]();}catch(e){$('#main').innerHTML=`<div class="card">${empty(esc(e.message),'<p style="margin-top:15px">'+btn('重新加载','reload')+'</p>')}</div>`;toast(e.message);}}
 function render(page,html){if(state.page===page)$('#main').innerHTML=html;}
@@ -161,7 +182,7 @@ function scrollChat(){const b=$('#messages');if(b)b.scrollTop=b.scrollHeight;}
 function currentStream(){return [...state.streams.values()].find(s=>s.cid===state.cid&&!s.finished);}
 function paintStream(s){const progress=$('#task-progress');if(progress?.dataset.task===s.task.id)progress.textContent=s.progress;if(state.page!=='chat'||s.cid!==state.cid)return;let box=$('#stream-answer');if(!box){$('#messages .chat-empty')?.remove();$('#messages').insertAdjacentHTML('beforeend',`<div id="stream-answer"><div class="progress-line"><i class="pulse"></i><span id="stream-progress"></span></div><div class="message assistant">${avatar('h')}<div class="message-content markdown" id="stream-content"></div></div></div>`);}$('#stream-progress').textContent=s.progress||'正在处理';$('#stream-content').innerHTML=md(s.text,true);$('#send-button').disabled=true;document.querySelector('[data-action="cancel-chat"]')?.classList.remove('hide');scrollChat();}
 function watch(task,cid=null){if(state.streams.has(task.id)){paintStream(state.streams.get(task.id));return;}const s={task,cid,text:'',progress:'等待处理',cursor:0,finished:false};state.streams.set(task.id,s);const es=new EventSource(`/api/tasks/${task.id}/events`);s.es=es;const consume=(type,fn)=>es.addEventListener(type,e=>{const seq=Number(e.lastEventId);if(seq&&seq<=s.cursor)return;if(seq)s.cursor=seq;fn(JSON.parse(e.data));paintStream(s);});consume('answer_start',()=>{s.text='';});consume('delta',d=>{s.text+=d.text;});consume('progress',d=>{s.progress=d.message;});consume('tool',d=>{s.progress='正在处理相关信息';});consume('memory',d=>{s.progress=d.outcomes.some(x=>x.status==='failed')?'部分信息未保存，正在生成回答':'信息检查完成，正在整理回答';});consume('result',d=>{s.result=d;s.text=d.answer||s.text;});consume('failed',d=>{s.error=d.message;});consume('cancelled',d=>{s.error=d.message;});es.addEventListener('end',async e=>{s.finished=true;es.close();const d=JSON.parse(e.data);if(state.page==='chat'&&state.cid===cid){$('#stream-answer')?.remove();$('#send-button').disabled=false;document.querySelector('[data-action="cancel-chat"]')?.classList.add('hide');await loadMessages();if(d.status!=='done'&&d.status!=='partial')$('#messages')?.insertAdjacentHTML('beforeend',message('assistant',s.error||d.error||'任务已停止。可在任务中心重试。'));}else if(!cid)toast(`${task.title} · ${statusNames[d.status]||d.status}`);if($('#task-progress')?.dataset.task===task.id)await taskDetail(task.id);if(['tasks','research','persons'].includes(state.page))pages[state.page]();badges();});es.onerror=()=>{s.progress='连接恢复中，任务记录已保留';paintStream(s);};paintStream(s);badges();}
-async function sendChat(text){if(state.sending||currentStream())return toast('请等待当前回复，或先取消');text=(text||$('#chat-input')?.value||'').trim();if(!text)return;state.sending=true;const input=$('#chat-input');if(input)input.value='';localStorage.setItem('home-draft',text);try{if(!state.cid){await newConversation();}const cid=state.cid;const task=await api(`/conversations/${cid}/turns`,{text,request_id:crypto.randomUUID()});localStorage.removeItem('home-draft');if($('#chat-input'))$('#chat-input').value='';if(state.page==='chat'){$('#messages .chat-empty')?.remove();$('#messages').insertAdjacentHTML('beforeend',message('user',text));}watch(task,cid);}catch(e){if($('#chat-input'))$('#chat-input').value=text;throw e;}finally{state.sending=false;}}
+async function sendChat(text,displayText){if(state.sending||currentStream())return toast('请等待当前回复，或先取消');text=(text||$('#chat-input')?.value||'').trim();if(!text)return;state.sending=true;const input=$('#chat-input');if(input)input.value='';localStorage.setItem('home-draft',text);try{if(!state.cid){await newConversation();}const cid=state.cid;const task=await api(`/conversations/${cid}/turns`,{text,request_id:crypto.randomUUID()});localStorage.removeItem('home-draft');if($('#chat-input'))$('#chat-input').value='';if(state.page==='chat'){$('#messages .chat-empty')?.remove();$('#messages').insertAdjacentHTML('beforeend',message('user',displayText||text));}watch(task,cid);}catch(e){if($('#chat-input'))$('#chat-input').value=text;throw e;}finally{state.sending=false;}}
 async function promptChat(text){close();if(state.page!=='chat')await go('chat');await sendChat(text);}
 
 async function persons(){const d=await api(state.archived?'/persons/archived':'/persons');state.persons=d.persons;render('persons',head(state.archived?'已归档的人物':'人物档案',`${d.persons.length} 位人物 · 已保存的档案与资料`,`${btn(state.archived?'返回档案':'已归档','toggle-archive','','ghost')}${btn('导入联系人','names')}${btn('＋ 导入聊天 / 文件','capture','','primary')}`)+`<div style="margin-bottom:20px"><input class="search" id="person-search" placeholder="搜索姓名或别名" aria-label="搜索人物"></div><div class="person-grid" id="person-grid">${personCards(d.persons)}</div>`);}
@@ -650,6 +671,7 @@ const actions={
   'new-chat':()=>newConversation(), 'select-chat':async d=>{state.cid=d.id;localStorage.setItem('home-conversation',d.id);await go('chat');},
   'send-chat':()=>sendChat(), prompt:d=>promptChat(d.text),
   'chat-source':openChatSource,
+  'chat-choose-person':chooseChatPerson,
   'quick-note':async()=>{const text=$('#quick-note').value.trim();if(!text)return toast('请输入近况');await promptChat(text);state.quickNote='';}, 'capture-text':()=>promptChat($('#capture-text').value),
   'agenda-refresh':refreshAgenda,'agenda-hidden':()=>showHiddenAgenda(),
   'agenda-more':()=>{state.agendaLimit=(state.agendaLimit||12)+12;paintAgendaList();},

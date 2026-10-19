@@ -8,12 +8,54 @@
 |----|------|------|---------|
 | **L1 抽取** | `eval/run.py` + `eval/cases/tune.jsonl` `holdout.jsonl` | 是 | 从文本抽人物/字段/事实/承诺/账本对不对 |
 | **L2 落库** | `tests/test_invariants.py`、`test_workflows.py`、`test_corrections.py`、`test_extraction_validation.py` | 否 | 置信度、金额、幂等、方向确认、跨入口写入、历史与纠错 |
-| **L3 检索** | 待补 | 否 | Recall@5 / MRR（需要 (query, 相关 id) 标注） |
+| **L3 检索** | `eval/memory_retrieval.py`、`eval/memory_questions.py --track retrieval` | 否 | 合成生命周期回归、虚构资料自然问法的 Recall@1/3/5 与 MRR@5，来源检查单列 |
 | **L5 不变量** | `tests/test_invariants.py` | 否 | 七原则：违反即失败，没有「大部分情况对」 |
-| L4 任务链路 | `tests/test_workflows.py`、`scripts/mock_e2e.py` | 真实链路需要 API | 对话、媒体、群聊、重试与最终库状态；完整多轮语义量化仍待补 |
+| L4 任务链路 | `tests/test_workflows.py`、`scripts/mock_e2e.py`、`eval/memory_questions.py --track answers` | 真实链路需要 API | 实际 harness 多轮、抽取、来源和工具记录；回答语义需要单独人工审阅 |
 
 评估器本身的比对逻辑在 `eval/metrics.py`，由 `tests/test_eval_metrics.py` 覆盖。
 **理由：评估器写错了比被测代码错了更危险**——指标会假绿，问题被掩盖。
+
+## 0.8 记忆检索与真实回答
+
+`fixtures/memory_questions_v08.json` 是**虚构资料与自然语言问法**，不包含真实用户记录，也不应称为独立未见基准。它是开发回归集，包含 16 个固定检索或来源场景，其中 10 个正召回问法、5 个无答案或身份/可见性负例及 1 个档案时间状态场景。另外有 6 组对话、13 个目标回答，覆盖昵称、口语、指代、同名澄清、当前与历史信息、冲突、缺少答案，以及修改、撤销、恢复、转移与归档。
+
+四种结果分别报告，禁止混为“模型准确率”：
+
+| 结果 | 判定依据 | 局限 |
+| --- | --- | --- |
+| 固定问法排名 | 预先标注的相关记录 ID，Recall@1/3/5、MRR@5 | 不衡量模型生成；无答案、歧义和档案来源检查不进入排名分母 |
+| 确定性检查 | 实际数据库行、证据原文、人物归属、字段状态和来源生命周期 | 引用真实不代表结论得到支持 |
+| `limited_fact_checks` | 明确列出的字符串存在或缺失规则 | 不能判断否定、指代、时间关系和推论；例如“不能发邮件”也含有“邮件” |
+| `semantic_review` | 人工审阅实际回答、当时资料、引用及工具记录 | 默认 `review_pending`、`score=null`，不使用 LLM 自评 |
+
+固定检索只传用户问法及 fixture 中明确的姓名或范围参数，不暗中注入人物 ID。`expect.relevant` 是固定检索的相关性标签。对话中的 `expect.source_records` 只列出可能相关的证据，供人工审阅使用，不要求必须全部引用，也不用于给回答打准确率。`evidence_access` 分别列出读取和引用过的相关记录，仅用于定位漏读资料。
+
+```bash
+# 默认离线检索：禁用向量与网络，不调用模型。
+.venv/bin/python -m eval.memory_questions --track retrieval --output-dir /tmp/home-v08-retrieval
+
+# 真实回答：实际调用 harness.run_turn，保留开头的真实抽取、工具与多轮历史。
+# 使用 runner 所在仓库的模型配置，会产生真实模型调用。
+.venv/bin/python -m eval.memory_questions --track answers --repeat 2 --output-dir /tmp/home-v08-answers
+
+# 按标签选择，多个 --tag 取并集；--limit 限制场景数量，完整保留选中对话的各轮。
+.venv/bin/python -m eval.memory_questions --track answers --tag lifecycle --limit 1 --worker-timeout 600
+
+# 使用同一 runner 和 fixture 对比另一份实现；app-root 在导入 app 前生效。
+.venv/bin/python -m eval.memory_questions --track retrieval --app-root /absolute/path/to/baseline --output-dir /tmp/home-v07-baseline
+```
+
+`HOME_EVAL_APP_ROOT` 可代替 `--app-root`。实现目录必须包含 `app/` 和 `migrations/`；不要求包含 0.8 的评测文件。模型配置始终从 runner 仓库的设置及环境加载，不输出密钥。两轨都禁用 embedding，这份报告不能衡量向量语义召回。
+
+每个场景及每次 repeat 使用独立子进程、临时 SQLite 和附件目录。多轮对话在自己的场景内共享历史。既不打开用户数据库，也不缓存模型结果。真实抽取可能新增或修改资料，报告会保存这些变化；新增记录不会自动加入预标相关记录集合。CLI 内部串行执行，可通过独立 CLI 进程并行运行不同标签，不共享连接和设置补丁。
+
+JSON 和可人工审阅的 Markdown 在初始化及每完成一个场景后原子更新。`run_status=running` 表示尚未完成，`complete` 表示选中场景结束。每场景默认 600 秒硬超时，可用 `--worker-timeout` 修改；超时终止该 worker，保留错误并继续其他场景。
+
+报告记录 fixture 与应用源码 SHA256、runner SHA256、模式、配置、repeat、Git 状态及运行期间应用源码是否变化。解压的实现目录没有自己的 Git 根时，`app_git` 为 null，不借用上层仓库的版本。比较两次运行时必须核对 fixture hash、配置、样本数量和实现 hash；运行期间源码变化的结果不可当作稳定版本对比。`scenario_errors` 统计场景级失败，`failed_turns` 统计未生成的回答轮次，`runtime_errors` 不重复叠加同一个 worker 失败及其目标回答。
+
+退出码非零表示运行异常、确定性检查失败、有限字符串规则失败或运行期间实现发生变化。低召回按实际数值报告，不设暗含的通过门槛。人工审阅待完成不视为语义通过。评测器负控在 `tests/test_memory_questions_eval.py`，包含错误引用、历史状态伪造、错误命中、空回答及失败样本分母检查。
+
+0.7 的 `memory_retrieval.py` 继续保留，默认 k=5、两项范围压力场景 k=1，使用它自己的 `recall_at_k` 口径。它与 0.8 的固定 Recall@1/3/5 不应直接拼成一个分数。
 
 ## 分集：tune / holdout（L1 的核心纪律）
 
@@ -150,8 +192,8 @@ L5 不变量层不设门槛——**必须 100%**。
   归档到当前人物名下」）因此只能靠 `max_people` 间接覆盖。待支持 `王芳.field:title` 这种带人名的写法。
 - **字段名无白名单**：模型可以自造 `family` 这类 schema 外的字段并原样落库
   （`sanitize()` 只做类型归一化，不校验字段名）。要不要加白名单需先定字段表。
-- **L3 检索层**没做，`retrieve.hybrid_search` 目前的排序质量无量化依据。
-- **L4 已覆盖部分任务链路**：跨入口和状态回归在 `test_workflows.py`，真实对话、图片、群聊与幂等验收在 `scripts/mock_e2e.py`。这些不能替代对多轮上下文、复杂语义归属和工具行为的独立量化。
+- **L3 已有开发集测量**：0.7 检索生命周期回归与 0.8 自然问法回归分别报告。缺少真实用户分布和独立未见检索集，且当前评测禁用向量，不能据此推断开放问法与 embedding 召回质量。
+- **L4 已覆盖部分任务链路**：跨入口和状态回归在 `test_workflows.py`，真实对话、图片、群聊与幂等验收在 `scripts/mock_e2e.py`。0.8 增加实际 harness 多轮记录与人工审阅材料，仍不能把来源检查或字符串规则当作多轮语义准确率。
 - **负样本仍偏少**：v1 只有 5 条 `negative-promise`（误判率分辨率 0.2 一档）→ v2 加到 11 条 →
   **v3 现为 12 条**（分辨率 0.083）。目标 20 条以上，且要覆盖**闸门词表里还没有的说法**
   （v3 已放「改日」「我妈」「回头请你喝两杯」这类探针——本轮全过，但过的是模型而不是词表，

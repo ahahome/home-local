@@ -1,5 +1,67 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>home · 关系与记忆</title><link rel="stylesheet" href="/static/style.css?v=0.10.0"><script defer src="/static/vendor/marked.min.js"></script><script defer src="/static/vendor/purify.min.js"></script><script defer src="/static/app.js?v=0.10.0"></script></head>
-<body><aside class="sidebar"><a class="brand" href="#/home"><span class="brand-symbol">h<i>•</i></span><span>home<small>关系与记忆</small></span></a><button class="capture-button" data-action="capture"><span>＋</span>记一件事 <kbd>N</kbd></button><nav>
-<a href="#/home" data-page="home"><span>◈</span>今日跟进</a><a href="#/chat" data-page="chat"><span>◌</span>对话</a><p>你的关系</p><a href="#/persons" data-page="persons"><span>♧</span>人物档案</a><a href="#/memories" data-page="memories"><span>▧</span>记忆</a><a href="#/atlas" data-page="atlas"><span>✧</span>关系星图</a><a href="#/projects" data-page="projects"><span>▤</span>项目</a><p>行动与沉淀</p><a href="#/pending" data-page="pending"><span>◇</span>待确认 <b id="pending-badge"></b></a><a href="#/promises" data-page="promises"><span>✓</span>承诺与提醒</a><a href="#/ledger" data-page="ledger"><span>↔</span>往来账本</a><a href="#/research" data-page="research"><span>⌕</span>深度研究</a><a href="#/skills" data-page="skills"><span>⌘</span>沟通技能</a><a href="#/journal" data-page="journal"><span>▥</span>关系日志</a><a href="#/tasks" data-page="tasks"><span>≋</span>任务中心 <i id="task-dot"></i></a></nav><div class="sidebar-bottom"><a href="#/settings" data-page="settings">⚙ 设置与数据</a><div><span class="status-dot"></span>本地存储 · 私人空间</div></div></aside>
-<div class="app-shell"><header class="topbar"><button class="mobile-menu" data-action="menu" aria-label="展开导航">☰</button><span id="breadcrumb">今日跟进</span><div><span id="connection-status">正在连接</span><button class="icon-button" data-action="notifications" title="通知" aria-label="通知">♧<b id="notification-count"></b></button><span class="user-avatar">我</span></div></header><main id="main" tabindex="-1"><div class="loading">正在打开你的空间…</div></main></div><div id="overlay"></div><div id="toast" role="status" aria-live="polite"></div><input id="global-file" type="file" hidden accept=".png,.jpg,.jpeg,.webp,.gif,.pdf,.docx,.xlsx,.pptx,.csv,.txt,.md"></body></html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f6f5f0">
+  <title>home · 关系与记忆</title>
+  <link rel="stylesheet" href="/static/style.css?v=0.11.0">
+  <link rel="stylesheet" href="/static/workspace.css?v=0.11.0">
+  <link rel="stylesheet" href="/static/today-workspace.css?v=0.11.0">
+  <link rel="stylesheet" href="/static/person-workspace.css?v=0.11.0-r2">
+  <link rel="stylesheet" href="/static/memory-workspace.css?v=0.11.0">
+  <script defer src="/static/vendor/marked.min.js"></script>
+  <script defer src="/static/vendor/purify.min.js"></script>
+  <script defer src="/static/person-workspace.js?v=0.11.0-r3"></script>
+  <script defer src="/static/app.js?v=0.11.0-r3"></script>
+</head>
+<body>
+  <svg class="icon-sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"/><path d="M9 21v-8h6v8"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-2 2V11.5a9.5 9.5 0 0 1 19 0Z"/><path d="M7 10h9M7 14h6"/></symbol>
+    <symbol id="i-people" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M18 15a5 5 0 0 1 3 5"/></symbol>
+    <symbol id="i-memory" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 3v18M11 8h5M11 12h5M11 16h3"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><path d="m3 13 3-9h12l3 9v7H3Z"/><path d="M3 13h5l2 3h4l2-3h5"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+    <symbol id="i-ledger" viewBox="0 0 24 24"><path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3Z"/></symbol>
+    <symbol id="i-tasks" viewBox="0 0 24 24"><path d="m3 6 1 1 2-3m-3 9 1 1 2-3m-3 9 1 1 2-3M10 6h11M10 13h11M10 20h11"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6M12 7v5l3 2"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="m3 3 18 9-18 9 4-9ZM7 12h14"/></symbol>
+    <symbol id="i-attach" viewBox="0 0 24 24"><path d="m8 13 7-7a3 3 0 0 1 4 4L9 20a5 5 0 0 1-7-7L13 2M5 15l9-9"/></symbol>
+  </defs></svg>
+  <a class="skip-link" href="#main" data-action="skip-content">跳到主要内容</a>
+  <button class="nav-scrim" data-action="nav-close" aria-label="关闭导航" tabindex="-1"></button>
+  <aside class="sidebar" id="primary-sidebar" aria-label="主导航">
+    <div class="sidebar-brand-row"><a class="brand" href="#/home"><span class="brand-symbol">h<i>•</i></span><span>home<small>关系与记忆</small></span></a><button class="nav-close icon-button" data-action="nav-close" aria-label="关闭导航"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div>
+    <button class="capture-button" data-action="capture"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>记一件事 <kbd>N</kbd></button>
+    <nav aria-label="工作空间">
+      <p class="nav-caption">你的日常</p>
+      <div class="nav-core">
+        <a href="#/home" data-page="home"><svg class="icon" aria-hidden="true"><use href="#i-home"/></svg>今日跟进</a>
+        <a href="#/chat" data-page="chat"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg>对话</a>
+        <a href="#/persons" data-page="persons"><svg class="icon" aria-hidden="true"><use href="#i-people"/></svg>人物档案</a>
+        <a href="#/memories" data-page="memories"><svg class="icon" aria-hidden="true"><use href="#i-memory"/></svg>记忆</a>
+      </div>
+      <a href="#/pending" data-page="pending"><svg class="icon" aria-hidden="true"><use href="#i-inbox"/></svg>待确认<b id="pending-badge"></b></a>
+      <details class="nav-group" open><summary>行动与记录 <span>⌄</span></summary><a href="#/promises" data-page="promises"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>承诺与提醒</a><a href="#/projects" data-page="projects"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg>项目</a><a href="#/ledger" data-page="ledger"><svg class="icon" aria-hidden="true"><use href="#i-ledger"/></svg>往来账本</a><a href="#/journal" data-page="journal"><svg class="icon" aria-hidden="true"><use href="#i-memory"/></svg>关系日志</a></details>
+      <details class="nav-group"><summary>探索与工具 <span>⌄</span></summary><a href="#/atlas" data-page="atlas"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>关系星图</a><a href="#/research" data-page="research"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>深度研究</a><a href="#/skills" data-page="skills"><svg class="icon" aria-hidden="true"><use href="#i-spark"/></svg>沟通技能</a><a href="#/tasks" data-page="tasks"><svg class="icon" aria-hidden="true"><use href="#i-tasks"/></svg>任务中心<i id="task-dot"></i></a></details>
+    </nav>
+    <div class="sidebar-bottom"><a href="#/settings" data-page="settings"><svg class="icon" aria-hidden="true"><use href="#i-settings"/></svg>设置与数据</a><div><span class="status-dot"></span>本地存储 · 私人空间</div></div>
+  </aside>
+  <div class="app-shell">
+    <header class="topbar"><div class="topbar-location"><button class="mobile-menu icon-button" data-action="menu" aria-label="展开导航" aria-expanded="false" aria-controls="primary-sidebar"><svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg></button><span class="workspace-label">我的空间</span><span class="breadcrumb-separator">/</span><span id="breadcrumb">今日跟进</span></div><div class="topbar-tools"><span id="connection-status">正在连接</span><button class="icon-button notification-button" data-action="notifications" title="通知" aria-label="通知"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg><b id="notification-count"></b></button><span class="user-avatar">我</span></div></header>
+    <main id="main" tabindex="-1"><div class="loading">正在打开你的空间…</div></main>
+  </div>
+  <nav class="mobile-nav" aria-label="快捷导航"><a href="#/home" data-page="home"><svg class="icon" aria-hidden="true"><use href="#i-home"/></svg><span>今日</span></a><a href="#/chat" data-page="chat"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg><span>对话</span></a><a href="#/persons" data-page="persons"><svg class="icon" aria-hidden="true"><use href="#i-people"/></svg><span>人物</span></a><a href="#/memories" data-page="memories"><svg class="icon" aria-hidden="true"><use href="#i-memory"/></svg><span>记忆</span></a></nav>
+  <div id="overlay"></div><div id="toast" role="status" aria-live="polite"></div>
+  <input id="global-file" type="file" hidden accept=".png,.jpg,.jpeg,.webp,.gif,.pdf,.docx,.xlsx,.pptx,.csv,.txt,.md">
+</body>
+</html>

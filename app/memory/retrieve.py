@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import math
 
+from app.agent.memory_sources import interaction_source, memory_source
 from app.memory.fts import fts_match_query
 from app.store import repo
 from app.util import now_ms
@@ -10,39 +11,67 @@ from app.util import now_ms
 W_VEC, W_FTS = 0.6, 0.4
 
 
-def _fetch_items(conn, keys: list[tuple[str, str]]) -> dict[tuple[str, str], dict]:
+_VISIBLE_INTERACTION = (
+    "NOT EXISTS (SELECT 1 FROM interaction_person ip LEFT JOIN person p ON p.id=ip.person_id "
+    "WHERE ip.interaction_id=i.id AND (p.id IS NULL OR p.deleted_at IS NOT NULL OR p.status='merged'))"
+)
+
+
+def _scope_filters(person_id, scope):
+    if scope not in {'all', 'personal'}:
+        raise ValueError('记忆范围须为 all 或 personal')
+    if person_id is not None and scope == 'personal':
+        raise ValueError('个人记忆范围不能同时指定人物')
+    memory, interaction, params = repo.ACTIVE_MEMORY_WHERE, _VISIBLE_INTERACTION, ()
+    if person_id is not None:
+        memory += ' AND m.person_id=?'
+        interaction += (' AND EXISTS (SELECT 1 FROM interaction_person scoped '
+                        'WHERE scoped.interaction_id=i.id AND scoped.person_id=?)')
+        params = (person_id,)
+    elif scope == 'personal':
+        memory += ' AND m.person_id IS NULL'
+        interaction += ' AND NOT EXISTS (SELECT 1 FROM interaction_person ip WHERE ip.interaction_id=i.id)'
+    return memory, interaction, params
+
+
+def _fetch_items(conn, keys: list[tuple[str, str]], *, person_id=None, scope='all') -> dict[tuple[str, str], dict]:
     out = {}
     for owner_type, oid in keys:
         if owner_type == "memory":
-            r = conn.execute(f"SELECT m.* FROM memory_item m WHERE m.id=? AND {repo.ACTIVE_MEMORY_WHERE}",
-                             (oid,)).fetchone()
-            if r:
-                name = ""
-                if r["person_id"]:
-                    p = repo.get_person(conn, r["person_id"])
-                    name = p["display_name"] if p else ""
+            source = memory_source(conn, oid)
+            if source:
+                pid = (source['person'] or {}).get('id')
+                if person_id is not None and pid != person_id or scope == 'personal' and pid is not None:
+                    continue
                 out[(owner_type, oid)] = {
-                    "type": "memory", "id": oid, "text": r["text"], "ts": r["ts"],
-                    "kind": r["kind"], "person": name,
+                    "type": "memory", "id": oid, "text": source["text"], "ts": source["ts"],
+                    "kind": source["kind"], "person": (source['person'] or {}).get('display_name', ''),
+                    "source": source,
                 }
         elif owner_type == "interaction":
-            r = conn.execute("SELECT * FROM interaction WHERE id=?", (oid,)).fetchone()
-            hidden = conn.execute(
-                "SELECT 1 FROM interaction_person ip JOIN person p ON p.id=ip.person_id "
-                "WHERE ip.interaction_id=? AND (p.deleted_at IS NOT NULL OR p.status='merged') LIMIT 1",
-                (oid,)).fetchone()
-            if hidden:
-                continue
-            if r:
-                names = repo.interaction_person_names(conn, oid)
+            source = interaction_source(conn, oid)
+            if source:
+                people = source['people']
+                if person_id is not None and not any(p['id'] == person_id for p in people) \
+                        or scope == 'personal' and people:
+                    continue
                 out[(owner_type, oid)] = {
-                    "type": "interaction", "id": oid, "text": r["content"], "ts": r["ts"],
-                    "kind": r["kind"], "channel": r["channel"], "person": "、".join(names),
+                    "type": "interaction", "id": oid, "text": source["text"], "ts": source["ts"],
+                    "kind": source["kind"], "channel": source["channel"],
+                    "person": "、".join(p['display_name'] for p in people), "source": source,
                 }
     return out
 
 
-def hybrid_search(conn, query: str, top_k: int = 8) -> list[dict]:
+def hybrid_search(conn, query: str, top_k: int = 8, *, person_id: str | None = None,
+                  scope: str = 'all') -> list[dict]:
+    if type(top_k) is not int or not 1 <= top_k <= 100:
+        raise ValueError('检索条数须为 1 至 100 的整数')
+    memory_filter, interaction_filter, params = _scope_filters(person_id, scope)
+    if person_id is not None:
+        person = repo.get_person(conn, person_id)
+        if not person or person['deleted_at'] is not None or person['status'] == 'merged':
+            raise ValueError('人物不存在或已归档')
     vec_scores: dict[tuple[str, str], float] = {}
     fts_scores: dict[tuple[str, str], float] = {}
 
@@ -52,8 +81,12 @@ def hybrid_search(conn, query: str, top_k: int = 8) -> list[dict]:
         from app.memory.vector import get_index
         qv = get_llm().embed([query])[0]
         idx = get_index()
-        for owner_type in ("memory", "interaction"):
-            for oid, _text, sim in idx.search(conn, owner_type, qv, top_k=top_k * 2):
+        for owner_type, table, alias, clause in (
+                ('memory', 'memory_item', 'm', memory_filter),
+                ('interaction', 'interaction', 'i', interaction_filter)):
+            allowed = {row['id'] for row in conn.execute(
+                f'SELECT {alias}.id FROM {table} {alias} WHERE {clause}', params)}
+            for oid, _text, sim in idx.search(conn, owner_type, qv, top_k=top_k * 2, allowed_ids=allowed):
                 vec_scores[(owner_type, oid)] = max(vec_scores.get((owner_type, oid), 0.0), sim)
     except Exception:  # noqa: BLE001
         pass
@@ -64,8 +97,12 @@ def hybrid_search(conn, query: str, top_k: int = 8) -> list[dict]:
         try:
             rows = conn.execute(
                 "SELECT owner_type, owner_id, bm25(memory_fts) s FROM memory_fts"
-                " WHERE memory_fts MATCH ? ORDER BY bm25(memory_fts) LIMIT ?",
-                (match, top_k * 2)).fetchall()
+                " WHERE memory_fts MATCH ? AND ((owner_type='memory' AND EXISTS "
+                f'(SELECT 1 FROM memory_item m WHERE m.id=memory_fts.owner_id AND {memory_filter})) '
+                "OR (owner_type='interaction' AND EXISTS "
+                f'(SELECT 1 FROM interaction i WHERE i.id=memory_fts.owner_id AND {interaction_filter}))) '
+                'ORDER BY bm25(memory_fts) LIMIT ?',
+                (match, *params, *params, top_k * 2)).fetchall()
             if rows:
                 # bm25 为负值（越小越好），归一化到 (0,1]
                 best = abs(rows[0]["s"]) or 1.0
@@ -75,9 +112,18 @@ def hybrid_search(conn, query: str, top_k: int = 8) -> list[dict]:
             pass
 
     keys = set(vec_scores) | set(fts_scores)
+    if not query.strip() and (person_id is not None or scope == 'personal'):
+        for owner_type, table, alias, clause in (
+                ('memory', 'memory_item', 'm', memory_filter),
+                ('interaction', 'interaction', 'i', interaction_filter)):
+            for row in conn.execute(f'SELECT {alias}.id FROM {table} {alias} WHERE {clause} '
+                                    f'ORDER BY {alias}.ts DESC,{alias}.id LIMIT ?', (*params, top_k * 2)):
+                key = (owner_type, row['id'])
+                keys.add(key)
+                fts_scores[key] = 1.0
     if not keys:
         return []
-    items = _fetch_items(conn, list(keys))
+    items = _fetch_items(conn, list(keys), person_id=person_id, scope=scope)
     now = now_ms()
     results = []
     for key, item in items.items():

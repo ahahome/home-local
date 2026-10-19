@@ -1,0 +1,141 @@
+"""Turn-local references are assigned only to records read from storage."""
+from copy import deepcopy
+from html.parser import HTMLParser
+import json
+import re
+
+from markdown_it import MarkdownIt
+
+from app.agent.followup import _atomic
+from app.agent.memory_sources import source_state
+
+_REFERENCE = re.compile(r'\[\[(S\d+)\]\]')
+_MARKDOWN = MarkdownIt('gfm-like')
+
+
+class _CitationText(HTMLParser):
+    excluded = {'a', 'code', 'pre', 'script', 'style', 'iframe', 'textarea', 'title', 'template'}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.blocked = []
+        self.references = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self.excluded:
+            self.blocked.append(tag)
+
+    def handle_endtag(self, tag):
+        for index in range(len(self.blocked) - 1, -1, -1):
+            if self.blocked[index] == tag:
+                del self.blocked[index:]
+                break
+
+    def handle_data(self, data):
+        if not self.blocked:
+            self.references.extend(_REFERENCE.findall(data))
+
+
+def _prose_references(answer):
+    parser = _CitationText()
+    parser.feed(_MARKDOWN.render(answer))
+    parser.close()
+    return list(dict.fromkeys(parser.references))
+
+
+class SourceChangedError(ValueError):
+    pass
+
+
+def _json(value):
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
+def compact_source(source):
+    value = {key: source[key] for key in (
+        'id', 'type', 'entity_id', 'person', 'text', 'date', 'temporal_status', 'revision',
+        'kind', 'field', 'valid_from', 'valid_to', 'recorded_at', 'people') if key in source}
+    value['text'] = value.get('text', '')[:1600]
+    evidence = source.get('evidence')
+    if evidence:
+        value['evidence'] = {'kind': evidence.get('kind'),
+                             'excerpt': (evidence.get('excerpt') or '')[:400]}
+    return value
+
+
+class SourceRegistry:
+    def __init__(self, conn):
+        self.conn = conn
+        self.sources = {}
+        self._keys = {}
+        self._profiles = {}
+
+    @property
+    def dependencies(self):
+        return deepcopy([*self.sources.values(), *self._profiles.values()])
+
+    def register_profile(self, person_id, card):
+        snapshot = {'type': 'profile_context', 'entity_id': person_id, 'text': card}
+        self._profiles[_json(snapshot)] = snapshot
+
+    def _key(self, source):
+        return _json({key: value for key, value in source.items() if key not in {'id', 'captured_at'}})
+
+    def preview(self, source):
+        sid = self._keys.get(self._key(source), f'S{len(self.sources) + 1}')
+        return {**deepcopy(source), 'id': sid}
+
+    def register(self, source):
+        value = self.preview(source)
+        self._keys[self._key(source)] = value['id']
+        self.sources[value['id']] = value
+        return value
+
+    def tool_result(self, result, budget=12000):
+        if 'card' not in result and not result.get('sources') and not any(
+                isinstance(item, dict) and item.get('source') for item in result.get('results', [])):
+            return result
+        output = {key: deepcopy(value) for key, value in result.items() if key not in {'results', 'sources'}}
+        if len(_json({**output, 'sources': [], 'results': [], 'truncated': True})) > budget:
+            return {'ok': False, 'error': '本轮资料已达到上下文预算，请缩小范围或新建对话后重试。',
+                    'truncated': True}
+        if result.get('card') and result.get('person_id'):
+            self.register_profile(result['person_id'], result['card'])
+        for key in ('sources', 'results'):
+            if key not in result:
+                continue
+            output[key] = []
+            for item in result[key]:
+                source = item if key == 'sources' else item.get('source')
+                candidate = compact_source(self.preview(source)) if source else None
+                entry = candidate if key == 'sources' else {**item, 'text': item.get('text', '')[:1600]}
+                if key == 'results' and source:
+                    entry.update(source=candidate, source_id=candidate['id'])
+                if len(_json({**output, key: output[key] + [entry], 'truncated': True})) > budget:
+                    output['truncated'] = True
+                    break
+                if source:
+                    self.register(source)
+                output[key].append(entry)
+        return output
+
+    def citations(self, answer, require_citations=False):
+        referenced = _prose_references(answer)
+        used = [sid for sid in referenced if sid in self.sources]
+        invalid = set(referenced) - self.sources.keys()
+        answer = _REFERENCE.sub(lambda match: '' if match.group(1) in invalid else match.group(0), answer)
+        warnings = []
+        if invalid:
+            warnings.append({'code': 'invalid_citation', 'message': '部分资料引用无法核验，已移除引用标记，请核对回答。'})
+        if not used and require_citations and self.sources:
+            warnings.append({'code': 'uncited', 'message': '本条回答未附可核查的资料引用，请核对其中的人物信息。'})
+        if any(self.sources[sid]['temporal_status'] in {'historical_background', 'historical_field'} for sid in used):
+            warnings.append({'code': 'historical_context', 'message': '引用包含有日期的历史背景，当前是否仍适用需要核实。'})
+        return answer, [deepcopy(self.sources[sid]) for sid in used], warnings
+
+    def save_answer(self, save):
+        # Hold the write lock across final source checks and the answer insert.
+        with _atomic(self.conn):
+            if any(source_state(self.conn, source)['status'] != 'current' for source in self.dependencies):
+                raise SourceChangedError('引用资料在生成期间发生变化，请重试以读取最新记录')
+            return save()

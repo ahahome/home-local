@@ -1,22 +1,28 @@
 # Portable Demo Data
 
 This directory contains the synthetic data used in the local QA workspace,
-updated on 2026-10-17 from `data/qa/outcome-memory-v05-20261017/`.
+updated on 2026-10-18 from `data/qa/memory-citations-v07-20261018/`.
 All people, conversations, commitments, and transfers are fictional.
 
 The committed snapshot includes:
 
 - `home.db`: a standalone SQLite backup, including committed WAL contents.
 - `blobs/`: the three original attachments, stored by SHA-256.
-- 69 people (64 visible), 216 field versions, 346 interactions, 123 memories,
+- 70 people (65 visible), 218 field versions, 346 interactions, 124 memories,
   69 commitments, 131 ledger entries, 32 confirmation records, 3 projects,
-  and 14 completed tasks.
+  and 16 completed tasks. The database uses schema version 9.
 - Three synthetic communication followups with four saved outcomes and four
   memory analyses, including five confirmed proposals and one discarded proposal.
   These demonstrate historical field updates, communication preferences, source
   review, and outcomes with no new information. There are no pending memory-update
   proposals in this snapshot; select all statuses in the memory proposal view to
   inspect the processing history.
+- A fictional person named `沈知遥` and the conversation `v0.7 来源可追溯演示`
+  demonstrate dated city fields and communication preferences. Two real gateway
+  answers retain their original source snapshots: the earlier answer cites the
+  original Wednesday preference, while the newer answer cites the manually
+  corrected Thursday preference. Opening the older citation reports that the
+  record has changed; the correction history and original evidence remain.
 
 After installing `requirements.txt`, restore a working copy from the repository
 root:

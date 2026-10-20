@@ -160,8 +160,8 @@ def _resolve(conn, text, previous):
     return _scope(conn, 'none', reason='no_person_reference')
 
 
-def for_user_message(conn, conversation_id, user_message_id, text):
-    """Rebuild only preceding user choices; failed answers and later messages cannot steer retries."""
+def resolve_user_message(conn, conversation_id, user_message_id, text):
+    """Resolve against preceding choices without changing any persisted metadata."""
     row = conn.execute("SELECT rowid ordering,* FROM message WHERE id=? AND conversation_id=? AND role='user'",
                        (user_message_id, conversation_id)).fetchone()
     if row is None or row['content'] != text:
@@ -180,6 +180,14 @@ def for_user_message(conn, conversation_id, user_message_id, text):
     scope = _resolve(conn, text, previous)
     scope.update(conversation_id=conversation_id, user_message_id=user_message_id)
     scope['origin_message_id'] = scope.get('origin_message_id') or user_message_id
+    return scope
+
+
+def for_user_message(conn, conversation_id, user_message_id, text):
+    """Rebuild only preceding user choices; failed answers and later messages cannot steer retries."""
+    scope = resolve_user_message(conn, conversation_id, user_message_id, text)
+    row = conn.execute("SELECT tool_calls FROM message WHERE id=? AND conversation_id=? AND role='user'",
+                       (user_message_id, conversation_id)).fetchone()
     metadata = _metadata(row['tool_calls'])
     metadata['conversation_scope'] = scope
     conn.execute("UPDATE message SET tool_calls=? WHERE id=? AND conversation_id=? AND role='user'",

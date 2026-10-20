@@ -3,11 +3,12 @@ from copy import deepcopy
 from datetime import datetime
 import json
 
+from markdown_it import MarkdownIt
 import pytest
 
 from app.agent import conversation_scope, memory_focus
 from app.agent.memory_sources import memory_source
-from app.agent.source_registry import SourceChangedError, SourceRegistry
+from app.agent.source_registry import SourceChangedError, SourceRegistry, _prose_reference_occurrences
 from app.config import tz
 from app.memory import memory_corrections
 from app.store import repo
@@ -560,6 +561,131 @@ def test_ordinary_singular_shorthand_after_two_records_requires_selection(conn):
     assert focus['sources'] == []
 
 
+@pytest.mark.parametrize('text', ['这条的来源能核对吗？', '那条的文字现在是什么？',
+                                  '这条的时间信息可以逐项列出吗？', '请问这条的录入情况有依据吗？',
+                                  '那这条的保存文字能看一下吗？', '  这条的记录状态能确认吗？',
+                                  '那条记录的来源能核对吗？'])
+def test_possessive_shorthand_binds_a_quotation_without_a_predicate_specific_template(conn, text):
+    pid, mid = memory(conn)
+    cid = conversation(conn)
+    original = quote(conn, mid, 'S7')
+    aid = answer(conn, cid, [original])
+
+    uid, focus = followup(conn, cid, text)
+
+    assert focus['status'] == 'selected' and focus['reason'] == 'unique_cited_memory'
+    assert focus['binding']['anchor_assistant_message_id'] == aid
+    assert focus['binding']['reference_snapshot'] == original
+    assert focus['source']['entity_id'] == mid
+    assert focus['read_scope']['person_ids'] == [pid]
+    assert metadata(conn, uid)['memory_focus'] == focus['binding']
+    assert not memory_focus.is_date_question(text)
+    assert memory_focus.date_answer(focus, 'S1', text) is None
+
+
+@pytest.mark.parametrize('text', ['这条的来源能核对吗？', '那条记录的来源能核对吗？'])
+def test_possessive_shorthand_does_not_choose_from_multiple_quoted_memories(conn, text):
+    _, first, second = memory_pair(conn)
+    cid = conversation(conn)
+    answer(conn, cid, [quote(conn, first), quote(conn, second, 'S2')])
+
+    _, focus = followup(conn, cid, text)
+
+    assert focus['status'] == 'clarify' and focus['reason'] == 'ambiguous_memory'
+    assert focus['sources'] == [] and focus['read_scope']['blocked']
+
+
+def test_possessive_shorthand_without_current_anchor_cannot_reuse_an_older_quotation(conn):
+    _, mid = memory(conn)
+    cid = conversation(conn)
+    answer(conn, cid, [quote(conn, mid)])
+    last = answer(conn, cid)
+
+    _, focus = followup(conn, cid, '这条的来源能核对吗？')
+
+    assert focus['status'] == 'clarify' and focus['reason'] == 'missing_memory'
+    assert focus['binding']['anchor_assistant_message_id'] == last
+    assert focus['sources'] == []
+
+
+def test_named_new_subject_overrides_a_possessive_memory_pointer(conn):
+    _, mid = memory(conn)
+    new_pid, _ = memory(conn, '陈岚')
+    cid = conversation(conn)
+    answer(conn, cid, [quote(conn, mid)])
+
+    _, focus = followup(conn, cid, '这条的情况先放一边，换成陈岚，查查相关日期。')
+
+    assert focus['status'] == 'not_applicable' and focus['reason'] == 'explicit_scope_precedence'
+    assert focus['read_scope']['person_ids'] == [new_pid]
+    assert focus['sources'] == []
+
+
+def test_ambiguous_named_person_is_not_replaced_by_a_possessive_memory_anchor(conn):
+    _, mid = memory(conn)
+    memory(conn, '郑言')
+    memory(conn, '郑言')
+    cid = conversation(conn)
+    answer(conn, cid, [quote(conn, mid)])
+
+    _, focus = followup(conn, cid, '这条的情况先放一边，我要问郑言的记录。')
+
+    assert focus['status'] == 'not_applicable' and focus['reason'] == 'explicit_scope_precedence'
+    assert focus['read_scope']['blocked'] and focus['read_scope']['reason'] == 'ambiguous_name'
+    assert focus['sources'] == []
+
+
+@pytest.mark.parametrize('action', ['withdraw', 'move'])
+def test_possessive_shorthand_preserves_availability_and_owner_guards(conn, monkeypatch, action):
+    _, mid = memory(conn)
+    hidden_pid, _ = memory(conn, '不可泄漏的新归属')
+    cid = conversation(conn)
+    answer(conn, cid, [quote(conn, mid)])
+    if action == 'withdraw':
+        change(conn, mid, monkeypatch, action='withdraw')
+    else:
+        change(conn, mid, monkeypatch, person_id=hidden_pid)
+
+    _, focus = followup(conn, cid, '那条的保存状态能确认吗？')
+
+    assert focus['status'] == 'clarify' and focus['read_scope']['blocked']
+    assert focus['reason'] == ('moved_memory' if action == 'move' else 'unavailable_memory')
+    assert focus['sources'] == []
+    assert '不可泄漏的新归属' not in json.dumps(focus, ensure_ascii=False)
+
+
+@pytest.mark.parametrize('text', ['这条的来源现在能核对吗？', '那条记录的来源现在能核对吗？'])
+def test_possessive_shorthand_retry_keeps_original_anchor_and_rereads_the_edited_source(conn, monkeypatch, text):
+    _, mid = memory(conn)
+    _, other = memory(conn, '陈岚')
+    cid = conversation(conn)
+    aid = answer(conn, cid, [quote(conn, mid)])
+    uid, original = followup(conn, cid, text)
+    change(conn, mid, monkeypatch, text='最新人工编辑后的文字')
+    repo.add_message(conn, cid, 'user', '陈岚的情况呢？')
+    answer(conn, cid, [quote(conn, other)])
+
+    _, focus = followup(conn, cid, text, uid=uid)
+
+    assert focus['binding'] == original['binding']
+    assert focus['binding']['anchor_assistant_message_id'] == aid
+    assert focus['source']['entity_id'] == mid
+    assert focus['source']['text'] == '最新人工编辑后的文字'
+    assert focus['source']['record_context']['last_user_edit_at'] == stamp('2026-09-15')
+
+
+@pytest.mark.parametrize('text', ['记住：这条的内容是我每天喝两杯水。',
+                                  '请保存：那条的路线从今天改走东门。',
+                                  '记住：那条记录是我的饮水提醒。',
+                                  '这条是我每天回家的路线。', '那条公路是什么时候修好的？'])
+def test_possessive_shorthand_does_not_expand_into_note_prefixes_or_unrelated_noun_phrases(conn, text):
+    cid = conversation(conn)
+
+    _, focus = followup(conn, cid, text)
+
+    assert focus['status'] == 'not_applicable' and not focus['read_scope']['blocked']
+
+
 def test_set_registration_checks_combined_budget_before_any_registry_mutation(conn, monkeypatch):
     _, first, second = memory_pair(conn)
     cid = conversation(conn)
@@ -718,16 +844,37 @@ def test_collection_comparison_truncates_long_saved_text_explicitly(conn):
     '保存文字含有&#91;&#91;S1&#93;&#93;，不能重复合成真实编号。',
     r'保存文字含有\[\[S1\]\]，不能重复合成真实编号。',
     '保存文字含有```\n尚未结束的代码块',
+    '<div hidden>隐藏原文和后续资料',
+    '<style>p{display:none}</style>后续资料仍应可见',
+    '[链接](https://example.com) ![图片](https://example.com/x.png) **强调**',
+    '```\n[[S99]]\n~~~\n[[S1]]\n````````\n~~~~~~~~',
 ])
-def test_collection_comparison_keeps_source_button_without_expanding_dangerous_saved_markup(conn, dangerous):
+def test_collection_comparison_keeps_saved_markup_literal_and_real_source_buttons(conn, dangerous):
     _, _, _, _, _, focus, text = comparison_focus(conn)
     focus['sources'][0]['text'] = dangerous
     result, registry = render_comparison(conn, focus, text)
-    assert isinstance(result, str) and result and dangerous not in result
+    assert isinstance(result, str) and result and dangerous in result
+    tokens = MarkdownIt('gfm-like').parse(result)
+    assert [token.content for token in tokens if token.type == 'fence'] == [
+        dangerous + '\n', focus['sources'][1]['text'] + '\n']
+    rendered_types = [token.type for token in tokens]
+    rendered_types.extend(child.type for token in tokens for child in (token.children or []))
+    assert not {'html_block', 'html_inline', 'link_open', 'image'} & set(rendered_types)
+    assert _prose_reference_occurrences(result) == ['S1'] * 4 + ['S2'] * 4
     _, citations, warnings = registry.citations(result)
     assert [source['id'] for source in citations] == ['S1', 'S2']
-    assert '[[S99]]' not in result
     assert not any(warning['code'] == 'invalid_citation' for warning in warnings)
+
+
+@pytest.mark.parametrize('unrenderable', ['前缀\x00后缀', '前缀\r后缀', '前缀\u202e后缀', '前缀\ud800后缀'])
+def test_collection_comparison_declines_text_that_cannot_be_shown_literally(conn, unrenderable):
+    _, _, _, _, _, focus, text = comparison_focus(conn)
+    focus['sources'][0]['text'] = unrenderable
+    before = deepcopy(focus)
+    result = memory_focus.comparison_answer(focus, ['S1', 'S2'], text,
+                                          {'intent': 'query', 'allow_writes': False})
+    assert result is None
+    assert focus == before
 
 
 @pytest.mark.parametrize('intent', [

@@ -79,7 +79,17 @@ def _run(tid):
         if t["kind"] == "chat":
             from app.agent.harness import run_turn
             context = {}
-            if p.get('reanalysis_of'):
+            if p.get('regeneration_of'):
+                from app.jobs.chat_regeneration import source_question
+                from app.util import sha256_text
+                original, context_id = source_question(conn, p['conversation_id'], p['regeneration_of'])
+                if original['id'] != p.get('user_message_id') or original['content'] != p['text'] or \
+                        sha256_text(p['text']) != p.get('source_sha256') or p.get('reanalysis_of'):
+                    raise ValueError('原问题内容或关联已变化，请重新核对')
+                if context_id != original['id']:
+                    context['context_message_id'] = context_id
+                context['expected_read_scope'] = json.loads(original['tool_calls'])['conversation_scope']
+            elif p.get('reanalysis_of'):
                 from app.jobs.chat_reanalysis import source_message
                 from app.util import sha256_text
                 original = source_message(conn, p['conversation_id'], p['reanalysis_of'])
@@ -95,6 +105,18 @@ def _run(tid):
                 conn.commit()
             result = run_turn(conn, p["conversation_id"], p["text"], emit=emit,
                               user_message_id=p["user_message_id"], **context)
+            if p.get('regeneration_of') and result.get('assistant_message_id'):
+                marker = {'source_assistant_message_id': p['regeneration_of'],
+                          'source_user_message_id': p['user_message_id'], 'question': p['text']}
+                result['regeneration'] = marker
+                saved_answer = conn.execute("SELECT tool_calls FROM message WHERE id=? AND conversation_id=? AND role='assistant'",
+                                             (result['assistant_message_id'], p['conversation_id'])).fetchone()
+                if saved_answer:
+                    metadata = json.loads(saved_answer['tool_calls'])
+                    metadata['regeneration'] = marker
+                    conn.execute('UPDATE message SET tool_calls=? WHERE id=?',
+                                 (json.dumps(metadata, ensure_ascii=False), result['assistant_message_id']))
+                    conn.commit()
         elif t["kind"] in {"file", "chatlog", "url"}:
             from app.ingest import normalize, chatlog
             emit("progress", {"message": "解析内容并提取人物信息"})

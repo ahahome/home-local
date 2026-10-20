@@ -124,6 +124,27 @@ def task_detail(tid: str):
     return task_or_404(tid)
 
 
+@router.post('/conversations/{cid}/messages/{mid}/regenerate', status_code=202)
+def regenerate_answer(cid: str, mid: str):
+    from app.jobs import chat_regeneration
+    c = get_conn()
+    if not repo.get_conversation(c, cid):
+        raise HTTPException(404, '对话不存在')
+    try:
+        return chat_regeneration.submit(c, cid, mid)
+    except LookupError as error:
+        raise HTTPException(404, str(error)) from None
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from None
+    except sqlite3.IntegrityError:
+        c.rollback()
+        existing = c.execute('SELECT id FROM task WHERE idempotency_key=?',
+                             (f'chat-regenerate:{cid}:{mid}',)).fetchone()
+        if existing:
+            return tasks.read(c, existing[0])
+        raise HTTPException(409, '该对话已有回复任务，请等待或取消后再发') from None
+
+
 @router.get("/tasks/{tid}/events")
 async def task_events(tid: str, after: int = 0):
     task_or_404(tid)

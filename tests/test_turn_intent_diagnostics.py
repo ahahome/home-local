@@ -37,7 +37,7 @@ def response(value=RECORD, **metadata):
     (TimeoutError('sk-private-timeout'), 'timeout'),
     (ConnectionError('sk-private-network'), 'request'),
     ({'content': ''}, 'empty_content'),
-    ({'content': '```json\n{}\n```'}, 'json'),
+    ({'content': '```json\n{}\n```'}, 'schema'),
     ({'content': '{"intent":"query"}'}, 'schema'),
     (response(finish_reason='length'), 'truncated'),
 ])
@@ -57,7 +57,7 @@ def test_only_one_recoverable_retry_can_produce_a_valid_grounded_decision(first,
 
 
 @pytest.mark.parametrize(('raw', 'category'), [
-    ('```json\n{"intent":"record","record_spans":["林舟住杭州。"],"reason":"ok"}\n```', 'json'),
+    ('Here is JSON: ```json\n{"intent":"record","record_spans":["林舟住杭州。"],"reason":"ok"}\n```', 'json'),
     ('{"intent":"query","intent":"record","record_spans":["林舟住杭州。"],"reason":"ok"}', 'json'),
     ('{"intent":"record","record_spans":["林舟住杭州。"],"reason":NaN}', 'json'),
     ('{"intent":"record","record_spans":["林舟住杭州。"]', 'json'),
@@ -65,7 +65,7 @@ def test_only_one_recoverable_retry_can_produce_a_valid_grounded_decision(first,
     ('null', 'schema'),
     ('{"intent":"record","record_spans":["林舟住杭州。"],"reason":"ok","extra":true}', 'schema'),
 ])
-def test_second_invalid_body_stays_readonly_without_fence_salvage(raw, category):
+def test_second_invalid_body_stays_readonly_without_prose_or_syntax_salvage(raw, category):
     client = ScriptedClassifier({'content': raw}, {'content': raw})
     result = turn_intent.classify_turn(TEXT, llm=client)
     assert not result['allow_writes'] and result['intent'] == 'unknown'
@@ -73,6 +73,80 @@ def test_second_invalid_body_stays_readonly_without_fence_salvage(raw, category)
     assert result['classifier']['failure_category'] == category
     assert result['classifier']['retryable']
     assert all('content' not in a and 'raw_response' not in a for a in result['classifier']['attempts'])
+
+
+def fenced_response(value=RECORD, **metadata):
+    return {'content': '```json\n' + json.dumps(value, ensure_ascii=False) + '\n```',
+            'response_metadata': metadata}
+
+
+def test_complete_json_fence_avoids_resampling_but_still_validates_exact_record_span():
+    client = ScriptedClassifier(fenced_response())
+    result = turn_intent.classify_turn(TEXT, llm=client)
+    assert result['record_spans'] == [TEXT] and result['allow_writes']
+    assert len(client.calls) == result['classifier']['request_count'] == 1
+    assert result['classifier']['attempts'][0]['response_envelope'] == 'json_fence'
+    assert result['classifier']['failure_category'] is None
+
+
+def test_invalid_plain_json_can_recover_with_complete_fence_with_bounded_audit():
+    client = ScriptedClassifier({'content': '{'}, fenced_response())
+    result = turn_intent.classify_turn(TEXT, llm=client)
+    assert result['allow_writes'] and len(client.calls) == 2
+    first, second = result['classifier']['attempts']
+    assert first['failure_category'] == 'json' and first['protocol_error'] == 'invalid_json'
+    assert second['response_envelope'] == 'json_fence'
+    assert client.calls[0][0] == client.calls[1][0]
+
+
+def test_fenced_semantic_unknown_stays_readonly_on_ordinary_task_retry(conn):
+    cid = repo.create_conversation(conn)
+    mid = repo.add_message(conn, cid, 'user', TEXT)
+    client = ScriptedClassifier(fenced_response({'intent': 'unknown', 'record_spans': [], 'reason': 'uncertain'}))
+    first = turn_intent.for_user_message(conn, cid, mid, TEXT, llm=client)
+    retry = ScriptedClassifier(fenced_response())
+    second = turn_intent.for_user_message(conn, cid, mid, TEXT, llm=retry)
+    assert first == second and not second['allow_writes'] and not retry.calls
+    assert first['intent'] == 'unknown' and len(client.calls) == 1
+    assert first['classifier']['failure_category'] is None
+
+
+def test_fenced_unsafe_span_does_not_gain_a_format_retry():
+    text, span = '不要记录：顾念住青岛，只是假设。', '顾念住青岛'
+    value = {'intent': 'record', 'record_spans': [span], 'reason': 'unsafe cut'}
+    client = ScriptedClassifier(fenced_response(value), fenced_response())
+    result = turn_intent.classify_turn(text, llm=client)
+    assert not result['allow_writes'] and len(client.calls) == 1
+    assert result['classifier']['failure_category'] == 'span'
+    assert not result['classifier']['retryable']
+    assert result['classifier']['attempts'][0]['response_envelope'] == 'json_fence'
+
+
+def test_fenced_content_with_provider_length_finish_still_fails_readonly():
+    client = ScriptedClassifier(fenced_response(finish_reason='length'), fenced_response(finish_reason='length'))
+    result = turn_intent.classify_turn(TEXT, llm=client)
+    assert not result['allow_writes'] and len(client.calls) == 2
+    assert result['classifier']['failure_category'] == 'truncated'
+    assert all('response_envelope' not in attempt for attempt in result['classifier']['attempts'])
+
+
+def test_successful_fenced_classification_persists_only_its_grounded_write(conn):
+    text = '请记住：顾念现在住青岛。'
+    cid = repo.create_conversation(conn)
+    mid = repo.add_message(conn, cid, 'user', text)
+    value = {'intent': 'record', 'record_spans': [text], 'reason': 'full instruction'}
+    first = turn_intent.for_user_message(conn, cid, mid, text,
+                                        llm=ScriptedClassifier(fenced_response(value)))
+    result = tools.execute_tool(conn, 'save_person_fact',
+                                {'person': '顾念', 'field': 'city', 'value': '青岛'},
+                                source_msg_id=mid, source_text=text, turn_intent=first)
+    assert result['ok']
+    assert conn.execute('SELECT COUNT(*) FROM person').fetchone()[0] == 1
+    raw = conn.execute('SELECT tool_calls FROM message WHERE id=?', (mid,)).fetchone()[0]
+    saved = json.loads(raw)['turn_intent']
+    assert saved['record_spans'] == [text]
+    assert saved['classifier']['attempts'][0]['response_envelope'] == 'json_fence'
+    assert 'raw_response' not in raw
 
 
 def test_length_limited_empty_output_has_reasoning_token_diagnostics():
@@ -177,7 +251,7 @@ def test_real_llm_request_budget_does_not_multiply_internal_retries(monkeypatch)
 def test_failed_attempts_persist_across_sqlite_connections_and_cannot_start_writing(conn):
     cid = repo.create_conversation(conn)
     mid = repo.add_message(conn, cid, 'user', TEXT)
-    client = ScriptedClassifier(TimeoutError('sk-private'), {'content': '```json\n{}\n```'})
+    client = ScriptedClassifier(TimeoutError('sk-private'), {'content': 'before ```json\n{}\n```'})
     first = turn_intent.for_user_message(conn, cid, mid, TEXT, llm=client)
     db_path = conn.execute('PRAGMA database_list').fetchone()['file']
     with sqlite3.connect(db_path) as other:

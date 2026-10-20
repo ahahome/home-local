@@ -12,6 +12,8 @@ import json
 import re
 
 from app.agent.source_registry import _prose_references, compact_source
+from app.agent.json_protocol import JSONProtocolError, parse_json_object
+from app.agent.answer_records import literal_generated_text, render_source_record
 
 _SOURCE_ID = re.compile(r'S[1-9]\d*\Z')
 _MARKER = re.compile(r'\[\[.*?\]\]', re.DOTALL)
@@ -24,7 +26,7 @@ _MAX_ISSUES = 20
 _NO_ANSWER = '当前可核查资料不足以回答这个问题。'
 _RECEIPT = '本轮处理结果请以下方回执为准。'
 _TYPES = {'factual', 'no_answer', 'advice', 'clarification', 'mixed'}
-_KINDS = {'fact', 'source_quote', 'no_answer', 'advice', 'clarification', 'receipt'}
+_KINDS = {'fact', 'source_quote', 'source_record', 'draft', 'no_answer', 'advice', 'clarification', 'receipt'}
 _ISSUES = {'unsupported_claim', 'state_confusion', 'date_confusion', 'citation_missing',
            'conflict_resolution', 'fact_advice_boundary', 'other'}
 
@@ -82,6 +84,23 @@ ok/pending/failed处理结果时才允许，纯查询的skipped回执不满足�
 answer_type；其余组合为mixed。不需要给置信度、正确率或通过认证等结论。
 """
 
+_RECORD_SYSTEM = """
+本轮启用server_records展示协议，优先于上述自由事实段规则：
+只选择与用户问题直接相关的本轮资料ID，用source_record段，text必须为空且恰一个来源。
+人物、原文、日期、字段和记录状态全部由服务端从快照生成，禁止自行复述、归纳或解释。
+source_quote和fact也将转换为服务端资料展示；不得用建议、澄清或草稿夹带人物结论。
+同一人物有多个相关且冲突的记录时分别选择，不自行调和；无所问信息时只输出no_answer，
+不要选择无关公司/城市等背景。只引用系统记录不能证明当事人逐字说过、历史从未编辑或目前仍成立。
+runtime_context.presentation.generation_requested为true时，可以另用draft给用户所要的正文，
+或用advice给所要的行动建议。必须忠实于资料条件，不能补出性别、适用范围、日期和已保存结果。
+起草也不能虚构用户已经完成发送、约定、确认或其他行动；未发生的动作使用待执行或待确认措辞。
+后续缩短、翻译、润色请求应继续完成所要求的文本操作，保留原文条件与行动时态。
+draft/advice不能有来源ID；生成正文与服务端记录分开显示。generation_requested为false时
+不允许生成正文或自由解释；需要澄清时使用clarification空text，系统会显示固定澄清提示。
+answer_type仍按内容种类声明；服务端会从校验后的段落推导最终类型，标签不一致会留审计。
+不要重复显示同一个资料。只输出相同三个顶层键的JSON，可使用完整单个json代码围栏。
+"""
+
 
 def _canonical(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
@@ -89,15 +108,6 @@ def _canonical(value):
 
 def _sha(value):
     return hashlib.sha256(value.encode('utf-8')).hexdigest()
-
-
-def _object(pairs):
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError('duplicate_json_key')
-        result[key] = value
-    return result
 
 
 def _exact(value, keys):
@@ -115,7 +125,7 @@ def _ids(value, available):
 
 
 def _classification(kinds):
-    if kinds <= {'fact', 'source_quote', 'receipt'}:
+    if kinds <= {'fact', 'source_quote', 'source_record', 'receipt'}:
         return 'factual'
     if len(kinds) == 1 and next(iter(kinds)) in {'no_answer', 'advice', 'clarification'}:
         return next(iter(kinds))
@@ -140,14 +150,17 @@ def _has_runtime_result(context):
 
 
 def _validate(raw, available, draft, context):
-    value = json.loads(raw, object_pairs_hook=_object)
+    parsed = parse_json_object(raw, max_chars=_MAX_RESPONSE_CHARS)
+    value = parsed.value
+    records = isinstance(context, dict) and context.get('presentation', {}).get('facts') == 'server_records'
+    generation = records and context['presentation'].get('generation_requested') is True
     _exact(value, {'answer_type', 'segments', 'issues'})
     if value['answer_type'] not in _TYPES:
         raise ValueError('invalid_answer_type')
     segments = value['segments']
     if not isinstance(segments, list) or not 1 <= len(segments) <= _MAX_SEGMENTS:
         raise ValueError('invalid_segments')
-    blocks, kinds, cited = [], set(), []
+    blocks, kinds, cited, rendered, suppressed = [], set(), [], [], []
     for segment in segments:
         _exact(segment, {'kind', 'text', 'source_ids'})
         kind, text = segment['kind'], segment['text']
@@ -158,6 +171,32 @@ def _validate(raw, available, draft, context):
         # promoted to citations. The server adds only registered identifiers.
         if _MARKER.search(text) or _prose_references(text):
             raise ValueError('inline_reference_not_allowed')
+        if kind == 'source_record' or (records and kind in {'fact', 'source_quote'}):
+            if kind in {'source_record', 'source_quote'} and (text != '' or len(ids) != 1):
+                raise ValueError('source_record_requires_single_source')
+            if kind == 'fact' and (not text.strip() or not ids):
+                raise ValueError('fact_without_source')
+            for sid in ids:
+                if sid not in cited:
+                    blocks.append(render_source_record(available[sid]))
+                    cited.append(sid)
+                    rendered.append({'kind': 'source_record', 'text': '', 'source_ids': [sid]})
+            kinds.add('source_record')
+            continue
+        if records and kind in {'advice', 'draft', 'clarification'}:
+            if ids:
+                raise ValueError('nonfact_has_sources')
+            if kind == 'clarification':
+                block = '请补充要查询的人物、记录或具体问题，以便继续核对资料。'
+                kinds.add(kind)
+                blocks.append(block)
+                rendered.append({'kind': kind, 'text': '', 'source_ids': []})
+                continue
+            if not generation:
+                suppressed.append(kind)
+                continue
+        if kind == 'draft' and not generation:
+            raise ValueError('draft_not_requested')
         if kind == 'source_quote':
             if text != '' or len(ids) != 1:
                 raise ValueError('source_quote_requires_single_source')
@@ -199,7 +238,9 @@ def _validate(raw, available, draft, context):
                 block = _ADVICE_PREFIX.sub('', block).strip()
                 if not block:
                     raise ValueError('empty_or_oversize_segment')
-                block = '建议：' + block
+                block = '建议：\n\n' + literal_generated_text(block) if records else '建议：' + block
+            elif kind == 'draft':
+                block = '生成内容（供你参考）：\n\n' + literal_generated_text(block)
             if ids:
                 block += ' ' + ''.join(f'[[{sid}]]' for sid in ids)
             # An unclosed fence, link or HTML element must not hide references.
@@ -208,8 +249,16 @@ def _validate(raw, available, draft, context):
         kinds.add(kind)
         blocks.append(block)
         cited.extend(ids)
-    if value['answer_type'] != _classification(kinds):
-        raise ValueError('inconsistent_answer_type')
+        rendered.append(segment)
+    if not blocks:
+        blocks, kinds = [_NO_ANSWER], {'no_answer'}
+        rendered.append({'kind': 'no_answer', 'text': '', 'source_ids': []})
+    value['declared_answer_type'] = value['answer_type']
+    value['answer_type'] = _classification(kinds)
+    value['answer_type_normalized'] = value['declared_answer_type'] != value['answer_type']
+    value['response_envelope'] = parsed.envelope
+    value['rendered_segments'] = rendered
+    value['suppressed_segment_kinds'] = suppressed
     answer = '\n\n'.join(blocks)
     if len(answer) > _MAX_ANSWER_CHARS:
         raise ValueError('oversize_answer')
@@ -253,17 +302,23 @@ def review_answer(llm, question, draft_answer, sources, *, context=None):
     validation on both the original and final text in the harness.
     """
     original_references = _prose_references(draft_answer) if isinstance(draft_answer, str) else []
-    metadata = {'version': 1, 'status': 'unavailable', 'method': 'single_model_revision',
+    records = isinstance(context, dict) and context.get('presentation', {}).get('facts') == 'server_records'
+    metadata = {'version': 2, 'status': 'unavailable', 'method': 'server_record_revision' if records else 'single_model_revision',
                 'semantic_verified': False, 'original_answer': draft_answer,
                 'revised_answer': None, 'changed': False, 'answer_type': None,
                 'issues': [], 'raw_issues': [], 'segments': [], 'raw_response': None,
                 'original_references': original_references, 'source_ids': [],
                 'invalid_original_references': [], 'source_snapshot_sha256': None,
                 'input_sha256': None, 'unavailable_reason': None}
+    metadata['presentation'] = deepcopy(context.get('presentation')) if records else None
     available = {}
 
     def unavailable(reason):
         metadata['unavailable_reason'] = reason
+        if records:
+            return {'answer': '本轮资料核对未完成，请重试回答。记忆处理结果请以下方回执为准。',
+                    'metadata': metadata, 'warnings': [{'code': 'review_unavailable',
+                    'message': '资料核对未完成，未展示未经核对的草稿。'}]}
         warnings = [{'code': 'review_unavailable',
                      'message': '本轮资料核对未完成，已保留原始回答，请对照来源核实其中的事实。'}]
         if available and not set(available).intersection(original_references):
@@ -296,7 +351,7 @@ def review_answer(llm, question, draft_answer, sources, *, context=None):
             return unavailable('input_budget_exceeded')
         # No chat_json or correction loop: a malformed model response fails
         # closed instead of spending additional revision attempts.
-        response = llm.chat([{'role': 'system', 'content': _SYSTEM},
+        response = llm.chat([{'role': 'system', 'content': _SYSTEM + (_RECORD_SYSTEM if records else '')},
                              {'role': 'user', 'content': body}],
                             tier='mid', temperature=0, max_tokens=6000)
         if not isinstance(response, dict) or response.get('tool_calls'):
@@ -314,14 +369,19 @@ def review_answer(llm, question, draft_answer, sources, *, context=None):
         except (ValueError, TypeError, KeyError, RecursionError) as exc:
             # Reasons are bounded codes, not provider exception text (which
             # can include request bodies or credentials).
-            reason = str(exc) if type(exc) is ValueError and re.fullmatch(r'[a-z_]+', str(exc)) else 'invalid_review_response'
+            reason = exc.code if isinstance(exc, JSONProtocolError) else str(exc) if type(exc) is ValueError and re.fullmatch(r'[a-z_]+', str(exc)) else 'invalid_review_response'
             return unavailable(reason)
         metadata.update(status='completed', revised_answer=answer,
                         changed=answer != draft_answer, answer_type=proposed['answer_type'],
                         issues=proposed['issues'], raw_issues=proposed['raw_issues'],
-                        segments=proposed['segments'])
+                        segments=proposed['segments'], rendered_segments=proposed['rendered_segments'],
+                        declared_answer_type=proposed['declared_answer_type'],
+                        answer_type_normalized=proposed['answer_type_normalized'],
+                        response_envelope=proposed['response_envelope'],
+                        suppressed_segment_kinds=proposed['suppressed_segment_kinds'])
         return {'answer': answer, 'metadata': metadata, 'warnings': []}
     except Exception:
         # Provider, serialization, or invalid snapshot failures must never
-        # turn into a falsely successful review or prevent saving the draft.
+        # turn into a falsely successful review. The application contract
+        # suppresses the draft; legacy direct callers retain their old behavior.
         return unavailable('review_call_failed')

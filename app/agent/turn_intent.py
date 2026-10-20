@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import json
 import re
+from copy import deepcopy
 
+from app.agent.json_protocol import JSONProtocolError, parse_json_object
 from app.llm import failure_metadata, get_llm
 from app.store import repo
 from app.util import clamp, sha256_text
@@ -167,7 +169,8 @@ def classify_turn(text: str, *, llm=None) -> dict:
                 attempt['http_status'] = info['status_code']
         else:
             attempt.update(_response_diagnostics(message))
-            result, category, retryable = _classify_response(message, text, attempt.get('finish_reason'))
+            result, category, retryable = _classify_response(
+                message, text, attempt.get('finish_reason'), diagnostics=attempt)
         attempt.update(status=result['status'] if category else 'succeeded',
                        failure_category=category, retryable=retryable)
         attempts.append(attempt)
@@ -209,7 +212,7 @@ def _response_diagnostics(message):
     return info
 
 
-def _classify_response(message, text, finish):
+def _classify_response(message, text, finish, *, diagnostics=None):
     if finish == 'content_filter':
         return _readonly(text, 'classifier_refusal', 'failed'), 'refusal', False
     if finish == 'length':
@@ -222,11 +225,17 @@ def _classify_response(message, text, finish):
     if not isinstance(raw, str):
         return _readonly(text, 'invalid_classifier_schema', 'invalid'), 'schema', True
     try:
-        # Strict parsing only: code fences, duplicate keys and NaN stay invalid.
-        value = json.loads(raw, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
-    except (ValueError, TypeError, RecursionError):
-        return _readonly(text, 'invalid_classifier_json', 'invalid'), 'json', True
-    result = validate_intent(value, text)
+        # A complete single JSON fence is only a transport wrapper. The exact
+        # JSON schema and grounded-span checks remain mandatory after unwrapping.
+        parsed = parse_json_object(raw)
+    except JSONProtocolError as error:
+        if isinstance(diagnostics, dict):
+            diagnostics['protocol_error'] = error.code
+        reason = 'invalid_classifier_schema' if error.category == 'schema' else 'invalid_classifier_json'
+        return _readonly(text, reason, 'invalid'), error.category, True
+    if isinstance(diagnostics, dict):
+        diagnostics['response_envelope'] = parsed.envelope
+    result = validate_intent(parsed.value, text)
     if result['status'] != 'invalid':
         return result, None, False
     category = 'span' if result['reason'] in {'record_spans_not_safely_grounded',
@@ -261,7 +270,99 @@ def write_text(intent: dict | None, source_text: str | None) -> str | None:
     return validated['extraction_text']
 
 
-def for_user_message(conn, conversation_id, user_message_id, text, *, llm=None, readonly_reason=None):
+def _preceding_ambiguity(conn, conversation_id, message_id, person_id):
+    row = conn.execute("SELECT rowid FROM message WHERE id=? AND conversation_id=? AND role='user'",
+                       (message_id, conversation_id)).fetchone()
+    if row is None:
+        return None
+    previous = conn.execute("SELECT rowid,id FROM message WHERE conversation_id=? AND role='user' "
+                            'AND rowid<? ORDER BY rowid DESC LIMIT 1', (conversation_id, row[0])).fetchone()
+    if previous is None:
+        return None
+    answer = conn.execute("SELECT tool_calls FROM message WHERE conversation_id=? AND role='assistant' "
+                          'AND rowid>? AND rowid<? ORDER BY rowid DESC LIMIT 1',
+                          (conversation_id, previous['rowid'], row[0])).fetchone()
+    try:
+        metadata = json.loads(answer['tool_calls']) if answer else {}
+        if not isinstance(metadata, dict):
+            return None
+        scope = metadata['conversation_scope']
+        if not isinstance(scope, dict) or not isinstance(scope.get('candidates'), list) \
+                or any(not isinstance(item, dict) or not isinstance(item.get('person_id'), str)
+                       for item in scope['candidates']):
+            return None
+        candidates = {item['person_id'] for item in scope['candidates']}
+    except (ValueError, TypeError, KeyError):
+        return None
+    if scope.get('conversation_id') != conversation_id or scope.get('user_message_id') != previous['id'] \
+            or scope.get('mode') != 'clarify' or scope.get('blocked') is not True \
+            or scope.get('reason') not in {'ambiguous_name', 'ambiguous_reference', 'ordinal_selection'} \
+            or len(candidates) < 2 or person_id not in candidates:
+        return None
+    return previous['id']
+
+
+def _pure_existing_selection(conn, person_id, span):
+    """A closed identification grammar, using only existing labels/background."""
+    person = repo.get_person(conn, person_id)
+    if person is None or person['deleted_at'] is not None or person['status'] == 'merged':
+        return False
+    labels = set(repo.aliases_of(conn, person_id)) | {person['display_name']}
+    labels = {label for label in labels if isinstance(label, str) and len(label) >= 2}
+    backgrounds = set()
+    for label in labels:
+        # A differentiating label such as “研发沈岑” also supports “研发的那位”.
+        name = person['display_name']
+        if label != name and (label.startswith(name) or label.endswith(name)):
+            extra = label[len(name):] if label.startswith(name) else label[:-len(name)]
+            if len(extra) >= 2:
+                backgrounds.add(extra)
+    fields = repo.current_fields(conn, person_id)
+    for field in ('city', 'company', 'title'):
+        value = fields.get(field, {}).get('value')
+        if isinstance(value, str) and len(value.strip()) >= 2:
+            backgrounds.add(value.strip())
+    if not labels:
+        return False
+    label_pattern = '(?:' + '|'.join(re.escape(label) for label in sorted(labels, key=len, reverse=True)) + ')'
+    pointer = r'(?:那位|这位|那个人|这个人)'
+    background_pattern = '(?:' + '|'.join(re.escape(value) for value in sorted(backgrounds, key=len, reverse=True)) + ')' \
+        if backgrounds else r'(?!)'
+    identified = '(?:' + label_pattern + '|' + background_pattern + r'的?' + pointer + ')'
+    prefix = r'(?:(?:我(?:选|选择|指的是|说的是)|就选|选择|选中|选|就是|是|指的是|说的是|叫|名叫|名字是|姓名是)\s*)?'
+    pattern = prefix + identified + r'(?:吧|呀|啊)?'
+    pointer_name = '(?:' + background_pattern + r'的?)?' + pointer + r'(?:叫|名叫|就是|是)' + label_pattern
+    clauses = [part.strip() for part in re.split(r'[，,。.!！?？；;\n\r：:]+', span) if part.strip()]
+    return bool(clauses) and all(not _EXPLICIT_RULE.search(clause) and (
+        re.fullmatch(pattern, clause) or re.fullmatch(pointer_name, clause)) for clause in clauses)
+
+
+def _guard_candidate_selection(conn, conversation_id, context_message_id, text, decision, read_scope):
+    if not decision.get('allow_writes') or not isinstance(read_scope, dict) \
+            or read_scope.get('mode') != 'single' or read_scope.get('blocked') \
+            or len(read_scope.get('person_ids', [])) != 1:
+        return decision
+    person_id = read_scope['person_ids'][0]
+    previous = _preceding_ambiguity(conn, conversation_id, context_message_id, person_id)
+    if previous is None:
+        return decision
+    removed = [span for span in decision['record_spans'] if _pure_existing_selection(conn, person_id, span)]
+    if not removed:
+        return decision
+    retained = [span for span in decision['record_spans'] if span not in removed]
+    guarded = validate_intent({'intent': decision['intent'] if retained else 'query', 'record_spans': retained,
+                              'reason': decision['reason'] if retained else 'existing_candidate_selection_is_readonly'}, text)
+    if isinstance(decision.get('classifier'), dict):
+        guarded['classifier'] = deepcopy(decision['classifier'])
+    guarded['write_guard'] = {
+        'policy': 'existing_candidate_selection', 'reason': 'identification_after_related_ambiguity_is_not_a_new_fact',
+        'previous_user_message_id': previous, 'person_id': person_id, 'removed_spans': removed,
+        'retained_spans': retained, 'original_decision': deepcopy(decision)}
+    return guarded
+
+
+def for_user_message(conn, conversation_id, user_message_id, text, *, llm=None, readonly_reason=None,
+                     read_scope=None, context_message_id=None):
     """Persist the decision and original audit evidence before extraction.
 
     A retry reuses its exact valid decision; failed/unknown decisions stay read-only
@@ -294,6 +395,8 @@ def for_user_message(conn, conversation_id, user_message_id, text, *, llm=None, 
             decision['status'] = 'ok'
         if 'classifier' not in decision and isinstance(saved.get('classifier'), dict):
             decision['classifier'] = saved['classifier']
+        if isinstance(saved.get('write_guard'), dict):
+            decision['write_guard'] = deepcopy(saved['write_guard'])
     elif malformed_metadata or 'turn_intent' in metadata:
         # Corrupt/older decisions do not grant a fresh sample on an existing row.
         decision = _diagnosed(_readonly(text, 'invalid_saved_classifier_decision', 'invalid'),
@@ -305,6 +408,8 @@ def for_user_message(conn, conversation_id, user_message_id, text, *, llm=None, 
         decision['classifier']['method'] = 'deterministic_readonly'
     else:
         decision = classify_turn(text, llm=llm)
+    decision = _guard_candidate_selection(conn, conversation_id, context_message_id or user_message_id,
+                                          text, decision, read_scope)
     evidence_id = repo.add_evidence(conn, 'text', source_ref=user_message_id, excerpt=clamp(text, 4000))
     decision['evidence_id'] = evidence_id
     metadata['turn_intent'] = decision

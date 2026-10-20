@@ -16,9 +16,14 @@ from app.config import tz
 from app.util import sha256_text
 
 VERSION = 1
-_REFERENCE = re.compile(r'这条记忆|那条记忆|这条记录|刚才那条记录|刚才那条记忆|上面那条记录|这个偏好|刚才那个偏好')
-_SHORT_REFERENCE = re.compile(r'^(?:请问|那|那么)?这条(?=是(?:什么|哪|几)|后来(?:是|在)?(?:什么|哪|几|改|修改|编辑|撤销|恢复)|'
-                              r'(?:的)?(?:日期|时间|来源|原文))')
+_REFERENCE = re.compile(r'这条记忆|那条记忆|这条记录|那条记录|刚才那条记录|刚才那条记忆|上面那条记录|这个偏好|刚才那个偏好')
+# A possessive pointer identifies a quotation independently of the predicate
+# that follows it. It grants neither a deterministic date answer nor writes.
+# Noun phrases such as "那条公路" and assertions such as "这条是我的路线" do
+# not match this shorthand; explicit note prefixes keep their normal path.
+_SHORT_REFERENCE = re.compile(r'^\s*(?:请问|那|那么)?\s*(?:(?:这|那)条(?=的)|'
+                              r'这条(?=是(?:什么|哪|几)|后来(?:是|在)?(?:什么|哪|几|改|修改|编辑|撤销|恢复)|'
+                              r'(?:日期|时间|来源|原文)))')
 _SET_REFERENCE = re.compile(
     r'(?:这|那)(?:些|几)条?(?:记忆|记录|偏好)|'
     r'(?:这|那)(?:两|2)条(?:记忆|记录|偏好)?|'
@@ -200,11 +205,14 @@ def for_user_message(conn, conversation_id, user_message_id, text, read_scope, *
         raise ValueError('记忆追问需要已解析的人物范围')
     ids = list(dict.fromkeys(match.upper() for match in _SOURCE_ID.findall(text)))
     set_reference = bool(_SET_REFERENCE.search(text)) or len(ids) > 1
-    singular_reference = bool(_REFERENCE.search(text))
+    singular_references = _REFERENCE.findall(text)
+    singular_reference = bool(singular_references)
     new_reference = bool(_SET_REFERENCE.search(text) or _SHORT_REFERENCE.search(text))
     # A new shorthand is optional context resolution, not permission to suppress
     # an explicit note. The normal classifier still decides whether it can save.
-    if not singular_reference and turn_intent._EXPLICIT_RULE.search(text.lstrip()):
+    if turn_intent._EXPLICIT_RULE.search(text.lstrip()) and (
+            not singular_reference or all(reference == '那条记录' for reference in singular_references)):
+        singular_reference = False
         new_reference = False
     if not singular_reference and not new_reference and not (_PREVIOUS_ANSWER.search(text) and ids):
         return _result('not_applicable', 'no_explicit_memory_reference', read_scope)
@@ -389,7 +397,7 @@ def comparison_answer(focus, source_ids, text, intent):
     binding is the evidence for comparison with the previous answer; old text
     is not passed off as a quotation of today's source.
     """
-    from app.agent.source_registry import _prose_references
+    from app.agent.answer_records import literal_generated_text
 
     if not isinstance(intent, dict) or intent.get('intent') != 'query' \
             or intent.get('allow_writes') is not False or intent.get('record_spans') \
@@ -419,13 +427,14 @@ def comparison_answer(focus, source_ids, text, intent):
     for index, (source, sid) in enumerate(zip(sources, source_ids), 1):
         original = source['text']
         quote = original[:1600]
-        rendered = '当前保存文字：' + quote + f'\n\n[[{sid}]]'
-        # Data can contain Markdown or citation-like strings. Preserve it in
-        # the attached snapshot, without allowing it to create/hide buttons.
-        if re.search(r'\[\[.*?\]\]|[`<>]', quote, re.DOTALL) or _prose_references(quote) \
-                or _prose_references(rendered) != [sid]:
-            rendered = f'这条文字含有引用标记或格式，未直接展开；请打开资料查看完整记录。[[{sid}]]'
-        elif len(original) > 1600:
+        # Stored text is data, including its Markdown, HTML and apparent source
+        # IDs. A fenced literal keeps it visible without styling adjacent prose
+        # or becoming another live citation in either renderer.
+        try:
+            rendered = '当前保存文字：\n\n' + literal_generated_text(quote) + f'\n\n[[{sid}]]'
+        except ValueError:
+            return None
+        if len(original) > 1600:
             rendered += '\n\n（以上仅显示记录前1600字符；完整文字见资料。）'
         changed = original != old[identity(source)]['text']
         delta = f'与上次引用相比，保存文字{"已变化" if changed else "未变化"}。[[{sid}]]'

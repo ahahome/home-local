@@ -1,0 +1,338 @@
+{
+  "status": "development_baseline_failures",
+  "app_source_hash": "267024bc8a07d6486a895bc8bcb8c8b5ce7a7aef81a5264a0c746f4207b20b63",
+  "fixture_hash": "7862601da12a9b2c7b1d4d3fd57724936c994aa33baca330fbf1fd106759916a",
+  "identity_clarification": {
+    "user_text": "实验室的那位，叫实验室戴禾。把他的报告交付和讨论时间说清楚。",
+    "turn_intent": {
+      "version": 1,
+      "intent": "mixed",
+      "record_spans": [
+        "实验室的那位，叫实验室戴禾。"
+      ],
+      "extraction_text": "实验室的那位，叫实验室戴禾。",
+      "allow_writes": true,
+      "reason": "前半句为引入人物名称的事实断言，后半句为要求澄清时间的查询指令，符合mixed定义。",
+      "status": "classified",
+      "source_sha256": "df28de22aba9e4e994f55ba982e37a8e69c5622604baf8189ad5846658a6aa39",
+      "classifier": {
+        "tier": "mini",
+        "max_attempts": 2,
+        "request_count": 1,
+        "attempts": [
+          {
+            "attempt": 1,
+            "max_tokens": 1800,
+            "request_started": true,
+            "content_chars": 106,
+            "finish_reason": "stop",
+            "model": "qwen3.7-flash",
+            "usage": {
+              "prompt_tokens": 703,
+              "completion_tokens": 3180,
+              "total_tokens": 3883,
+              "reasoning_tokens": 3132
+            },
+            "response_envelope": "plain",
+            "status": "succeeded",
+            "failure_category": null,
+            "retryable": false
+          }
+        ],
+        "failure_category": null,
+        "retryable": false
+      },
+      "evidence_id": "f37e0c6781824161"
+    },
+    "conversation_scope": {
+      "version": 1,
+      "mode": "single",
+      "person_ids": [
+        "afbaf1c9d2024db7"
+      ],
+      "blocked": false,
+      "reason": "explicit_name",
+      "candidates": [
+        {
+          "person_id": "afbaf1c9d2024db7",
+          "display_name": "戴禾"
+        }
+      ],
+      "origin_message_id": "3db8833489b9484b",
+      "conversation_id": "21377312696e4336",
+      "user_message_id": "3db8833489b9484b"
+    },
+    "memory_focus": {
+      "status": "not_applicable",
+      "reason": "no_explicit_memory_reference",
+      "binding": null,
+      "registration": {
+        "status": "not_selected",
+        "source_id": null,
+        "source_ids": []
+      },
+      "sources": []
+    },
+    "source_dependencies": [
+      {
+        "type": "memory",
+        "entity_id": "4f7dd8f83d504c4e",
+        "person": {
+          "id": "afbaf1c9d2024db7",
+          "display_name": "戴禾"
+        },
+        "text": "实验室戴禾说测试报告先传共享文件夹，只在周四下午集中讨论。",
+        "date": 1768266000000,
+        "temporal_status": "historical_background",
+        "revision": 0,
+        "ts": 1768266000000,
+        "kind": "semantic",
+        "evidence": {
+          "id": "0714e3b25d924ff5",
+          "kind": "text",
+          "excerpt": "实验室戴禾说测试报告先传共享文件夹，只在周四下午集中讨论。",
+          "source_ref": "eval-v08:dai_lab_contact",
+          "blob_hash": null,
+          "created_at": 1792491810686
+        },
+        "captured_at": 1792491889118,
+        "record_context": {
+          "status": "active",
+          "recorded_at": 1792491810686,
+          "last_user_edit_at": null,
+          "last_lifecycle_change": null
+        },
+        "origin_source": {
+          "id": "0714e3b25d924ff5",
+          "kind": "text",
+          "excerpt": "实验室戴禾说测试报告先传共享文件夹，只在周四下午集中讨论。",
+          "source_ref": "eval-v08:dai_lab_contact",
+          "blob_hash": null,
+          "created_at": 1792491810686
+        },
+        "id": "S1"
+      },
+      {
+        "type": "profile_context",
+        "entity_id": "afbaf1c9d2024db7",
+        "text": "人物：戴禾（别名：实验室戴禾）"
+      }
+    ],
+    "answer": "资料类型：记忆\n\n所属人物：\n\n```text\n戴禾\n```\n\n保存文字：\n\n```text\n实验室戴禾说测试报告先传共享文件夹，只在周四下午集中讨论。\n```\n\n记录状态：记录可读取，未撤销；所属人物当前可读取\n\n事实时效：有日期的背景记录；当前事实是否仍成立尚未核实。背景记录不表示已撤销。\n\n最近人工编辑时间：未知\n\n记忆所标日期（不代表录入或修改日期）：2026-01-13T09:00:00+08:00\n\n首次录入时间：2026-10-20T18:23:30+08:00\n\n所标日期不能用来断言当事人何时说过、用户何时纠正或何时修改。叙述“某日纠正/修改”也只能使用最近人工编辑时间；未知就不能给出日期。\n\n文字核对：当前文字与来源摘录逐字一致。\n\n文字核对只比较系统内当前保存的字符串；逐字一致不代表记录历史从未编辑，也不证明当事人逐字说过这些话或原始资料完整。\n\n[[S1]]",
+    "actual_pending_items": [
+      {
+        "_eval_rowid": 1,
+        "id": "eb3387b6a76a469e",
+        "kind": "person_identity",
+        "payload": {
+          "candidates": [
+            {
+              "display_name": "戴禾",
+              "person_id": "afbaf1c9d2024db7",
+              "score": 0.9
+            },
+            {
+              "display_name": "戴禾",
+              "person_id": "5ec9e8ca143d44da",
+              "score": 0.9
+            }
+          ],
+          "canonical_name": "戴禾",
+          "channel": "chat",
+          "evidence_id": "f37e0c6781824161",
+          "fingerprint": "cd776a6b74d60150cb3ca8684f3015d91aaf9ae4f187962b53a35d45ca5f4745",
+          "mention": "戴禾",
+          "patch": {
+            "aliases": [
+              {
+                "alias": "实验室戴禾",
+                "confidence": 0.9
+              }
+            ],
+            "canonical_name": "戴禾",
+            "facts": [],
+            "fields": [
+              {
+                "_source_verified": true,
+                "confidence": 0.9,
+                "evidence": "实验室的那位，叫实验室戴禾",
+                "field": "company",
+                "valid_from": null,
+                "value": "实验室"
+              }
+            ],
+            "ledger": [],
+            "name": "戴禾",
+            "promises": [],
+            "relations": [],
+            "value_read": null
+          },
+          "source_msg_id": "3db8833489b9484b",
+          "source_text": "实验室的那位，叫实验室戴禾。"
+        },
+        "reason": "身份不确定（最高分 0.90 且存在并列候选）",
+        "created_at": 1792491889117,
+        "resolved_at": null,
+        "resolution": null
+      }
+    ]
+  },
+  "date_followup": {
+    "user_text": "这条的标注日期、放进系统的日期、最近人工改动日期分别能查到吗？",
+    "turn_intent": {
+      "version": 1,
+      "intent": "query",
+      "record_spans": [],
+      "extraction_text": "",
+      "allow_writes": false,
+      "reason": "用户仅询问系统能否查询特定字段（标注日期、录入日期、修改日期），属于对已有资料或系统功能的查询，未包含需记录的新事实或持久化操作指令。",
+      "status": "classified",
+      "source_sha256": "7b56077d38932907ffb0defa8112bcbd734aa1ca3cae7f134b6cd7d05621aa45",
+      "classifier": {
+        "tier": "mini",
+        "max_attempts": 2,
+        "request_count": 1,
+        "attempts": [
+          {
+            "attempt": 1,
+            "max_tokens": 1800,
+            "request_started": true,
+            "content_chars": 140,
+            "finish_reason": "stop",
+            "model": "qwen3.7-flash",
+            "usage": {
+              "prompt_tokens": 703,
+              "completion_tokens": 582,
+              "total_tokens": 1285,
+              "reasoning_tokens": 509
+            },
+            "response_envelope": "json_fence",
+            "status": "succeeded",
+            "failure_category": null,
+            "retryable": false
+          }
+        ],
+        "failure_category": null,
+        "retryable": false
+      },
+      "evidence_id": "a505f9b015bb400a"
+    },
+    "conversation_scope": {
+      "version": 1,
+      "mode": "none",
+      "person_ids": [],
+      "blocked": false,
+      "reason": "no_person_reference",
+      "candidates": [],
+      "origin_message_id": "93a4bd1e9dae4f20",
+      "conversation_id": "49d6a9040e2c412d",
+      "user_message_id": "93a4bd1e9dae4f20"
+    },
+    "memory_focus": {
+      "status": "not_applicable",
+      "reason": "no_explicit_memory_reference",
+      "binding": null,
+      "registration": {
+        "status": "not_selected",
+        "source_id": null,
+        "source_ids": []
+      },
+      "sources": []
+    },
+    "source_dependencies": [],
+    "answer": "当前可核查资料不足以回答这个问题。",
+    "explicit_reference": "这条",
+    "expected_source_key": "pei_teaching",
+    "stored_source_before_answer": {
+      "visible": true,
+      "source": {
+        "type": "memory",
+        "entity_id": "54fa2f9ecea64cd4",
+        "person": {
+          "id": "5dc349bb943d49c4",
+          "display_name": "裴青"
+        },
+        "text": "裴青更正：周二授课期间不接电话，课程结束后也先发短信确认，再安排回电。",
+        "date": 1768093200000,
+        "temporal_status": "historical_background",
+        "revision": 1,
+        "ts": 1768093200000,
+        "kind": "semantic",
+        "evidence": {
+          "id": "473facc9180648b5",
+          "kind": "text",
+          "excerpt": "{\"correction_id\":\"f7b08be8931f4f52\",\"edited_by_user\":true,\"memory_id\":\"54fa2f9ecea64cd4\",\"origin_evidence_id\":\"b4a1925d06f74e7d\",\"previous_evidence_id\":\"b4a1925d06f74e7d\",\"reason\":\"\",\"user_correction\":{\"person_id\":\"5dc349bb943d49c4\",\"text\":\"裴青更正：周二授课期间不接电话，课程结束后也先发短信确认，再安排回电。\",\"valid_from\":\"2026-01-11\"}}",
+          "source_ref": "memory-correction:f7b08be8931f4f52",
+          "blob_hash": null,
+          "created_at": 1792491968243
+        },
+        "captured_at": 1792491998907,
+        "record_context": {
+          "status": "active",
+          "recorded_at": 1792491916474,
+          "last_user_edit_at": 1792491968243,
+          "last_lifecycle_change": null
+        },
+        "origin_source": {
+          "id": "b4a1925d06f74e7d",
+          "kind": "text",
+          "excerpt": "裴青说周二授课期间不接电话，课程结束后可以回电；急事先发短信。",
+          "source_ref": "eval-v08:pei_teaching",
+          "blob_hash": null,
+          "created_at": 1792491916474
+        }
+      },
+      "stored": {
+        "id": "54fa2f9ecea64cd4",
+        "person_id": "5dc349bb943d49c4",
+        "kind": "semantic",
+        "text": "裴青更正：周二授课期间不接电话，课程结束后也先发短信确认，再安排回电。",
+        "confidence": 1.0,
+        "evidence_id": "473facc9180648b5",
+        "ts": 1768093200000,
+        "created_at": 1792491916474,
+        "deleted_at": null,
+        "status": "active",
+        "revision": 1,
+        "assignment_revision": 0,
+        "updated_at": 1792491968243,
+        "origin_evidence_id": "b4a1925d06f74e7d"
+      }
+    },
+    "failed_checks": [
+      {
+        "name": "required_dependency_record:pei_teaching",
+        "passed": false,
+        "record": "pei_teaching"
+      }
+    ]
+  },
+  "generation_task_losses": [
+    {
+      "case": "draft-retains-task-and-evidence-conditions",
+      "turn": 2,
+      "question": "太长了，缩成两句，再提醒我发送前应该补哪一步。",
+      "presentation": {
+        "version": 1,
+        "facts": "server_records",
+        "generation_requested": false,
+        "method": "conservative_language_heuristic",
+        "semantic_verified": false
+      },
+      "actual_answer": "请补充要查询的人物、记录或具体问题，以便继续核对资料。"
+    },
+    {
+      "case": "different-travel-conditions-and-advice",
+      "turn": 2,
+      "question": "那我约她去外地看展应该先问什么？给个建议，不要把还没问到的安排当定了。",
+      "presentation": {
+        "version": 1,
+        "facts": "server_records",
+        "generation_requested": false,
+        "method": "conservative_language_heuristic",
+        "semantic_verified": false
+      },
+      "actual_answer": "资料类型：记忆\n\n所属人物：\n\n```text\n祝遥\n```\n\n保存文字：\n\n```text\n祝遥说到外地参加展会时优先坐高铁。\n```\n\n记录状态：记录可读取，未撤销；所属人物当前可读取\n\n事实时效：有日期的背景记录；当前事实是否仍成立尚未核实。背景记录不表示已撤销。\n\n最近人工编辑时间：未知\n\n记忆所标日期（不代表录入或修改日期）：2026-01-15T09:00:00+08:00\n\n首次录入时间：2026-10-20T18:27:23+08:00\n\n所标日期不能用来断言当事人何时说过、用户何时纠正或何时修改。叙述“某日纠正/修改”也只能使用最近人工编辑时间；未知就不能给出日期。\n\n文字核对：当前文字与来源摘录逐字一致。\n\n文字核对只比较系统内当前保存的字符串；逐字一致不代表记录历史从未编辑，也不证明当事人逐字说过这些话或原始资料完整。\n\n[[S3]]\n\n资料类型：记忆\n\n所属人物：\n\n```text\n祝遥\n```\n\n保存文字：\n\n```text\n祝遥说跨境行程先看直飞航班，不把转机作为首选。\n```\n\n记录状态：记录可读取，未撤销；所属人物当前可读取\n\n事实时效：有日期的背景记录；当前事实是否仍成立尚未核实。背景记录不表示已撤销。\n\n最近人工编辑时间：未知\n\n记忆所标日期（不代表录入或修改日期）：2026-01-16T09:00:00+08:00\n\n首次录入时间：2026-10-20T18:27:23+08:00\n\n所标日期不能用来断言当事人何时说过、用户何时纠正或何时修改。叙述“某日纠正/修改”也只能使用最近人工编辑时间；未知就不能给出日期。\n\n文字核对：当前文字与来源摘录逐字一致。\n\n文字核对只比较系统内当前保存的字符串；逐字一致不代表记录历史从未编辑，也不证明当事人逐字说过这些话或原始资料完整。\n\n[[S2]]\n\n当前可核查资料不足以回答这个问题。"
+    }
+  ]
+}

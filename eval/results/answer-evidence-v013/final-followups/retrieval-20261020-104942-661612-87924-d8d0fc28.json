@@ -1,0 +1,210 @@
+{
+  "evaluation": "memory-questions-v08",
+  "schema_version": 1,
+  "track": "retrieval",
+  "created_at": "2026-10-20T10:49:42.661612+00:00",
+  "report_id": "20261020-104942-661612-87924",
+  "run_status": "complete",
+  "fixture_version": "0.13.0-followups-new-wording-1",
+  "fixture_hash": "cc1d18100151bbb92886b685a9dcdba5a8002cef73e49c6845bd5f0839afdf33",
+  "corpus_provenance": "fictional_records_with_natural_questions",
+  "corpus_description": "v0.13 首版反例修复期间，独立于具体补丁设计冻结的额外虚构新措辞语料。具体问题在最终应用冻结前不向实现代理披露，不使用问题调实现；首次正式采样前冻结，采样后不改问题或期望。仅内部开发构造的新措辞检查，非外部盲测、真实用户分布或语义准确率基准。与首版20答的已知同题回归分开报告，不失败后重跑筛绿。",
+  "app_root": "/Users/emdoor/Documents/projects/integrate/home-local",
+  "app_source_hash": "d8d0fc2893b3b44d5fff71b77bbbb79f862a03e7ea24c7921107fd39c071a62a",
+  "runner_source_hash": "0cab27da2a00ae850c9f1bfd8f9429a28f8ba021945a8f3e98d05d3d7265190c",
+  "app_source_changed_during_run": false,
+  "app_git": {
+    "sha": "38a4d27bb9409c783cff067d05c94576cbbb3932",
+    "dirty": true
+  },
+  "runner_git": {
+    "sha": "38a4d27bb9409c783cff067d05c94576cbbb3932",
+    "dirty": true
+  },
+  "configuration": {
+    "repeat": 1,
+    "tags": [],
+    "limit": null,
+    "worker_timeout_seconds": 600,
+    "models": [],
+    "configured_model_tiers": [],
+    "embedding": "disabled",
+    "cache": false,
+    "runtime": "separate process and temporary SQLite per scenario and repeat",
+    "retrieval_mode": "FTS only; network forbidden"
+  },
+  "limitations": [
+    "Fictional development corpus, not real users or an unseen semantic benchmark",
+    "String checks and source integrity do not establish answer correctness",
+    "Answer semantics require human review; no LLM self-grading"
+  ],
+  "expectation_semantics": {
+    "relevant": "Fixed-query relevance labels used only for retrieval ranking metrics",
+    "source_records": "Potentially relevant evidence for human review, not mandatory citations or an answer score",
+    "required_dependency_records": "Nonempty explicit record set that must actually be read as dependencies",
+    "required_cited_records": "Nonempty explicit record set that must appear in final citations, independently of access",
+    "limited_fact_rules": "Literal string probes only; negation and entailment require human review",
+    "deterministic_checks": "Stored provenance, identity scope, source status and lifecycle contracts",
+    "no_memory_writes": "Actual domain-table changes excluding the original audit evidence, not the intent label",
+    "saved_fields": "Exact current stored field value, not a model claim or a pending proposal",
+    "memory_focus": "Reference status, exact selected identities, immutable anchor and complete current source registration; not semantic correctness"
+  },
+  "human_review_rubric": [
+    "逐答核对资料卡原文/身份/日期与本轮SQLite来源；只读和保存状态使用真实变更判断。",
+    "独立检查生成任务是否实际完成，以及草稿是否描述尚未发生的发送、准备或对方答复。",
+    "已有别名澄清和带真正新增事实的mixed要分别核对，不用前者误写修复来吞掉后者。",
+    "这是内部开发新措辞语料，首次采样后不再是未见问题；代理证据审阅不计算人工或语义准确率。"
+  ],
+  "selected_scenarios": 1,
+  "details": [
+    {
+      "question": "样品 报价 数量 交期 邮件",
+      "tags": [
+        "new_wording",
+        "condition"
+      ],
+      "expected": {
+        "relevant": [
+          "yu_quote"
+        ],
+        "excluded_persons": [
+          "zhou_pottery",
+          "zhou_music"
+        ]
+      },
+      "id": "yu-sample-quote",
+      "tool": "query_memory",
+      "actual_arguments": {
+        "person": "小麦",
+        "query": "样品 报价 数量 交期 邮件",
+        "top_k": 5
+      },
+      "result": {
+        "ok": true,
+        "results": [
+          {
+            "type": "memory",
+            "id": "d9a20f9a089f453e",
+            "text": "余麦说讨论样品报价时先发邮件列出数量和交期，收到信息后再约语音。",
+            "ts": 1768006800000,
+            "kind": "semantic",
+            "person": "余麦",
+            "source": {
+              "type": "memory",
+              "entity_id": "d9a20f9a089f453e",
+              "person": {
+                "id": "e9d33083284c495f",
+                "display_name": "余麦"
+              },
+              "text": "余麦说讨论样品报价时先发邮件列出数量和交期，收到信息后再约语音。",
+              "date": 1768006800000,
+              "temporal_status": "historical_background",
+              "revision": 0,
+              "ts": 1768006800000,
+              "kind": "semantic",
+              "evidence": {
+                "id": "94b1141127d246ad",
+                "kind": "text",
+                "excerpt": "余麦说讨论样品报价时先发邮件列出数量和交期，收到信息后再约语音。",
+                "source_ref": "eval-v08:yu_quote",
+                "blob_hash": null,
+                "created_at": 1792493382966
+              },
+              "captured_at": 1792493383241,
+              "record_context": {
+                "status": "active",
+                "recorded_at": 1792493382966,
+                "last_user_edit_at": null,
+                "last_lifecycle_change": null
+              },
+              "origin_source": {
+                "id": "94b1141127d246ad",
+                "kind": "text",
+                "excerpt": "余麦说讨论样品报价时先发邮件列出数量和交期，收到信息后再约语音。",
+                "source_ref": "eval-v08:yu_quote",
+                "blob_hash": null,
+                "created_at": 1792493382966
+              }
+            },
+            "score": 0.14,
+            "match_type": "text_exact",
+            "when": "2026-01-10 09:00"
+          }
+        ],
+        "scope": "all",
+        "scope_inferred": false,
+        "scoped_person": {
+          "id": "e9d33083284c495f",
+          "display_name": "余麦"
+        },
+        "scoped_person_ids": [
+          "e9d33083284c495f"
+        ]
+      },
+      "ranked_records": [
+        "yu_quote"
+      ],
+      "metrics": {
+        "recall_at_1": 1.0,
+        "recall_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "deterministic_checks": [
+        {
+          "name": "tool_completed",
+          "passed": true
+        },
+        {
+          "name": "excluded_records_absent",
+          "passed": true
+        },
+        {
+          "name": "source_snapshot:0",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "person_isolation:0",
+          "passed": true
+        }
+      ],
+      "semantic_review": {
+        "status": "not_applicable_fixed_retrieval"
+      },
+      "repeat": 1
+    }
+  ],
+  "summary": {
+    "scenarios": 1,
+    "units": 1,
+    "runtime_errors": 0,
+    "scenario_errors": 0,
+    "failed_turns": null,
+    "deterministic_checks": {
+      "total": 4,
+      "passed": 4,
+      "failed": 0
+    },
+    "limited_fact_checks": {
+      "total": 0,
+      "passed": 0,
+      "failed": 0,
+      "meaning": "Limited string rules, not semantic answer accuracy"
+    },
+    "semantic_review": {
+      "status": "not_applicable",
+      "pending_turns": 0,
+      "reviewed_turns": 0,
+      "score": null
+    },
+    "retrieval": {
+      "positive_queries": 1,
+      "nonranking_cases": 0,
+      "recall_at_1": 1.0,
+      "recall_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "mrr_at_5": 1.0
+    }
+  }
+}

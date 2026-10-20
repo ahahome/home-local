@@ -193,8 +193,11 @@ def test_no_answer_label_cannot_smuggle_a_personal_fact_into_uncited_suppression
 def test_factual_segment_cannot_hide_behind_a_no_answer_classification():
     result, llm = run(proposed([segment()], 'no_answer'))
 
-    assert_fallback(result, llm)
-    assert result['metadata']['unavailable_reason'] == 'inconsistent_answer_type'
+    assert result['metadata']['status'] == 'completed'
+    assert result['metadata']['answer_type'] == 'factual'
+    assert result['metadata']['declared_answer_type'] == 'no_answer'
+    assert result['metadata']['answer_type_normalized'] is True
+    assert '[[S1]]' in result['answer']
 
 
 def test_pure_advice_gets_an_explicit_prefix_without_fabricating_a_source():

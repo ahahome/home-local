@@ -7,11 +7,13 @@
 """
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 import re
 
 from app.agent import answer_review, conversation_scope, memory_focus, prompts, tools, turn_intent
-from app.agent.source_registry import SourceRegistry, compact_source
+from app.agent.answer_contract import presentation_contract
+from app.agent.source_registry import SourceChangedError, SourceRegistry, compact_source
 from app.config import get_settings
 from app.llm import get_llm
 from app.memory import compile_card, extract
@@ -137,7 +139,7 @@ def _history_messages(conn, conversation_id: str, through_user_message_id=None) 
 
 
 def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message_id=None,
-             context_message_id=None) -> dict:
+             context_message_id=None, expected_read_scope=None, *, _answer_recovery=None) -> dict:
     s = get_settings()
 
     conv = repo.get_conversation(conn, conversation_id)
@@ -164,16 +166,28 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
     read_scope = {**focus['read_scope'], 'user_message_id': user_msg_id}
     if context_id != user_msg_id:
         read_scope['context_message_id'] = context_id
+    if expected_read_scope is not None:
+        keys = ('version', 'conversation_id', 'user_message_id', 'mode', 'person_ids', 'blocked')
+        if not isinstance(expected_read_scope, dict) or any(
+                read_scope.get(key) != expected_read_scope.get(key) for key in keys):
+            raise ValueError('原问题的人物范围已变化，请重新明确提问')
     try:
         llm = get_llm()
     except Exception:
         llm = None
 
     emit = emit or (lambda kind, data: None)
+    presentation = presentation_contract(user_text)
     emit("progress", {"message": "判断查询与记事范围"})
     date_policy = memory_focus.is_date_question(user_text) and focus['status'] != 'not_applicable'
-    intent = turn_intent.for_user_message(conn, conversation_id, user_msg_id, user_text, llm=llm,
-                                        readonly_reason='memory_date_question' if date_policy else None)
+    intent = deepcopy(_answer_recovery['intent']) if _answer_recovery is not None else \
+        turn_intent.for_user_message(conn, conversation_id, user_msg_id, user_text, llm=llm,
+                                    readonly_reason='memory_date_question' if date_policy else None,
+                                    read_scope=read_scope, context_message_id=context_id)
+    # Recovery keeps the persisted mixed/record decision and its actual write
+    # receipts. Only the new answer phase loses permission to execute writes.
+    execution_intent = {**intent, 'intent': 'query', 'allow_writes': False,
+                        'record_spans': [], 'extraction_text': ''} if _answer_recovery is not None else intent
     user_row = conn.execute('SELECT tool_calls FROM message WHERE id=?', (user_msg_id,)).fetchone()
     user_metadata = json.loads(user_row['tool_calls'])
     user_metadata['conversation_scope'] = read_scope
@@ -182,10 +196,13 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
     conn.execute('UPDATE message SET tool_calls=? WHERE id=?',
                  (json.dumps(user_metadata, ensure_ascii=False), user_msg_id))
     conn.commit()
-    outcomes, pending_ids = [], []
+    outcomes = deepcopy(_answer_recovery['outcomes']) if _answer_recovery is not None else []
+    pending_ids = deepcopy(_answer_recovery['pending_ids']) if _answer_recovery is not None else []
     try:
         record_text = turn_intent.write_text(intent, user_text)
-        if read_scope['blocked'] or date_policy:
+        if _answer_recovery is not None:
+            pass  # Already committed: never repeat extraction or any operation.
+        elif read_scope['blocked'] or date_policy:
             outcomes = [turn_intent.readonly_outcome(intent) if record_text is None else
                         {'kind': 'intent', 'status': 'skipped', 'detail': '需先明确人物或记忆，本轮未保存新记忆。'}]
         elif record_text is None:
@@ -255,11 +272,16 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
     messages.insert(1, {"role": "system", "content": "本轮实际记忆处理回执：" +
         json.dumps(outcomes, ensure_ascii=False) + "。仅成功项可称已记录；待确认和失败必须如实说明。"})
     messages.insert(2, {'role': 'system', 'content': '本轮查询与记事边界：' +
-        json.dumps({key: intent[key] for key in ('intent', 'allow_writes', 'record_spans')}, ensure_ascii=False) +
+        json.dumps({key: execution_intent[key] for key in ('intent', 'allow_writes', 'record_spans')}, ensure_ascii=False) +
         '。只允许记事原话支持的写入；查询或无法判定的消息不得新增或修改记忆、人物或其他操作。'})
+    if _answer_recovery is not None:
+        messages.insert(3, {'role': 'system', 'content': '此前记事已处理，但回答资料在生成期间变化，旧草稿已拒绝。'
+            '现在仅使用本次重新读取的资料回答原问题，并如实保留实际处理回执；不得重放任何记事或操作。'})
 
     # ---- 工具循环 ----
-    receipts: list[dict] = []
+    receipts: list[dict] = deepcopy(_answer_recovery['receipts']) if _answer_recovery is not None else []
+    available_tools = [tool for tool in tools.TOOLS if tool['function']['name'] not in tools._WRITE_TOOLS] \
+        if _answer_recovery is not None else tools.TOOLS
     answer = ""
     read_tools_used = False
     for _ in range(_MAX_TOOL_ROUNDS):
@@ -274,11 +296,12 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
             break
         emit("progress", {"message": "正在整理回答"})
         if hasattr(llm, "chat_stream"):
-            emit("answer_start", {})
-            msg = llm.chat_stream(messages, tier="mid", tools=tools.TOOLS, max_tokens=3000,
-                                  on_delta=lambda text: emit("delta", {"text": text}))
+            # Drafts may contain incorrect dates, identities or write claims.
+            # Only the final server-rendered revision is user-visible.
+            msg = llm.chat_stream(messages, tier="mid", tools=available_tools, max_tokens=3000,
+                                  on_delta=lambda text: None)
         else:
-            msg = llm.chat(messages, tier="mid", tools=tools.TOOLS, max_tokens=3000)
+            msg = llm.chat(messages, tier="mid", tools=available_tools, max_tokens=3000)
         tool_calls = msg.get("tool_calls") or []
         if not tool_calls:
             answer = msg.get("content", "")
@@ -293,7 +316,7 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
             try:
                 result = tools.execute_tool(conn, tc["function"]["name"], args,
                                             source_text=user_text, source_msg_id=user_msg_id,
-                                            read_scope=read_scope, turn_intent=intent)
+                                            read_scope=read_scope, turn_intent=execution_intent)
             except Exception as e:  # noqa: BLE001
                 result = {"ok": False, "error": str(e)}
             if tc['function']['name'] in {'get_person', 'query_memory'}:
@@ -344,10 +367,12 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
         review = answer_review.review_answer(llm, user_text, draft, registry.sources,
             context={'outcomes': outcomes, 'receipts': receipts, 'pending_ids': pending_ids,
                      'intent': intent['intent'], 'read_scope': read_scope, 'confirmed_identity': identity,
-                     'memory_focus': focus_context})
+                     'memory_focus': focus_context, 'presentation': presentation})
     answer = review['answer']
     reviewed_no_answer = (review['metadata'].get('status') == 'completed'
                           and review['metadata'].get('answer_type') == 'no_answer')
+    review_failed_closed = (review['metadata'].get('status') == 'unavailable'
+                            and review['metadata'].get('method') == 'server_record_revision')
     # A prose editor cannot erase the actual write decision. In particular, a
     # failed classification of a note is not the same as missing query data.
     intent_notice = None
@@ -356,7 +381,8 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
         intent_notice = turn_intent.readonly_outcome(intent)['detail']
         answer = intent_notice if reviewed_no_answer else intent_notice + '\n\n' + answer
     answer, sources, source_warnings = registry.citations(
-        answer, require_citations=not reviewed_no_answer and llm is not None and (bool(person_ids) or read_tools_used))
+        answer, require_citations=not (reviewed_no_answer or review_failed_closed)
+        and llm is not None and (bool(person_ids) or read_tools_used))
     extra_warnings = [warning for warning in draft_warnings if warning['code'] == 'invalid_citation']
     for warning in [*review['warnings'], *extra_warnings]:
         if warning not in source_warnings:
@@ -371,13 +397,49 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
                 "failed": failed, "pending_ids": list(dict.fromkeys(pending_ids)),
                 'sources': sources, 'source_warnings': source_warnings,
                 'source_dependencies': registry.dependencies, 'conversation_scope': read_scope,
-                'turn_intent': intent, 'answer_review': review['metadata'],
+                'turn_intent': intent, 'answer_review': review['metadata'], 'presentation': presentation,
                 'intent_notice': intent_notice,
                 'memory_focus': {key: focus[key] for key in ('status', 'reason', 'binding')}}
     metadata['memory_focus']['registration'] = {key: registration[key] for key in ('status', 'source_id', 'source_ids')}
     metadata['memory_focus']['sources'] = focus['sources']
-    assistant_message_id = registry.save_answer(lambda: repo.add_message(
-        conn, conversation_id, 'assistant', answer, json.dumps(metadata, ensure_ascii=False)))
+    if _answer_recovery is not None:
+        metadata['answer_recovery'] = {'version': 1, 'status': 'recovered', 'attempt_count': 1,
+                                       'mode': 'readonly_after_source_change'}
+    try:
+        assistant_message_id = registry.save_answer(lambda: repo.add_message(
+            conn, conversation_id, 'assistant', answer, json.dumps(metadata, ensure_ascii=False)))
+    except SourceChangedError:
+        has_write_result = intent.get('allow_writes') is True and (
+            bool(saved or pending) or any(receipt.get('status') in {'ok', 'pending'} for receipt in receipts))
+        if _answer_recovery is None and not has_write_result:
+            raise
+        # Keep the rejected revision outside the assistant answer. In particular,
+        # refreshing dependencies cannot make an already generated draft valid.
+        row = conn.execute('SELECT tool_calls FROM message WHERE id=?', (user_msg_id,)).fetchone()
+        user_metadata = json.loads(row['tool_calls'])
+        audit = deepcopy(_answer_recovery['audit']) if _answer_recovery is not None else {
+            'version': 1, 'mode': 'readonly_after_source_change', 'attempt_count': 1,
+            'rejected_revisions': []}
+        audit['status'] = 'exhausted' if _answer_recovery is not None else 'retrying'
+        audit['rejected_revisions'].append({'reason': 'source_changed', 'draft': draft,
+            'reviewed_answer': answer, 'source_dependencies': registry.dependencies,
+            'sources': sources, 'answer_review': review['metadata']})
+        user_metadata['answer_recovery'] = audit
+        conn.execute('UPDATE message SET tool_calls=? WHERE id=?',
+                     (json.dumps(user_metadata, ensure_ascii=False), user_msg_id))
+        conn.commit()
+        if _answer_recovery is not None:
+            raise
+        emit('progress', {'message': '记事结果已保留，正在重新读取资料并回答'})
+        return run_turn(conn, conversation_id, user_text, emit=emit, user_message_id=user_msg_id,
+            context_message_id=context_id, expected_read_scope=read_scope,
+            _answer_recovery={'intent': deepcopy(intent), 'outcomes': deepcopy(outcomes),
+                'pending_ids': deepcopy(pending_ids), 'receipts': deepcopy(receipts), 'audit': audit})
+
+    if _answer_recovery is not None:
+        user_metadata['answer_recovery'] = {**_answer_recovery['audit'], 'status': 'recovered'}
+        conn.execute('UPDATE message SET tool_calls=? WHERE id=?',
+                     (json.dumps(user_metadata, ensure_ascii=False), user_msg_id))
 
     # 首轮生成标题
     if conv["title"] == "新对话":

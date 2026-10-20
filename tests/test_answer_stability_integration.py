@@ -107,6 +107,59 @@ def test_date_followup_persists_query_and_registered_source_without_any_model_ph
     assert saved['content'] == result['answer'] and json.loads(saved['tool_calls'])['sources'] == result['sources']
 
 
+@pytest.mark.parametrize('question', ['这条的时间依据可以逐项核对吗？', '那条记录的时间依据可以逐项核对吗？'])
+def test_possessive_time_query_uses_current_source_and_normal_model_path_without_a_new_date_template(conn, monkeypatch, question):
+    pid, mid = seed(conn)
+    cid = repo.create_conversation(conn, 'Possessive reference integration')
+    aid, old_sources = preceding_answer(conn, cid, [mid])
+    monkeypatch.setattr(memory_corrections, 'now_ms', lambda: stamp('2026-09-17'))
+    memory_corrections.correct_memory(conn, mid, {
+        'action': 'edit', 'expected_revision': 0, 'request_id': new_id(), 'text': '人工更新后的联系安排。'})
+    calls = []
+
+    def chat(messages, **kwargs):
+        system = messages[0]['content']
+        if '写入意图分类器' in system:
+            calls.append('classify')
+            return {'content': json.dumps({'intent': 'query', 'record_spans': [], 'reason': '只查询已有记录'})}
+        if '本轮回答的资料编辑' in system:
+            calls.append('review')
+            payload = json.loads(messages[-1]['content'])
+            assert payload['runtime_context']['memory_focus']['source_ids'] == ['S1']
+            source = next(s for s in payload['sources'] if s['id'] == 'S1')
+            assert source['text'] == '人工更新后的联系安排。'
+            assert source['时间信息']['最近人工编辑时间'].startswith('2026-09-17')
+            return {'content': json.dumps({'answer_type': 'factual', 'segments': [
+                {'kind': 'source_record', 'text': '', 'source_ids': ['S1']}], 'issues': []})}
+        calls.append('generate')
+        assert '人工更新后的联系安排。' in '\n'.join(m['content'] for m in messages)
+        return {'content': '这条在2026-09-11由当事人改过。 [[S1]]'}
+
+    monkeypatch.setattr(harness, 'get_llm', lambda: SimpleNamespace(chat=chat))
+    monkeypatch.setattr(harness.extract, 'extract_from_text', lambda *args: pytest.fail('query must not extract'))
+    monkeypatch.setattr(harness.tools, 'execute_tool', lambda *args, **kwargs: pytest.fail('focused source is already read'))
+    before = domain_state(conn)
+    result = harness.run_turn(conn, cid, question)
+
+    assert not memory_focus.is_date_question(question)
+    assert calls == ['classify', 'generate', 'review']
+    assert domain_state(conn) == before
+    assert result['turn_intent']['intent'] == 'query' and result['turn_intent']['allow_writes'] is False
+    assert result['memory_focus']['status'] == 'selected'
+    assert result['memory_focus']['binding']['anchor_assistant_message_id'] == aid
+    assert result['memory_focus']['binding']['reference_snapshot'] == old_sources[0]
+    assert result['conversation_scope']['person_ids'] == [pid]
+    current = next(source for source in result['source_dependencies'] if source.get('entity_id') == mid)
+    assert current['text'] == '人工更新后的联系安排。' and current['revision'] == 1
+    assert result['answer_review']['status'] == 'completed'
+    assert result['answer_review']['method'] == 'server_record_revision'
+    assert '记忆所标日期（不代表录入或修改日期）：2026-09-11' in result['answer']
+    assert '首次录入时间：2026-09-12' in result['answer']
+    assert '最近人工编辑时间：2026-09-17' in result['answer']
+    assert '由当事人改过' not in result['answer']
+    assert [source['entity_id'] for source in result['sources']] == [mid]
+
+
 def test_date_followup_rereads_manual_edit_and_registers_latest_quotation(conn, monkeypatch):
     _, mid = seed(conn)
     cid = repo.create_conversation(conn, 'Edited memory date')
@@ -430,7 +483,9 @@ def test_plural_reference_in_mixed_message_does_not_suppress_explicit_new_fact(c
     assert len(result['saved']) > 0
 
 
-@pytest.mark.parametrize('text', ['记住：这条是我每天回家的路线。', '请记住：这些记录是我个人的出行安排。'])
+@pytest.mark.parametrize('text', ['记住：这条是我每天回家的路线。', '请记住：这些记录是我个人的出行安排。',
+                                  '记住：这条的内容是我每天喝两杯水。', '请保存：那条的路线从今天改走东门。',
+                                  '记住：那条记录是我的饮水提醒。'])
 def test_explicit_personal_note_is_not_blocked_by_new_memory_reference_shortcuts(conn, monkeypatch, text):
     calls = []
     def chat(messages, **kwargs):

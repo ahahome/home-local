@@ -1,0 +1,35 @@
+{
+  "version": "0.13.0-relationship-workflow-1",
+  "provenance": "fictional_records_with_natural_questions",
+  "description": "虚构完整关系工作流；人物、资料、目标、结果与问法在本轮正式模型采样前独立冻结，不用于调实现。使用真实 HTTP 路由和 durable task 服务，在临时 SQLite 中验证；代理逐步证据审阅不构成人工准确率。",
+  "person": {"name": "白芮", "aliases": ["阿芮"]},
+  "seed": {
+    "company": {"value": "旧川仪器", "valid_from": 1767225600000},
+    "memory": {"text": "白芮说技术合作的事情先把问题清单发邮件，收到后再约电话。", "ts": 1768006800000}
+  },
+  "initial_query": "阿芮现在在哪家公司？如果要谈技术合作，她说应该怎么联系？",
+  "goal": "写一段约白芮讨论传感器技术合作的邮件草稿；问题清单还没发送。",
+  "outcome": {
+    "contacted_at": 1792382400000,
+    "channel": "电话",
+    "notes": "今天实际与白芮通了电话。白芮说目前在澄光传感工作，住在合肥。白芮说讨论报价时先发邮件，确认清单后再约电话。我答应发送技术规格。",
+    "state": "completed",
+    "next_followup_at": null,
+    "complete_promise_ids": [],
+    "new_promises": [{"who": "me", "content": "发送技术规格", "due_date": null}]
+  },
+  "expected": {
+    "company": "澄光传感",
+    "city": "合肥",
+    "memory_evidence": "白芮说讨论报价时先发邮件，确认清单后再约电话",
+    "explicit_promise": "发送技术规格"
+  },
+  "final_query": "重新查白芮现在的公司和城市，再把她对讨论报价怎么安排的记忆原文给我看。",
+  "review_points": [
+    "第一轮公司与联系条件各有真实来源；草稿实际生成，未发送、不算联系。",
+    "结果 POST 只保存实际联系与显式承诺；分析前后事实记忆计数不变，不能自动把模型提案当已确认。",
+    "至少一条档案提案和一条记忆提案必须由真实模型从结果原文抽出；确认经过 revision 守卫与真实确认 API。",
+    "确认后 SQLite 当前公司/城市与记忆文字真实存在，FTS 可查；后续聊天和新准备材料必须读取新来源，旧公司不能当当前。",
+    "每步检查仅证明当前构造流程的实际行为；自由回答仍需代理逐句对照，不称语义准确率。"
+  ]
+}

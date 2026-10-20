@@ -57,16 +57,26 @@ def _json(value):
 
 
 def compact_source(source):
-    from app.agent.memory_sources import model_source_context
+    from app.agent.memory_sources import model_evidence_context, model_source_context
 
     value = {key: source[key] for key in (
-        'id', 'type', 'entity_id', 'person', 'text', 'kind', 'field', 'people') if key in source}
+        'id', 'type', 'entity_id', 'person', 'text', 'people') if key in source}
     value.update(model_source_context(source))
     value['text'] = value.get('text', '')[:1600]
-    evidence = source.get('evidence')
-    if evidence:
-        value['evidence'] = {'kind': evidence.get('kind'),
-                             'excerpt': (evidence.get('excerpt') or '')[:400]}
+    if source.get('type') in {'memory', 'field', 'interaction'}:
+        # Storage classifications do not establish whether text is verbatim.
+        # Known audit envelopes also contain dates named after API input keys;
+        # their full forms remain in the quotation but never enter model input.
+        value['文字依据'] = model_evidence_context(source)
+    if source.get('type') == 'field':
+        field = source.get('field')
+        labels = {'company': '公司', 'title': '职位', 'city': '城市', 'birthday': '生日',
+                  'phone': '电话', 'email': '电子邮箱', 'family': '家庭'}
+        if isinstance(field, str):
+            value['档案项目'] = labels.get(field, field)
+            if field.startswith(('trait.', 'need.')):
+                prefix, name = field.split('.', 1)
+                value['档案项目'] = ('特点：' if prefix == 'trait' else '需求：') + name
     return value
 
 
@@ -92,8 +102,32 @@ class SourceRegistry:
         sid = self._keys.get(self._key(source), f'S{len(self.sources) + 1}')
         return {**deepcopy(source), 'id': sid}
 
+    def preview_many(self, sources):
+        """Assign sequential IDs for a whole group without registering any source.
+
+        Budget checks must inspect the same compact group that a successful
+        registration would produce. Duplicates and already registered records
+        reuse their IDs, including duplicates first encountered in this group.
+        """
+        keys = dict(self._keys)
+        next_id = len(self.sources) + 1
+        values = []
+        for source in sources:
+            key = self._key(source)
+            sid = keys.get(key)
+            if sid is None:
+                sid = f'S{next_id}'
+                keys[key] = sid
+                next_id += 1
+            values.append({**deepcopy(source), 'id': sid})
+        return values
+
     def register(self, source):
         value = self.preview(source)
+        if value['id'] in self.sources:
+            # The key ignores captured_at. Re-reading unchanged content must not
+            # replace the original turn-local quotation with a later capture.
+            return deepcopy(self.sources[value['id']])
         self._keys[self._key(source)] = value['id']
         self.sources[value['id']] = value
         return value
@@ -121,6 +155,7 @@ class SourceRegistry:
                     # Raw duplicate timestamps otherwise look like edit times.
                     entry.pop('ts', None)
                     entry.pop('when', None)
+                    entry.pop('kind', None)
                     entry.update(source=candidate, source_id=candidate['id'])
                 if len(_json({**output, key: output[key] + [entry], 'truncated': True})) > budget:
                     output['truncated'] = True

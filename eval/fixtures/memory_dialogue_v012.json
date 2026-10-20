@@ -1,0 +1,809 @@
+{
+  "provenance": "fictional_records_with_natural_questions",
+  "persons": [
+    {
+      "key": "tang",
+      "name": "唐宁",
+      "aliases": [
+        "糖糖"
+      ]
+    },
+    {
+      "key": "xu",
+      "name": "许澄",
+      "aliases": [
+        "小许"
+      ]
+    },
+    {
+      "key": "gu",
+      "name": "顾舟",
+      "aliases": [
+        "顾工"
+      ]
+    },
+    {
+      "key": "zheng_product",
+      "name": "郑言",
+      "aliases": [
+        "产品小郑"
+      ]
+    },
+    {
+      "key": "zheng_design",
+      "name": "郑言",
+      "aliases": [
+        "设计小郑"
+      ]
+    }
+  ],
+  "fields": [
+    {
+      "key": "tang_city",
+      "person": "tang",
+      "field": "city",
+      "value": "南京",
+      "valid_from": 1756684800000
+    },
+    {
+      "key": "xu_company",
+      "person": "xu",
+      "field": "company",
+      "value": "远帆设计",
+      "valid_from": 1756684800000
+    },
+    {
+      "key": "gu_city",
+      "person": "gu",
+      "field": "city",
+      "value": "天津",
+      "valid_from": 1756684800000
+    }
+  ],
+  "memories": [
+    {
+      "key": "tang_contact",
+      "person": "tang",
+      "text": "唐宁说工作联系先发短信，收到后再约通话。",
+      "ts": 1757552400000
+    },
+    {
+      "key": "xu_phone",
+      "person": "xu",
+      "text": "许澄说周三午休方便接电话，其他时候先留言。",
+      "ts": 1757638800000
+    },
+    {
+      "key": "xu_email",
+      "person": "xu",
+      "text": "许澄说项目事项都写邮件，不要直接给他打电话。",
+      "ts": 1757725200000
+    },
+    {
+      "key": "gu_food",
+      "person": "gu",
+      "text": "顾舟吃饭不吃花生，口味偏清淡。",
+      "ts": 1757811600000
+    },
+    {
+      "key": "zheng_product_contact",
+      "person": "zheng_product",
+      "text": "产品小郑郑言说需求讨论先发邮件。",
+      "ts": 1757811600000
+    },
+    {
+      "key": "zheng_design_contact",
+      "person": "zheng_design",
+      "text": "设计小郑郑言说每周五下午可以电话对稿。",
+      "ts": 1757898000000
+    }
+  ],
+  "interactions": [],
+  "version": "0.12.0-dialogue-acceptance-1",
+  "description": "v0.12 真实模型采样前冻结的虚构开发验收语料。沿用既有人物与记录，新增同名人物；所有自然问法均在本轮采样前确定，采样后不修改。不是独立真实用户分布或未见语义基准；语义逐轮待人工审阅，不按自由回答关键词估计准确率。",
+  "time_anchor": "2026-10-20T09:00:00+08:00",
+  "top_k": 5,
+  "retrieval_cases": [
+    {
+      "id": "xu-both-contact-records",
+      "tags": [
+        "acceptance",
+        "collection"
+      ],
+      "question": "电话 邮件 联系",
+      "args": {
+        "person": "小许"
+      },
+      "expect": {
+        "relevant": [
+          "xu_phone",
+          "xu_email"
+        ],
+        "excluded_persons": [
+          "tang",
+          "gu",
+          "zheng_product",
+          "zheng_design"
+        ]
+      }
+    }
+  ],
+  "dialogues": [
+    {
+      "id": "collection-compare-edit-and-date",
+      "tags": [
+        "acceptance",
+        "collection",
+        "conflict",
+        "edit",
+        "temporal"
+      ],
+      "turns": [
+        {
+          "question": "把小许关于接电话和写邮件的两条记录原文放在一起，方便我对照。",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "source_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "allowed_persons": [
+              "xu"
+            ],
+            "review_points": [
+              "分别引用两条原话，不合并适用条件；来源均来自本轮真实读取。"
+            ],
+            "required_dependency_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "required_cited_records": [
+              "xu_phone",
+              "xu_email"
+            ]
+          }
+        },
+        {
+          "question": "这些记录说的是同一种联系安排吗？哪些地方对得上，哪些地方还不能确定？",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "source_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "allowed_persons": [
+              "xu"
+            ],
+            "review_points": [
+              "承接上一回答的两条记忆并分别重新读源；不能推定私事打电话、工作走邮件。"
+            ],
+            "required_dependency_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "required_cited_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "memory_focus": {
+              "status": "selected",
+              "registration_status": "registered",
+              "records": [
+                "xu_phone",
+                "xu_email"
+              ]
+            }
+          }
+        },
+        {
+          "question": "刚才两条现在再对照一下，原文和能支持的结论有没有变化？",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "source_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "allowed_persons": [
+              "xu"
+            ],
+            "review_points": [
+              "电话原文已经被人工更正，须显示最新版本；邮件记录仍保留其自身身份和条件，不把编辑当成两条合并。"
+            ],
+            "required_dependency_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "required_cited_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "memory_focus": {
+              "status": "selected",
+              "registration_status": "registered",
+              "records": [
+                "xu_phone",
+                "xu_email"
+              ]
+            },
+            "previous_source_states": {
+              "xu_phone": "updated",
+              "xu_email": "current"
+            }
+          },
+          "actions": [
+            {
+              "op": "edit",
+              "memory": "xu_phone",
+              "text": "许澄更正：周三午休也先发短信，确认后才通电话。"
+            }
+          ]
+        },
+        {
+          "question": "这两条是什么时候记下的，后来又是哪天改过？",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "source_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "allowed_persons": [
+              "xu"
+            ],
+            "review_points": [
+              "逐条区分记忆所标日期、首次录入和人工编辑审计；无人工编辑记录时说明未知，不以记忆日期代替编辑日。"
+            ],
+            "required_dependency_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "required_cited_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "memory_focus": {
+              "status": "selected",
+              "registration_status": "registered",
+              "records": [
+                "xu_phone",
+                "xu_email"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "collection-withdraw-needs-whole-set-confirmation",
+      "tags": [
+        "acceptance",
+        "collection",
+        "withdraw",
+        "ambiguity"
+      ],
+      "turns": [
+        {
+          "question": "许澄那两条电话、邮件记录都怎么写的？分别给我原话。",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "source_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "allowed_persons": [
+              "xu"
+            ],
+            "review_points": [
+              "分别引用两条原话，不合并适用条件；来源均来自本轮真实读取。"
+            ],
+            "required_dependency_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "required_cited_records": [
+              "xu_phone",
+              "xu_email"
+            ]
+          }
+        },
+        {
+          "question": "这些记录现在还能放在一起判断吗？",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "source_records": [],
+            "allowed_persons": [
+              "xu"
+            ],
+            "review_points": [
+              "一条已撤销，整组必须先澄清；不得静默丢弃撤销项并只回答剩下那条，也不能引用旧原文。"
+            ],
+            "memory_focus": {
+              "status": "clarify",
+              "registration_status": "not_selected",
+              "records": [],
+              "reason": "unavailable_memory"
+            },
+            "previous_source_states": {
+              "xu_phone": "withdrawn",
+              "xu_email": "current"
+            },
+            "forbidden_source_records": [
+              "xu_phone",
+              "xu_email"
+            ]
+          },
+          "actions": [
+            {
+              "op": "withdraw",
+              "memory": "xu_phone"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "collection-move-needs-owner-confirmation",
+      "tags": [
+        "acceptance",
+        "collection",
+        "move",
+        "person_scope"
+      ],
+      "turns": [
+        {
+          "question": "先列出小许留下的两条联系记忆，我要比较电话与邮件安排。",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "source_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "allowed_persons": [
+              "xu"
+            ],
+            "review_points": [
+              "分别引用两条原话，不合并适用条件；来源均来自本轮真实读取。"
+            ],
+            "required_dependency_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "required_cited_records": [
+              "xu_phone",
+              "xu_email"
+            ]
+          }
+        },
+        {
+          "question": "刚才两条里，哪条更适合拿来决定怎么联系他？",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "source_records": [],
+            "allowed_persons": [
+              "xu"
+            ],
+            "review_points": [
+              "一条的归属已经转到顾舟，先请重新确认人物和记录；不得把新归属沿旧人物续用，也不能只选择未转移项。"
+            ],
+            "memory_focus": {
+              "status": "clarify",
+              "registration_status": "not_selected",
+              "records": [],
+              "reason": "moved_memory"
+            },
+            "previous_source_states": {
+              "xu_phone": "current",
+              "xu_email": "moved"
+            },
+            "forbidden_source_records": [
+              "xu_phone",
+              "xu_email"
+            ]
+          },
+          "actions": [
+            {
+              "op": "edit",
+              "memory": "xu_email",
+              "person": "gu"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "single-ordinary-date-and-restore",
+      "tags": [
+        "acceptance",
+        "single",
+        "temporal",
+        "restore"
+      ],
+      "turns": [
+        {
+          "question": "糖糖关于工作先怎么联系的记忆原话是什么？",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "source_records": [
+              "tang_contact"
+            ],
+            "allowed_persons": [
+              "tang"
+            ],
+            "review_points": [
+              "解析糖糖为唐宁并引用该记忆，建立唯一记录锚点。"
+            ],
+            "required_dependency_records": [
+              "tang_contact"
+            ],
+            "required_cited_records": [
+              "tang_contact"
+            ]
+          }
+        },
+        {
+          "question": "这条是什么时候记下的？",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "source_records": [
+              "tang_contact"
+            ],
+            "allowed_persons": [
+              "tang"
+            ],
+            "review_points": [
+              "普通时间问法需说明记忆日期与首次录入时间各自含义，不能声称两者是同一天。"
+            ],
+            "required_dependency_records": [
+              "tang_contact"
+            ],
+            "required_cited_records": [
+              "tang_contact"
+            ],
+            "memory_focus": {
+              "status": "selected",
+              "registration_status": "registered",
+              "records": [
+                "tang_contact"
+              ]
+            }
+          }
+        },
+        {
+          "question": "这条后来改过吗，恢复又是在什么时候？",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "source_records": [
+              "tang_contact"
+            ],
+            "allowed_persons": [
+              "tang"
+            ],
+            "review_points": [
+              "引用最新编辑文本，人工编辑、撤销和恢复分别据审计说明；恢复不能充当人工编辑时间。"
+            ],
+            "required_dependency_records": [
+              "tang_contact"
+            ],
+            "required_cited_records": [
+              "tang_contact"
+            ],
+            "memory_focus": {
+              "status": "selected",
+              "registration_status": "registered",
+              "records": [
+                "tang_contact"
+              ]
+            },
+            "previous_source_states": {
+              "tang_contact": "updated"
+            }
+          },
+          "actions": [
+            {
+              "op": "edit",
+              "memory": "tang_contact",
+              "text": "唐宁更正工作联系偏好：先写邮件，收到后再约通话。"
+            },
+            {
+              "op": "withdraw",
+              "memory": "tang_contact"
+            },
+            {
+              "op": "restore",
+              "memory": "tang_contact"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "explicit-person-switch-overrides-collection",
+      "tags": [
+        "acceptance",
+        "collection",
+        "person_scope",
+        "switch"
+      ],
+      "turns": [
+        {
+          "question": "许澄关于电话和邮件分别留了什么原话？两条都给我看看。",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "source_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "allowed_persons": [
+              "xu"
+            ],
+            "review_points": [
+              "分别引用两条原话，不合并适用条件；来源均来自本轮真实读取。"
+            ],
+            "required_dependency_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "required_cited_records": [
+              "xu_phone",
+              "xu_email"
+            ]
+          }
+        },
+        {
+          "question": "先不看这些记录了，换成顾工：他的吃饭忌口原话是怎样的？",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "source_records": [
+              "gu_food"
+            ],
+            "allowed_persons": [
+              "gu"
+            ],
+            "review_points": [
+              "明确切换顾舟，不继续注入许澄的集合；不吃花生不等于诊断过敏。"
+            ],
+            "required_dependency_records": [
+              "gu_food"
+            ],
+            "required_cited_records": [
+              "gu_food"
+            ],
+            "memory_focus": {
+              "status": "not_applicable",
+              "reason": "explicit_scope_precedence",
+              "registration_status": "not_selected",
+              "records": []
+            },
+            "forbidden_source_records": [
+              "xu_phone",
+              "xu_email"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "same-name-owner-needs-selection",
+      "tags": [
+        "acceptance",
+        "same_name",
+        "ambiguity",
+        "person_scope"
+      ],
+      "turns": [
+        {
+          "question": "郑言平时希望我怎样联系？把他的原话找给我。",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "source_records": [],
+            "allowed_persons": [
+              "zheng_product",
+              "zheng_design"
+            ],
+            "review_points": [
+              "存在两位郑言，先用已有别名澄清；不得根据任一记录内容猜选人物或把两人资料拼接。"
+            ],
+            "forbidden_source_records": [
+              "zheng_product_contact",
+              "zheng_design_contact"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "multi-person-set-and-singular-ambiguity",
+      "tags": [
+        "acceptance",
+        "collection",
+        "multiple_persons",
+        "single",
+        "ambiguity"
+      ],
+      "turns": [
+        {
+          "question": "唐宁那条先发短信的原话和顾工那条不吃花生的原话，一起列给我。",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "source_records": [
+              "tang_contact",
+              "gu_food"
+            ],
+            "allowed_persons": [
+              "tang",
+              "gu"
+            ],
+            "review_points": [
+              "分清两个人及两条来源，不能把内容互相归属。"
+            ],
+            "required_dependency_records": [
+              "tang_contact",
+              "gu_food"
+            ],
+            "required_cited_records": [
+              "tang_contact",
+              "gu_food"
+            ]
+          }
+        },
+        {
+          "question": "这些记录有什么共同点，可以替其中一个人直接下结论吗？",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "source_records": [],
+            "allowed_persons": [
+              "tang",
+              "gu"
+            ],
+            "review_points": [
+              "上一回答是多人物记忆，不自动选集合；先请用户明确人物与记录，不把跨人物联系与饮食混为偏好。"
+            ],
+            "memory_focus": {
+              "status": "clarify",
+              "registration_status": "not_selected",
+              "records": []
+            },
+            "forbidden_source_records": [
+              "tang_contact",
+              "gu_food"
+            ]
+          }
+        },
+        {
+          "question": "只看许澄，把他关于电话和邮件的两条原话重新列出来。",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "source_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "allowed_persons": [
+              "xu"
+            ],
+            "review_points": [
+              "分别引用两条原话，不合并适用条件；来源均来自本轮真实读取。"
+            ],
+            "required_dependency_records": [
+              "xu_phone",
+              "xu_email"
+            ],
+            "required_cited_records": [
+              "xu_phone",
+              "xu_email"
+            ]
+          }
+        },
+        {
+          "question": "这条后来是什么时候改的？",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "source_records": [],
+            "allowed_persons": [
+              "xu"
+            ],
+            "review_points": [
+              "上一回答有两条记忆而用户用单数这条，应先选具体记忆，不猜其中一条或报任意编辑时间。"
+            ],
+            "memory_focus": {
+              "status": "clarify",
+              "registration_status": "not_selected",
+              "records": [],
+              "reason": "ambiguous_memory"
+            },
+            "forbidden_source_records": [
+              "xu_phone",
+              "xu_email"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "record-and-mixed-domain-write-boundary",
+      "tags": [
+        "acceptance",
+        "record",
+        "mixed",
+        "write_boundary"
+      ],
+      "turns": [
+        {
+          "question": "记一下：顾舟现在住厦门，后面再搬家我会另外告诉你。",
+          "expect": {
+            "intent": "record",
+            "no_memory_writes": false,
+            "source_records": [],
+            "allowed_persons": [
+              "gu"
+            ],
+            "review_points": [
+              "保存已断言的当前城市厦门；未发生的搬家不保存，不能只口头确认。"
+            ],
+            "saved_fields": [
+              {
+                "person": "gu",
+                "field": "city",
+                "value": "厦门"
+              }
+            ]
+          }
+        },
+        {
+          "question": "唐宁已经住到无锡了。顺便查查他以前说工作联系要先做什么。",
+          "expect": {
+            "intent": "mixed",
+            "no_memory_writes": false,
+            "source_records": [
+              "tang_contact"
+            ],
+            "allowed_persons": [
+              "tang"
+            ],
+            "review_points": [
+              "只保存搬到无锡的事实；查询部分保持只读并引用原来短信安排，不生成查询意图记忆。"
+            ],
+            "required_dependency_records": [
+              "tang_contact"
+            ],
+            "required_cited_records": [
+              "tang_contact"
+            ],
+            "saved_fields": [
+              {
+                "person": "tang",
+                "field": "city",
+                "value": "无锡"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "human_review_rubric": [
+    "多轮承接：比较类集合必须沿上一条明确引用、同一归属的全部记忆重新读源；不得凭助手旧话续答。",
+    "生命周期：编辑读最新版并保留原锚身份；撤销或转移任一项均整组澄清，不能悄悄缩小集合。",
+    "日期：逐条分辨记忆日期、首次录入、人工编辑和恢复审计，未知时间明确未知。",
+    "身份：显式换人优先；同名未选、多人物集合和多条后的单数引用需澄清，不串档。",
+    "证据：必需已读依赖与必需最终引用分别按记录身份验证；这些是可验证契约，不是回答语义准确率。",
+    "写入：查询检查实际领域表无变化；record/mixed检查真实字段落库，口头成功不能替代回执。",
+    "人工语义：逐句核查结论、限定条件和来源；任何关键词命中或协议通过都不能当正确率。"
+  ]
+}

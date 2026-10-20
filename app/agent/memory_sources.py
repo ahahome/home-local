@@ -170,6 +170,56 @@ def _readable_time(value):
         return '未知'
 
 
+def model_evidence_context(source, excerpt_limit=400):
+    """Project known audit envelopes without exposing their storage/input keys.
+
+    An ordinary user excerpt can itself contain JSON. Interpret only envelopes
+    produced by the two known review workflows, never similarly named keys in a
+    plain excerpt. Exact text comparisons describe stored strings, not whether
+    somebody actually uttered those words or whether an import is complete.
+    """
+    evidence = source.get('evidence')
+    if not isinstance(evidence, dict):
+        return {'文字核对': '没有可见来源摘录，不能判断是否逐字记录。'}
+    excerpt = evidence.get('excerpt')
+    excerpt = excerpt if isinstance(excerpt, str) else ''
+    reference = evidence.get('source_ref') or ''
+    audit_type = ('correction' if reference.startswith('memory-correction:') else
+                  'proposal' if reference.startswith('outcome-memory-review:') else None)
+    if audit_type:
+        try:
+            audit = json.loads(excerpt)
+        except (ValueError, TypeError):
+            audit = None
+        result = {'来源说明': '用户人工修订审计记录' if audit_type == 'correction' else '用户确认提案的审计记录',
+                  '文字核对': '审计记录不等于当事人的逐字原话；当前文字与旧来源可能不同。'}
+        if isinstance(audit, dict):
+            if audit_type == 'correction':
+                edited = audit.get('user_correction')
+                if isinstance(edited, dict) and isinstance(edited.get('text'), str):
+                    result['用户修订文字'] = edited['text'][:excerpt_limit]
+            else:
+                confirmed = audit.get('user_confirmed')
+                if isinstance(confirmed, dict) and isinstance(confirmed.get('content'), str):
+                    result['用户确认文字'] = confirmed['content'][:excerpt_limit]
+                if isinstance(audit.get('original_quote'), str):
+                    result['提案所引摘录'] = audit['original_quote'][:excerpt_limit]
+            result['摘录范围说明'] = '仅显示审计中已有的文字，可能因展示预算截断；日期含义只看时间信息。'
+        return result
+    text = source.get('text')
+    if not excerpt:
+        comparison = '没有可见来源摘录，不能判断是否逐字记录。'
+    elif isinstance(text, str) and text == excerpt:
+        comparison = '当前文字与来源摘录逐字一致。'
+    elif isinstance(text, str) and text and text in excerpt:
+        comparison = '当前文字是来源摘录中的连续片段。'
+    else:
+        comparison = '当前文字与来源摘录不同；不能仅据此判断是提炼、改写还是来源不完整。'
+    return {'来源摘录': excerpt[:excerpt_limit], '摘录已截断': len(excerpt) > excerpt_limit,
+            '文字核对': comparison,
+            '核对边界': '只比较系统内保存的文字，不证明是当事人逐字原话或原始资料的完整内容。'}
+
+
 def model_source_context(source):
     """Explain database availability separately from the truth/date of its claim.
 
@@ -191,7 +241,9 @@ def model_source_context(source):
             action = '恢复' if lifecycle['action'] == 'restore' else '撤销'
             times['最近撤销或恢复操作'] = {'操作': action, '操作时间': _readable_time(lifecycle.get('created_at'))}
         return {'记录状态': state, '事实时效': '有日期的背景记录；当前事实是否仍成立尚未核实。背景记录不表示已撤销。',
-                '时间信息': times}
+                '时间信息': times,
+                '时间表述边界': '所标日期不能用来断言当事人何时说过、用户何时纠正或何时修改。'
+                          '叙述“某日纠正/修改”也只能使用最近人工编辑时间；未知就不能给出日期。'}
     if kind == 'field':
         current = source.get('valid_to') is None
         times.update({'字段生效时间': _readable_time(source.get('valid_from')),

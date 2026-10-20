@@ -24,7 +24,7 @@ _MAX_ISSUES = 20
 _NO_ANSWER = '当前可核查资料不足以回答这个问题。'
 _RECEIPT = '本轮处理结果请以下方回执为准。'
 _TYPES = {'factual', 'no_answer', 'advice', 'clarification', 'mixed'}
-_KINDS = {'fact', 'no_answer', 'advice', 'clarification', 'receipt'}
+_KINDS = {'fact', 'source_quote', 'no_answer', 'advice', 'clarification', 'receipt'}
 _ISSUES = {'unsupported_claim', 'state_confusion', 'date_confusion', 'citation_missing',
            'conflict_resolution', 'fact_advice_boundary', 'other'}
 
@@ -49,25 +49,36 @@ confirmed_identity.status表示本轮解析状态；people中的id、name和alia
 把记忆所标日期推断为事实发生或用户纠正时间。用户问何时改过一条记忆时，只能采用
 该资料“时间信息”明确列出的最近人工编辑时间；未知就说明不能确认。memory_focus用于
 定位本轮记忆，日期含义仍须以对应source的自然语言时间说明为准。
+普通叙述“某日纠正了说法”“某日改为”也在主张修改时间，不能使用记忆所标日期。
+人工编辑只说明用户修改了系统记录，不能将编辑动作或时间归给当事人、断言偏好改变。
+“文字依据”只核对系统内的文字。逐字一致可以支持“记录写的是”及忠实引用，不证明
+当事人逐字说过或原资料完整；文字不同/摘录缺失也不能反向断言“并非逐字原话”。
+内部semantic/episodic分类不能证明文字是否被提炼；用户修订/确认文字不能冒充当事人原话。
 同一人物多条沟通偏好有冲突时，分别保留资料原话、已知日期与各自来源，并明确说资料
 不足以确认适用范围或变化原因。不能仅凭新旧日期选边，不能发明“工作用邮件、私事打电话”
 或“搬家后偏好改变”等调和规则，也不能把这些无来源解释移进建议或澄清问题中。
+保留每条原有的限定词；另一条未限定工作/私事时，不能补成互斥分类。必要时只问
+“各自适用范围是什么”，不要在澄清中举“项目/非项目”“紧急私事”等无来源候选解释。
+用户正文用自然名称说明资料和时间，不能输出valid_from、city字段、语义记忆等内部用语。
 
 只输出严格JSON，不能有代码围栏或额外字段：
 {"answer_type":"factual|no_answer|advice|clarification|mixed",
- "segments":[{"kind":"fact|no_answer|advice|clarification|receipt",
+ "segments":[{"kind":"fact|source_quote|no_answer|advice|clarification|receipt",
               "text":"段落正文，不要自行写任何[[引用]]", "source_ids":["S1"]}],
  "issues":[{"code":"unsupported_claim|state_confusion|date_confusion|citation_missing|conflict_resolution|fact_advice_boundary|other",
              "quote":"草稿中的原文片段，或空字符串", "detail":"简短说明", "source_ids":[]}]}
 
 最多20个段落、20个问题，总正文不超过16000字符。fact段必须非空且有直接支持的有效来源；
-其他段落source_ids必须为空。事实与建议拆段；建议正文不写前缀，系统统一加一次“建议：”。
+直接对照记录时优先使用source_quote段：text必须为空，source_ids只能有一个本轮来源编号，
+系统会从该快照填入记录文字（最多1600字符并标明截断），不要自行改写或补限定词。
+source_quote只保证复制保存的文字，不证明其内容真实、当事人逐字说过或现在仍适用。
+除fact/source_quote外source_ids必须为空。事实与建议拆段；建议正文不写前缀，系统统一加一次“建议：”。
 no_answer段text必须是空字符串，系统统一显示“当前可核查资料不足以回答这个问题。”，
 不得在这种段落中夹带任何人物事实。receipt段text也必须为空，系统统一显示
 “本轮处理结果请以下方回执为准。”；只有runtime_context.outcomes或receipts中存在实际
 ok/pending/failed处理结果时才允许，纯查询的skipped回执不满足条件。不能自行复述或声称
 任何写入成功、待确认或失败。clarification只提出必要的澄清。
-只有fact/receipt时answer_type=factual；所有段落同为no_answer/advice/clarification时用对应
+只有fact/source_quote/receipt时answer_type=factual；所有段落同为no_answer/advice/clarification时用对应
 answer_type；其余组合为mixed。不需要给置信度、正确率或通过认证等结论。
 """
 
@@ -104,7 +115,7 @@ def _ids(value, available):
 
 
 def _classification(kinds):
-    if kinds <= {'fact', 'receipt'}:
+    if kinds <= {'fact', 'source_quote', 'receipt'}:
         return 'factual'
     if len(kinds) == 1 and next(iter(kinds)) in {'no_answer', 'advice', 'clarification'}:
         return next(iter(kinds))
@@ -147,7 +158,24 @@ def _validate(raw, available, draft, context):
         # promoted to citations. The server adds only registered identifiers.
         if _MARKER.search(text) or _prose_references(text):
             raise ValueError('inline_reference_not_allowed')
-        if kind == 'no_answer':
+        if kind == 'source_quote':
+            if text != '' or len(ids) != 1:
+                raise ValueError('source_quote_requires_single_source')
+            original = available[ids[0]].get('text')
+            if not isinstance(original, str) or not original.strip():
+                raise ValueError('source_quote_missing_text')
+            quote = original[:1600]
+            # Quoted data must not manufacture source buttons or hide the one
+            # appended below. Do not rewrite the stored text to make it pass.
+            if _MARKER.search(quote) or _prose_references(quote):
+                raise ValueError('source_quote_not_renderable')
+            block = '记录文字：' + quote
+            if len(original) > 1600:
+                block += '\n（以上仅显示记录前1600字符。）'
+            block += f' [[{ids[0]}]]'
+            if _prose_references(block) != ids:
+                raise ValueError('references_not_visible')
+        elif kind == 'no_answer':
             if text != '' or ids:
                 raise ValueError('no_answer_contains_content')
             block = _NO_ANSWER
@@ -232,13 +260,13 @@ def review_answer(llm, question, draft_answer, sources, *, context=None):
                 'original_references': original_references, 'source_ids': [],
                 'invalid_original_references': [], 'source_snapshot_sha256': None,
                 'input_sha256': None, 'unavailable_reason': None}
-    available = set()
+    available = {}
 
     def unavailable(reason):
         metadata['unavailable_reason'] = reason
         warnings = [{'code': 'review_unavailable',
                      'message': '本轮资料核对未完成，已保留原始回答，请对照来源核实其中的事实。'}]
-        if available and not available.intersection(original_references):
+        if available and not set(available).intersection(original_references):
             warnings.append({'code': 'uncited', 'message': '本条回答未附可核查的资料引用，请核对其中的人物信息。'})
         return {'answer': draft_answer, 'metadata': metadata, 'warnings': warnings}
 
@@ -249,9 +277,9 @@ def review_answer(llm, question, draft_answer, sources, *, context=None):
                 return unavailable('invalid_source_snapshot')
             if source['id'] in available:
                 return unavailable('duplicate_source_snapshot')
-            available.add(source['id'])
+            available[source['id']] = source
         metadata['source_ids'] = sorted(available, key=lambda sid: int(sid[1:]))
-        metadata['invalid_original_references'] = sorted(set(original_references) - available)
+        metadata['invalid_original_references'] = sorted(set(original_references) - available.keys())
         metadata['source_snapshot_sha256'] = _sha(_canonical(snapshots))
         # Use the same human-readable lifecycle/time projection as the answer
         # model; raw database enum names and millisecond fields can mislead it.

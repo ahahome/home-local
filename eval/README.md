@@ -15,6 +15,16 @@
 评估器本身的比对逻辑在 `eval/metrics.py`，由 `tests/test_eval_metrics.py` 覆盖。
 **理由：评估器写错了比被测代码错了更危险**——指标会假绿，问题被掩盖。
 
+## 0.12 多轮记忆集合与证据比较
+
+`fixtures/memory_dialogue_v012.json` 在真实采样前冻结，8 组、每次 20 答，覆盖同人物集合比较及编辑、撤销和转移，普通日期问法、恢复、明确换人、同名、多人物与单数歧义，以及 record/mixed 的实际保存。使用虚构开发资料，不能称为独立未见语义基准。实现与最终结果见 [0.12 验收](../docs/MEMORY_DIALOGUE_V012.md)。
+
+```sh
+.venv/bin/python -m eval.memory_questions --track answers --cases eval/fixtures/memory_dialogue_v012.json --repeat 3 --output-dir /tmp/home-v012-acceptance
+```
+
+新增 `required_dependency_records` 与 `required_cited_records` 非空记录集合，分别检查实际已读依赖和最终引用，不能互相替代。`expect.memory_focus.records` 检查精确当前成员、原问题持久绑定、同对话最近前序终稿、旧快照逐字一致，以及完整本轮注册。日期元数据对照实际纠错审计；缺失旧来源状态明确失败，没有相应断言的范围显示 `not_exercised`。既有 `source_records` 仍只作审阅提示，不暗中升级为引用要求。负控包含缺源、重复集合、旧版本、伪造正文/锚点和日期，语义判断仍单列待人工审阅。
+
 ## 0.10 分类诊断与记忆追问
 
 `fixtures/answer_stability_v010.json` 在真实调用前冻结，7 组、12 问，正式重复两轮。沿用 0.9 虚构资料、增加自然问法，覆盖别名与恢复原文、唯一记忆日期追问、多记忆澄清、冲突范围、简短缺资料、无问号查询、带条件尾句的明确记事及 mixed 真实更新。另回归 0.9 和 0.8 原语料。完整结果见 [0.10 验收](../docs/ANSWER_STABILITY_V010.md)，逐轮代理证据核对见 [审阅记录](../docs/ANSWER_STABILITY_V010_REVIEW.md)；语义仍待人工审阅。

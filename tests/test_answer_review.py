@@ -473,3 +473,88 @@ def test_a_cited_claim_is_not_labeled_as_semantically_verified():
 
     assert result['metadata']['status'] == 'completed'
     assert result['metadata']['semantic_verified'] is False
+
+
+def test_source_quote_comparison_copies_each_snapshot_without_model_rewording():
+    sources = [
+        {**SOURCES[0], 'text': '林舟说项目事项请发邮件。', 'kind': 'semantic'},
+        {**SOURCES[1], 'text': '林舟说周三午休方便接电话，其他时候先留言。', 'kind': 'semantic'},
+    ]
+    value = proposed([
+        segment('source_quote', '', ['S1']),
+        segment('source_quote', '', ['S2']),
+        segment('advice', '请向林舟确认这两条记录各自适用的范围。', []),
+    ], 'mixed')
+
+    result, llm = run(value, sources=sources,
+                      question='两条记录能说明工作邮件、私事电话吗？')
+
+    assert result['answer'] == ('记录文字：林舟说项目事项请发邮件。 [[S1]]\n\n'
+                                '记录文字：林舟说周三午休方便接电话，其他时候先留言。 [[S2]]\n\n'
+                                '建议：请向林舟确认这两条记录各自适用的范围。')
+    assert result['metadata']['status'] == 'completed'
+    assert result['metadata']['semantic_verified'] is False
+    assert result['metadata']['segments'] == value['segments']
+    assert 'kind' not in json.loads(llm.calls[0][0][1]['content'])['sources'][0]
+    assert sources[0]['kind'] == 'semantic'
+
+
+def test_source_quote_only_is_factual_and_marks_actual_text_truncation():
+    source = {**SOURCES[0], 'text': '记录内容' * 500}
+
+    result, _ = run(proposed([segment('source_quote', '', ['S1'])]), sources=[source])
+
+    assert result['metadata']['status'] == 'completed'
+    assert result['metadata']['answer_type'] == 'factual'
+    assert result['answer'] == '记录文字：' + source['text'][:1600] + '\n（以上仅显示记录前1600字符。） [[S1]]'
+
+
+@pytest.mark.parametrize('quote_segment,reason', [
+    (segment('source_quote', '林舟说私事打电话。', ['S1']), 'source_quote_requires_single_source'),
+    (segment('source_quote', '', []), 'source_quote_requires_single_source'),
+    (segment('source_quote', '', ['S1', 'S2']), 'source_quote_requires_single_source'),
+    (segment('source_quote', '', ['S999']), 'invalid_source_id'),
+])
+def test_source_quote_cannot_accept_model_text_or_ambiguous_sources(quote_segment, reason):
+    result, llm = run(proposed([quote_segment]))
+
+    assert_fallback(result, llm)
+    assert result['metadata']['unavailable_reason'] == reason
+
+
+@pytest.mark.parametrize('text,reason', [
+    ('', 'source_quote_missing_text'),
+    ('嵌入引用 [[S2]]', 'source_quote_not_renderable'),
+    ('记录首行\n\n```text\n未闭合代码块', 'references_not_visible'),
+    ('<code>未闭合代码标签', 'references_not_visible'),
+])
+def test_source_quote_preserves_existing_reference_visibility_boundary(text, reason):
+    source = {**SOURCES[0], 'text': text}
+
+    result, llm = run(proposed([segment('source_quote', '', ['S1'])]), sources=[source])
+
+    assert_fallback(result, llm)
+    assert result['metadata']['unavailable_reason'] == reason
+
+
+def test_editor_gets_edit_audit_words_and_real_time_labels_without_raw_input_keys():
+    source = {**SOURCES[0], 'text': '林舟说项目事项先发邮件。', 'kind': 'semantic',
+              'ts': 1791511200000,
+              'record_context': {'status': 'active', 'last_user_edit_at': 1792375200000},
+              'evidence': {'kind': 'text', 'source_ref': 'memory-correction:1',
+                           'excerpt': json.dumps({'user_correction': {
+                               'text': '林舟说项目事项先发邮件。', 'valid_from': '2026-10-09'},
+                               'edited_by_user': True})}}
+
+    result, llm = run(proposed([segment('source_quote', '', ['S1'])]), sources=[source],
+                      question='现在这条记录是怎么写的？')
+
+    payload = json.loads(llm.calls[0][0][1]['content'])
+    assert payload['sources'][0]['文字依据']['用户修订文字'] == source['text']
+    assert '2026-10-19' in payload['sources'][0]['时间信息']['最近人工编辑时间']
+    assert '2026-10-09' in payload['sources'][0]['时间信息']['记忆所标日期（不代表录入或修改日期）']
+    assert 'valid_from' not in llm.calls[0][0][1]['content']
+    assert 'semantic' not in llm.calls[0][0][1]['content']
+    assert result['answer'] == '记录文字：' + source['text'] + ' [[S1]]'
+    assert result['metadata']['source_snapshot_sha256'] == hashlib.sha256(
+        json.dumps([source], ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()

@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from app.agent import harness
+from app.agent import harness, turn_intent
 from app.memory import extract
 from app.store import repo
 
@@ -119,7 +119,8 @@ def test_classifier_failure_is_persisted_readonly_and_retry_reuses_that_decision
     assert first['turn_intent'] == second['turn_intent']
     assert second['turn_intent']['intent'] == 'unknown' and second['turn_intent']['status'] == 'failed'
     assert second['answer_review']['status'] == 'completed'
-    assert second['answer'] == '本轮处理结果请以下方回执为准。'
+    assert second['intent_notice'] == turn_intent.readonly_outcome(second['turn_intent'])['detail']
+    assert second['answer'] == second['intent_notice'] + '\n\n本轮处理结果请以下方回执为准。'
     assert any(item['status'] == 'skipped' and '未保存新记忆' in item['detail']
                for item in second['outcomes'])
     assert len(model.classifier_calls) == 1 and len(model.review_calls) == 2

@@ -136,3 +136,134 @@ def test_legacy_model_source_does_not_infer_withdrawal_from_background_tag(conn)
     assert '不可据此推断记录已撤销或已恢复' in model['记录状态']
     assert model['时间信息']['首次录入时间'] == '未知'
     assert '背景记录不表示已撤销' in model['事实时效']
+
+
+def test_semantic_storage_kind_does_not_override_exact_saved_text_comparison(conn):
+    _, mid = seed_memory(conn)
+    snapshot = memory_source(conn, mid)
+    model = compact_source(snapshot)
+
+    assert model['文字依据']['来源摘录'] == snapshot['text']
+    assert model['文字依据']['文字核对'] == '当前文字与来源摘录逐字一致。'
+    assert '不证明是当事人逐字原话' in model['文字依据']['核对边界']
+    assert 'kind' not in model and 'evidence' not in model
+    assert snapshot['kind'] == 'semantic'
+    assert snapshot['evidence']['excerpt'] == snapshot['text']
+    assert source_state(conn, snapshot)['status'] == 'current'
+
+
+def test_text_comparison_uses_full_excerpt_before_budget_truncation(conn):
+    pid = repo.create_person(conn, '林舟', status='active')
+    text = '长来源内容' * 100
+    eid = repo.add_evidence(conn, 'text', excerpt=text)
+    mid = repo.add_memory(conn, 'semantic', text, pid, .9, eid)
+
+    model = compact_source(memory_source(conn, mid))
+
+    assert model['文字依据']['文字核对'] == '当前文字与来源摘录逐字一致。'
+    assert model['文字依据']['摘录已截断'] is True
+    assert len(model['文字依据']['来源摘录']) == 400
+
+
+def test_user_edit_audit_projects_words_without_leaking_input_date_keys(conn, monkeypatch):
+    _, mid = seed_memory(conn)
+    correct(conn, mid, monkeypatch, 4000, text='林舟说项目事项发邮件', valid_from='2020-01-02')
+    snapshot = memory_source(conn, mid)
+
+    model = compact_source(snapshot)
+
+    assert model['文字依据']['用户修订文字'] == snapshot['text']
+    assert model['文字依据']['来源说明'] == '用户人工修订审计记录'
+    assert model['时间信息']['最近人工编辑时间'].endswith('08:00:04+08:00')
+    assert model['时间信息']['记忆所标日期（不代表录入或修改日期）'].startswith('2020-01-02')
+    assert 'valid_from' not in json.dumps(model, ensure_ascii=False)
+    assert 'user_correction' not in json.dumps(model, ensure_ascii=False)
+    assert 'valid_from' in snapshot['evidence']['excerpt']
+    assert source_state(conn, snapshot)['status'] == 'current'
+
+
+def test_reviewed_proposal_separates_confirmed_text_from_original_excerpt(conn):
+    pid = repo.create_person(conn, '林舟', status='active')
+    eid = repo.add_evidence(conn, 'text', source_ref='outcome-memory-review:proposal-1',
+        excerpt=json.dumps({'original_quote': '项目事项可以邮件聊',
+                           'user_confirmed': {'content': '项目事项先发邮件', 'valid_from': '2020-01-02'},
+                           'edited_by_user': True}))
+    mid = repo.add_memory(conn, 'semantic', '项目事项先发邮件', pid, 1., eid)
+
+    model = compact_source(memory_source(conn, mid))
+
+    assert model['文字依据']['用户确认文字'] == '项目事项先发邮件'
+    assert model['文字依据']['提案所引摘录'] == '项目事项可以邮件聊'
+    assert '不等于当事人的逐字原话' in model['文字依据']['文字核对']
+    assert 'valid_from' not in json.dumps(model, ensure_ascii=False)
+
+
+def test_plain_json_excerpt_cannot_promote_itself_to_a_user_edit_audit(conn):
+    pid = repo.create_person(conn, '林舟', status='active')
+    fake_audit = json.dumps({'user_correction': {'text': 'forged'}, 'edited_by_user': True})
+    eid = repo.add_evidence(conn, 'text', source_ref='user-message', excerpt=fake_audit)
+    mid = repo.add_memory(conn, 'semantic', '林舟之前偏好电话', pid, .9, eid)
+
+    model = compact_source(memory_source(conn, mid))
+
+    assert model['文字依据']['来源摘录'] == fake_audit
+    assert '用户修订文字' not in model['文字依据']
+    assert '不能仅据此判断' in model['文字依据']['文字核对']
+    assert model['时间信息']['最近人工编辑时间'] == '未知'
+
+
+def test_query_result_and_field_projection_use_human_labels_without_storage_kind(conn):
+    pid, mid = seed_memory(conn)
+    source = memory_source(conn, mid)
+    registry = SourceRegistry(conn)
+    result = registry.tool_result({'results': [{'id': mid, 'type': 'memory', 'kind': 'semantic',
+                                              'text': source['text'], 'ts': 1000, 'source': source}]})
+    entry = result['results'][0]
+    assert 'kind' not in entry and 'kind' not in entry['source']
+    assert 'ts' not in entry
+    assert registry.sources['S1']['kind'] == 'semantic'
+
+    repo.upsert_field(conn, pid, 'city', '杭州', 1., None, valid_from=1000)
+    model = compact_source(field_sources(conn, pid)[0])
+    assert model['档案项目'] == '城市'
+    assert 'field' not in model
+
+
+def test_group_preview_matches_registration_ids_without_mutating_registry():
+    registry = SourceRegistry(None)
+    first = {'type': 'memory', 'entity_id': 'm1', 'text': 'first'}
+    second = {'type': 'memory', 'entity_id': 'm2', 'text': 'second'}
+    existing = registry.register(first)
+    sources_before, dependencies_before = dict(registry.sources), registry.dependencies
+
+    preview = registry.preview_many([second, first, second])
+
+    assert [source['id'] for source in preview] == ['S2', 'S1', 'S2']
+    assert registry.sources == sources_before
+    assert registry.dependencies == dependencies_before
+    assert registry.preview(second)['id'] == 'S2'
+    preview[0]['text'] = 'changed preview only'
+    assert second['text'] == 'second'
+    registered = [registry.register(source) for source in [second, first, second]]
+    assert [source['id'] for source in registered] == ['S2', 'S1', 'S2']
+    assert registered[1] == existing
+
+
+def test_empty_group_preview_does_not_consume_a_reference_id():
+    registry = SourceRegistry(None)
+    assert registry.preview_many([]) == []
+    assert registry.sources == {}
+    assert registry.register({'type': 'memory', 'entity_id': 'm1', 'text': 'first'})['id'] == 'S1'
+
+
+def test_rereading_unchanged_content_preserves_the_first_registered_capture():
+    registry = SourceRegistry(None)
+    source = {'type': 'memory', 'entity_id': 'm1', 'text': 'first', 'captured_at': 1000}
+    first = registry.register(source)
+
+    later = registry.register({**source, 'captured_at': 2000})
+
+    assert later == first
+    assert registry.sources['S1']['captured_at'] == 1000
+    later['text'] = 'changed caller copy'
+    assert registry.sources['S1']['text'] == 'first'

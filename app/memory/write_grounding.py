@@ -7,9 +7,12 @@ import re
 from app.store import repo
 
 _PRONOUN = re.compile(r'^(?:他|她|对方|这个人|那个人|he|she|him|her)$', re.I)
-_SUBJECT = re.compile(r'^\s*(?:(?:帮我记下|请记住|记住|记下|记录|补充|更新|保存|请|帮我|记一下)\s*[：:，,]?\s*)*'
+_RECORD_REQUEST = r'(?:顺便)?(?:帮我|替我)(?:记下|记一下|存下|存一下)'
+_SUBJECT = re.compile(r'^\s*(?:(?:' + _RECORD_REQUEST +
+                      r'|帮我记下|请记住|记住|记下|记录|补充|更新|保存|请|帮我|记一下)\s*[：:，,]?\s*)*'
                       r'(他|她|对方|这个人|那个人)(?!们|人)')
-_TRANSFER_PRONOUN = re.compile(r'^\s*(?:(?:帮我记下|请记住|记住|记下|记录)\s*[：:]?\s*)*'
+_TRANSFER_PRONOUN = re.compile(r'^\s*(?:(?:' + _RECORD_REQUEST +
+    r'|帮我记下|请记住|记住|记下|记录)\s*[：:，,]?\s*)*'
     r'我\s*(?:在?\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}(?:日|号)?\s*)?'
     r'(?:给|向|还|借给|付给|转给)(他|她|对方)(?!们|人)')
 _WORKPLACE = re.compile(r'(?<!现)在\s*([^，。；！？;!?\n]{1,60}?)\s*(?:工作|任职|就职)(?=了|的|[，。；！？;!?\n]|$)')
@@ -134,7 +137,7 @@ def constrain_person(conn, person, source, person_id=None):
         body = _mask(proof, names)
         value = item.get('value', '') if kind == 'field' else item.get('text', '')
         identity_only = (kind == 'field' and value and any(value in name for name in names) and value not in body)
-        inferred_qualifier = kind != 'field' and any(q in value and q not in body for q in qualifiers)
+        inferred_qualifier = kind != 'field' and any(q in _mask(value, names) and q not in body for q in qualifiers)
         if identity_only or inferred_qualifier:
             audit.append({'kind': kind, 'action': 'skipped', 'reason': 'identity_label_is_not_fact',
                           'candidate': deepcopy(item)})

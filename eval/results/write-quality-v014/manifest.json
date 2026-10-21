@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "evaluation": "write-quality-v014",
+  "first_implementation_commit": "929cbe6",
+  "first_app_source_hash": "46bc6fea5b49a26c186f618e3608dbf019d0a31cdda922a0f7d3ac431268af0e",
+  "final_app_source_hash": "2805f5d1fa33d778376601cb321daa99b3c8e29b750f7122e56c99b43d3d8758",
+  "offline_validation": {
+    "python_tests": 1752,
+    "python_seconds": 15.31,
+    "node_tests": 6
+  },
+  "semantic_verified": false,
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 54152,
+      "sha256": "d7861fe7ef8f39fb2a65e0766cf8cc80446ac157bc3d70d09bebb701b2b46db9"
+    },
+    {
+      "path": "docs/WRITE_QUALITY_V014.md",
+      "bytes": 18562,
+      "sha256": "ae822c770fadac401b5a38ccfb56790616ecfb1520f2105a95e0ca0dd9951bc5"
+    },
+    {
+      "path": "eval/fixtures/write_quality_v014.json",
+      "bytes": 12271,
+      "sha256": "c36b55e7337dbce9d88e49ad1910c890a1cd015d8099ec3de64645467f65e498"
+    },
+    {
+      "path": "eval/fixtures/write_quality_v014_regression.json",
+      "bytes": 9472,
+      "sha256": "6cc86df51c6e294aabeebbe14a1364a6fc88010296f4775a1ec16995c016c991"
+    },
+    {
+      "path": "eval/memory_questions.py",
+      "bytes": 65020,
+      "sha256": "0cab27da2a00ae850c9f1bfd8f9429a28f8ba021945a8f3e98d05d3d7265190c"
+    },
+    {
+      "path": "eval/relationship_workflow_v013.py",
+      "bytes": 44015,
+      "sha256": "b6ffafb74907be7440f29a008d4100e8854b2ff4db8839689dd68858412ce5e3"
+    },
+    {
+      "path": "eval/results/write-quality-v014/README.md",
+      "bytes": 7538,
+      "sha256": "a1ac275a0b4bf620081667423a8f5b59f5573831fc583ebf5339c2fc4d739d0a"
+    },
+    {
+      "path": "eval/results/write-quality-v014/first-known-regression/evidence-review.md",
+      "bytes": 9357,
+      "sha256": "ce67ae84e0aeffdae59af03cdbbd45f1dcebc41ef9de3ea82c44214d62e64586"
+    },
+    {
+      "path": "eval/results/write-quality-v014/first-known-regression/write-quality-20261021-012623-903626-2651-46bc6fea-review.md",
+      "bytes": 10895,
+      "sha256": "4c1df7cd6442e6f1ade86952ff799ec4ff862d33ee4ff5364c6eed820288a406"
+    },
+    {
+      "path": "eval/results/write-quality-v014/first-known-regression/write-quality-20261021-012623-903626-2651-46bc6fea.json",
+      "bytes": 886509,
+      "sha256": "486e76ae3fcb33c700fa6d9dfa5d8d344e9f3da3ba92c76ce61dc209e7e82c67"
+    },
+    {
+      "path": "eval/results/write-quality-v014/first-new-wording/evidence-review.md",
+      "bytes": 8356,
+      "sha256": "6c807a7feccce35c506e24ef9c33cfdc5f2f544b562cf816afc25ed9ac419d73"
+    },
+    {
+      "path": "eval/results/write-quality-v014/first-new-wording/write-quality-20261021-012623-903639-2650-46bc6fea-review.md",
+      "bytes": 7875,
+      "sha256": "c5978479222fb4c968e066084bf5858c849b19c4de984b03926703a45668649c"
+    },
+    {
+      "path": "eval/results/write-quality-v014/first-new-wording/write-quality-20261021-012623-903639-2650-46bc6fea.json",
+      "bytes": 487699,
+      "sha256": "97859d10d1a22bb23ba5578303a90f2a75cee1e6612260d38b2056e73ae7a55f"
+    },
+    {
+      "path": "eval/results/write-quality-v014/targeted-regression/evidence-review.md",
+      "bytes": 8807,
+      "sha256": "ba0177585e91644b0a7f202de9b3dc5a2bd0d0fbf3473db5003bd1c52c6eac75"
+    },
+    {
+      "path": "eval/results/write-quality-v014/targeted-regression/write-quality-20261021-015638-708776-7362-2805f5d1-review.md",
+      "bytes": 7081,
+      "sha256": "a6800857bc8f85c0d31ea9c935a6ba309a2ec4dd0dcad9519534793e5e19d939"
+    },
+    {
+      "path": "eval/results/write-quality-v014/targeted-regression/write-quality-20261021-015638-708776-7362-2805f5d1.json",
+      "bytes": 446797,
+      "sha256": "35f4fa2f9431b04411d3fec8d2c092c927c38df5a890c7a7e06e493da56b207f"
+    },
+    {
+      "path": "eval/write_quality_v014.py",
+      "bytes": 23032,
+      "sha256": "218e025cf295e565aa4e425a173677d1e5bae4081fd0100e648d5e72eef87366"
+    }
+  ]
+}

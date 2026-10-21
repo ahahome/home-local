@@ -131,6 +131,17 @@ def test_explicit_job_and_workplace_stay_valid_even_when_they_repeat_alias_words
     assert conn.execute('SELECT 1 FROM memory_item WHERE person_id=?', (b,)).fetchone()
 
 
+def test_complete_alias_in_a_real_fact_is_a_locator_not_an_inferred_occupation(conn, namesakes):
+    a, b = namesakes
+    source = '乐团周汐喜欢周末徒步。'
+    result = write(conn, source, [person('周汐', facts=[
+        {'text': source, 'confidence': .96, 'evidence': source}])], read_scope=scope(b))
+    saved = conn.execute('SELECT text FROM memory_item WHERE person_id=?', (b,)).fetchall()
+    assert [row['text'] for row in saved] == [source]
+    assert not conn.execute('SELECT 1 FROM memory_item WHERE person_id=?', (a,)).fetchone()
+    assert not any(item['action'] == 'skipped' for item in result['write_audit'])
+
+
 def test_incomplete_company_requires_confirmation_without_inventing_a_title(conn):
     source = '祝遥现在在云岸策展工作。'
     result = write(conn, source, [person('祝遥', fields=[field('company', '云岸', source), field('title', '策展', source)])])
@@ -331,6 +342,85 @@ def test_id_only_write_tools_recheck_frozen_alias_ownership(conn, namesakes, cha
     assert result == {'ok': False, 'error': '记事原文中的人物称呼已变化，请重新指定人物'}
     assert repo.current_fields(conn, a) == repo.current_fields(conn, b) == {}
     assert conn.execute('SELECT COUNT(*) FROM reminder').fetchone()[0] == 0
+
+
+@pytest.mark.parametrize('prefix', ['顺便替我存一下，', '替我记一下：', '顺便帮我记下，'])
+@pytest.mark.parametrize('entry', ['extraction', 'tool'])
+def test_explicit_record_prefix_supports_pronoun_writes_to_selected_person(conn, namesakes, prefix, entry):
+    a, b = namesakes
+    source = prefix + '她已搬到贵阳了。'
+    if entry == 'extraction':
+        result = write(conn, source, [person('她', fields=[field('city', '贵阳', source)])], read_scope=scope(b))
+    else:
+        decision = turn_intent.validate_intent({'intent': 'record', 'record_spans': [source],
+                                              'reason': 'explicit record'}, source)
+        result = tools.execute_tool(conn, 'save_person_fact',
+            {'person': '周汐', 'person_id': b, 'field': 'city', 'value': '贵阳'},
+            source_text=source, source_msg_id='record-prefix', read_scope=scope(b), turn_intent=decision)
+        assert result['ok'] is True
+    assert repo.current_fields(conn, b)['city']['value'] == '贵阳'
+    assert repo.current_fields(conn, a) == {} and not result['pending_ids']
+    assert '她' not in repo.aliases_of(conn, b)
+
+
+@pytest.mark.parametrize('source', [
+    '顺便替我存一下，何晴说她搬到贵阳了。',
+    '我对何晴说，顺便替我存一下，她搬到贵阳了。',
+    '顺便替我存一下，如果她搬到贵阳就联系我。',
+    '不要顺便替我存一下，她搬到贵阳了。',
+    '顺便替我存一下，她们搬到贵阳了。',
+])
+@pytest.mark.parametrize('entry', ['extraction', 'tool'])
+def test_record_prefix_does_not_find_a_pronoun_past_other_subjects_or_conditions(conn, namesakes, source, entry):
+    a, b = namesakes
+    if entry == 'extraction':
+        result = write(conn, source, [person('她', fields=[field('city', '贵阳', source)])], read_scope=scope(b))
+        assert not result['pending_ids']
+    else:
+        decision = turn_intent.validate_intent({'intent': 'record', 'record_spans': [source],
+                                              'reason': 'negative control'}, source)
+        # The conditional is already stopped by the existing intent gate;
+        # the other controls reach the selected-person grounding check.
+        assert decision['allow_writes'] is ('如果' not in source)
+        result = tools.execute_tool(conn, 'save_person_fact',
+            {'person': '周汐', 'person_id': b, 'field': 'city', 'value': '贵阳'},
+            source_text=source, source_msg_id='record-prefix-negative', read_scope=scope(b), turn_intent=decision)
+        assert result['ok'] is False
+    assert repo.current_fields(conn, a) == repo.current_fields(conn, b) == {}
+    assert len(repo.all_active_persons(conn)) == 2
+
+
+def test_tool_can_recover_an_empty_extraction_for_an_authorized_record_prefix(
+        conn, monkeypatch, namesakes, record_model):
+    a, b = namesakes
+    record = '顺便替我存一下，她已搬到贵阳了。'
+    source = '说的是乐团周汐；' + record + '再查她的近况。'
+    model = harness.get_llm()
+    original = model.chat
+    sent = []
+
+    def chat(messages, **kwargs):
+        if '写入意图分类器' in messages[0]['content']:
+            return {'content': json.dumps({'intent': 'mixed', 'record_spans': [record],
+                                          'reason': 'explicit record and query'}, ensure_ascii=False)}
+        if '本轮回答的资料编辑' not in messages[0]['content'] and not sent:
+            sent.append(True)
+            return {'role': 'assistant', 'content': '', 'tool_calls': [{
+                'id': 'record-prefix-tool', 'type': 'function', 'function': {
+                    'name': 'save_person_fact', 'arguments': json.dumps({
+                        'person': '周汐', 'person_id': b, 'field': 'city', 'value': '贵阳'}, ensure_ascii=False)}}]}
+        return original(messages, **kwargs)
+
+    model.chat = chat
+    monkeypatch.setattr(harness, 'get_llm', lambda: model)
+    monkeypatch.setattr(harness.extract, 'extract_from_text', lambda *a: {'people': [], 'my_notes': []})
+    result = harness.run_turn(conn, repo.create_conversation(conn), source)
+    assert result['conversation_scope']['person_ids'] == [b]
+    assert result['turn_intent']['allow_writes'] is True
+    assert repo.current_fields(conn, b)['city']['value'] == '贵阳'
+    assert repo.current_fields(conn, a) == {} and len(repo.all_active_persons(conn)) == 2
+    assert any(receipt.get('status') == 'ok' for receipt in result['receipts'])
+    assert conn.execute('SELECT COUNT(*) FROM person_field').fetchone()[0] == 1
 
 
 def test_retry_after_later_person_selection_keeps_original_write_person(conn, namesakes, recorded_turn):

@@ -1,0 +1,304 @@
+{
+  "version": "0.14.0-write-quality-known-regression-1",
+  "provenance": "fictional_records_with_natural_questions",
+  "description": "内部虚构已知开发回归：从0.14首次固定语料及保留的失败结果派生三场景，原问句、步骤、期望与种子数据不变，仅统一cohort为known_regression并增加派生说明；修复后各步骤只采一次，不失败后重采筛绿，非未见验收或语义准确率。",
+  "persons": [
+    {
+      "key": "yu",
+      "name": "余麦",
+      "aliases": [
+        "小麦"
+      ]
+    },
+    {
+      "key": "zhou_pottery",
+      "name": "周汐",
+      "aliases": [
+        "陶艺周汐"
+      ]
+    },
+    {
+      "key": "zhou_music",
+      "name": "周汐",
+      "aliases": [
+        "乐团周汐"
+      ]
+    },
+    {
+      "key": "zhu",
+      "name": "祝遥",
+      "aliases": []
+    },
+    {
+      "key": "bai",
+      "name": "白芮",
+      "aliases": [
+        "阿芮"
+      ]
+    },
+    {
+      "key": "yuan_book",
+      "name": "袁牧",
+      "aliases": [
+        "书店袁牧"
+      ]
+    },
+    {
+      "key": "yuan_hike",
+      "name": "袁牧",
+      "aliases": [
+        "登山袁牧"
+      ]
+    },
+    {
+      "key": "qiao",
+      "name": "乔安",
+      "aliases": [
+        "小乔"
+      ]
+    }
+  ],
+  "fields": [
+    {
+      "key": "yu_company",
+      "person": "yu",
+      "field": "company",
+      "value": "白桥照明",
+      "valid_from": 1767225600000
+    },
+    {
+      "key": "bai_company",
+      "person": "bai",
+      "field": "company",
+      "value": "旧川仪器",
+      "valid_from": 1767225600000
+    },
+    {
+      "key": "qiao_company",
+      "person": "qiao",
+      "field": "company",
+      "value": "鹿鸣纸品",
+      "valid_from": 1767225600000
+    }
+  ],
+  "memories": [
+    {
+      "key": "yu_quote",
+      "person": "yu",
+      "text": "余麦说讨论样品报价时先发邮件列出数量和交期，收到信息后再约语音。",
+      "ts": 1768006800000
+    },
+    {
+      "key": "pottery_order",
+      "person": "zhou_pottery",
+      "text": "陶艺周汐说接定制订单时先发器型参考图和尺寸，材料确认后才讨论工期。",
+      "ts": 1768093200000
+    },
+    {
+      "key": "music_order",
+      "person": "zhou_music",
+      "text": "乐团周汐说演出邀约先邮件发场地与曲目范围，排练期间不接电话。",
+      "ts": 1768179600000
+    },
+    {
+      "key": "bai_contact",
+      "person": "bai",
+      "text": "白芮说技术合作的事情先把问题清单发邮件，收到后再约电话。",
+      "ts": 1768006800000
+    },
+    {
+      "key": "yuan_hike_contact",
+      "person": "yuan_hike",
+      "text": "登山袁牧说路线协调先发邮件列出出发点和人数，名单确认之后再开语音会。",
+      "ts": 1768266000000
+    },
+    {
+      "key": "yuan_book_contact",
+      "person": "yuan_book",
+      "text": "书店袁牧说选书合作先发书目，周五集中看资料，不接受临时语音。",
+      "ts": 1768352400000
+    },
+    {
+      "key": "qiao_contact",
+      "person": "qiao",
+      "text": "乔安说定制纸品先在邮件里给出纸张克重和印刷数量，样张通过之后再谈排产。",
+      "ts": 1768438800000
+    }
+  ],
+  "interactions": [],
+  "scenarios": [
+    {
+      "id": "known-mail-and-revision",
+      "cohort": "known_regression",
+      "tags": [
+        "draft",
+        "revision"
+      ],
+      "steps": [
+        {
+          "op": "chat",
+          "text": "按小麦说的报价流程，拟一封询问样品价格的短邮件，数量和交期我还没整理好。",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "allowed_persons": [
+              "yu"
+            ],
+            "required_dependency_records": [
+              "yu_quote"
+            ],
+            "review_points": [
+              "必须给可编辑邮件；数量/交期留清楚占位，先补齐后询价；不可虚称已经整理、发送或获得报价。"
+            ]
+          }
+        },
+        {
+          "op": "chat",
+          "text": "保留原意，压到三十字以内，语气随和一点；然后提醒我发之前还有什么没补。",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "allowed_persons": [
+              "yu"
+            ],
+            "review_points": [
+              "真正缩写上条邮件；三十字限制只针对草稿，提醒另列；保留未填数量和交期，发前提醒可执行。"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "new-selected-alias-scope",
+      "cohort": "known_regression",
+      "tags": [
+        "identity",
+        "mixed",
+        "scope"
+      ],
+      "steps": [
+        {
+          "op": "chat",
+          "text": "袁牧对路线协调有什么沟通要求？",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "ambiguity": [
+              "yuan_book",
+              "yuan_hike"
+            ],
+            "no_pending": true,
+            "review_points": [
+              "同名澄清，不靠路线协调自动挑登山别名。"
+            ]
+          }
+        },
+        {
+          "op": "chat",
+          "text": "说的是登山袁牧；顺便替我存一下，她已搬到贵阳了。再告诉我协调路线该先备哪些信息。",
+          "expect": {
+            "intent": "mixed",
+            "saved_fields": [
+              {
+                "person": "yuan_hike",
+                "field": "city",
+                "value": "贵阳"
+              }
+            ],
+            "absent_fields": [
+              {
+                "person": "yuan_hike",
+                "field": "company"
+              },
+              {
+                "person": "yuan_hike",
+                "field": "title"
+              }
+            ],
+            "unchanged_persons": [
+              "yuan_book"
+            ],
+            "allowed_persons": [
+              "yuan_hike"
+            ],
+            "required_dependency_records": [
+              "yuan_hike_contact"
+            ],
+            "forbidden_source_records": [
+              "yuan_book_contact"
+            ],
+            "no_pending": true,
+            "review_points": [
+              "贵阳真实归选中的袁牧，登山不推成职业/机构；回查出发点、人数和名单确认后语音条件。"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "new-mail-before-send",
+      "cohort": "known_regression",
+      "tags": [
+        "draft",
+        "revision",
+        "attachment"
+      ],
+      "steps": [
+        {
+          "op": "chat",
+          "text": "小乔那边要询一批定制便签的价，照她的沟通要求帮我起封邮件。克重和印量都还没定，样张也没有。",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "allowed_persons": [
+              "qiao"
+            ],
+            "required_dependency_records": [
+              "qiao_contact"
+            ],
+            "review_points": [
+              "给实际邮件，克重/印量显式占位或先补信息；样张没通过不能提前谈排产。无附件实体，不能虚称附样张；不擅自发邮件。"
+            ]
+          }
+        },
+        {
+          "op": "chat",
+          "text": "改成两句话就够了，别太正式，末尾另列我点发送之前要补齐的项目。",
+          "expect": {
+            "intent": "query",
+            "no_memory_writes": true,
+            "allowed_persons": [
+              "qiao"
+            ],
+            "review_points": [
+              "实际改稿为两句，可编辑且随和；待补克重、印量和样张阶段关系不丢；发送前项目另列，不用来源卡代替草稿。"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "human_review_rubric": [
+    "逐步检查实际当前字段、历史字段、pending原文与owner，以及本轮完整域表变化；保存回执和intent不能代替数据库事实。",
+    "机构/职位与人物绑定不由字符串包含推定正确，逐句对照用户原话与既有人物；明确岗位反例必须保留。",
+    "邮件、改稿、发送前步骤逐项人工/代理对照；重点核对未决输入、先后条件与附件/发送/完成等状态，不让格式正确掩盖任务遗漏。",
+    "仅内部虚构开发回归与新措辞；确定性检查数、代理证据审阅均不是独立人工准确率，也没有使用模型自评。",
+    "所有首次结果与失败保留，语料和runner冻结后不为使结果转绿而调整期望。"
+  ],
+  "derived_from": {
+    "fixture_path": "eval/fixtures/write_quality_v014.json",
+    "fixture_hash": "868eb486b76775807c0ca60a85dd1080e10b5a309aa8f534390b75e8d3de99f1",
+    "first_app_source_hash": "46bc6fea5b49a26c186f618e3608dbf019d0a31cdda922a0f7d3ac431268af0e",
+    "first_report_paths": [
+      "eval/results/write-quality-v014/first-known-regression/write-quality-20261021-012623-903626-2651-46bc6fea.json",
+      "eval/results/write-quality-v014/first-new-wording/write-quality-20261021-012623-903639-2650-46bc6fea.json"
+    ],
+    "scenario_ids": [
+      "known-mail-and-revision",
+      "new-mail-before-send",
+      "new-selected-alias-scope"
+    ],
+    "expectations_changed": false,
+    "question_text_changed": false
+  }
+}

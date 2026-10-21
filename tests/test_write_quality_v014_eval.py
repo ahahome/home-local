@@ -50,6 +50,26 @@ def test_frozen_fixture_separates_cohorts_and_covers_production_operations():
     assert all(step['expect']['review_points'] for case in cases for step in case['steps'])
 
 
+def test_followup_regression_preserves_original_questions_seeds_and_expectations():
+    original = evaluation.load_fixture()
+    path = evaluation.DEFAULT_FIXTURE.with_name('write_quality_v014_regression.json')
+    regression = evaluation.load_fixture(path)
+    assert base.fixture_hash(regression) == '1c1f131e34916580733b2038406b201478c17057c82b29a85902441f82154560'
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == \
+        '6cc86df51c6e294aabeebbe14a1364a6fc88010296f4775a1ec16995c016c991'
+    assert len(regression['scenarios']) == 3
+    assert sum(len(case['steps']) for case in regression['scenarios']) == 6
+    for key in ('persons', 'fields', 'memories', 'interactions', 'human_review_rubric'):
+        assert regression[key] == original[key]
+    original_cases = {case['id']: case for case in original['scenarios']}
+    for case in regression['scenarios']:
+        assert case['cohort'] == 'known_regression'
+        assert {key: value for key, value in case.items() if key != 'cohort'} == {
+            key: value for key, value in original_cases[case['id']].items() if key != 'cohort'}
+    assert regression['derived_from']['fixture_hash'] == base.fixture_hash(original)
+    assert regression['derived_from']['expectations_changed'] is False
+
+
 @pytest.mark.parametrize('mutate,message', [
     (lambda f: f.update(provenance='real_user_data'), 'Fictional'),
     (lambda f: f['scenarios'][0].update(cohort='unseen_external_benchmark'), 'cohort'),

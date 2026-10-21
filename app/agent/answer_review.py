@@ -101,6 +101,9 @@ presentation.draft_requested为true时，必须实际给出draft正文；可填�
 确实无法起草的必要输入，只能用clarification提出具体问题，不能用通用“补充人物或问题”替代。
 generation_requested为true时clarification的text应为具体问题，不能夹带人物结论；
 系统会保留为待补信息，不视为草稿已完成。可以同时有draft与具体的待补问题。
+段落类型示例：邮件正文放{"kind":"draft","text":"主题：沟通确认\\n你好，…【待补：具体信息】…","source_ids":[]}；
+发送前步骤另放{"kind":"advice","text":"发送前补齐占位信息并核对材料。","source_ids":[]}。
+正文即使语气委婉、包含建议句或尚有未知信息，也仍是draft；不能把整封邮件标为advice。
 draft/advice不能有来源ID；生成正文与服务端记录分开显示。generation_requested为false时
 不允许生成正文或自由解释；需要澄清时使用clarification空text，系统会显示固定澄清提示。
 answer_type仍按内容种类声明；服务端会从校验后的段落推导最终类型，标签不一致会留审计。

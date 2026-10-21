@@ -5,6 +5,7 @@ import json
 import re
 
 from app.agent.tools import _alias_pattern
+from app.agent.answer_contract import is_draft_edit_followup, is_text_edit_request
 from app.memory.writes import archived_only_aliases
 from app.store import repo
 
@@ -160,6 +161,53 @@ def _resolve(conn, text, previous):
     return _scope(conn, 'none', reason='no_person_reference')
 
 
+def _draft_edit_scope(conn, conversation_id, ordering, text, preceding_users, previous):
+    """Reuse a recipient only for a closed edit of an adjacent completed draft.
+
+    Ordinary user choices remain the source of person identity. The assistant
+    is only evidence that this immediate text-edit request has a prior draft;
+    its prose and tool ordering never select a person or expand write rights.
+    """
+    if not is_draft_edit_followup(text) or not preceding_users:
+        return None
+    prior_user = preceding_users[-1]
+    user_scope = _metadata(prior_user['tool_calls']).get('conversation_scope')
+    if not isinstance(user_scope, dict) or user_scope.get('version') != 1 \
+            or user_scope.get('conversation_id') != conversation_id \
+            or user_scope.get('user_message_id') != prior_user['id'] \
+            or user_scope.get('mode') != 'single' or user_scope.get('blocked') is not False \
+            or len(user_scope.get('person_ids', [])) != 1:
+        return None
+    valid = _valid_previous(conn, user_scope)
+    if any(valid.get(key) != previous.get(key) for key in
+           ('mode', 'person_ids', 'reason', 'origin_message_id')):
+        return None
+    anchor = conn.execute('SELECT * FROM message WHERE conversation_id=? AND rowid<? '
+                          'ORDER BY rowid DESC LIMIT 1', (conversation_id, ordering)).fetchone()
+    if anchor is None or anchor['role'] != 'assistant':
+        return None
+    metadata = _metadata(anchor['tool_calls'])
+    review = metadata.get('answer_review')
+    assistant_scope = metadata.get('conversation_scope')
+    if not isinstance(review, dict) or review.get('status') != 'completed' \
+            or review.get('method') != 'server_record_revision' \
+            or not isinstance(review.get('generation_task'), dict) \
+            or review['generation_task'].get('draft_present') is not True \
+            or not isinstance(assistant_scope, dict):
+        return None
+    keys = ('version', 'conversation_id', 'user_message_id', 'mode', 'blocked', 'person_ids',
+            'origin_message_id')
+    if any(assistant_scope.get(key) != user_scope.get(key) for key in keys):
+        return None
+    # Re-read availability before borrowing even the one previously selected ID.
+    if valid.get('mode') != 'single':
+        return valid
+    scope = _scope(conn, 'single', valid['person_ids'], 'inherited_draft_edit',
+                   valid.get('origin_message_id'))
+    scope['draft_anchor_assistant_message_id'] = anchor['id']
+    return scope
+
+
 def resolve_user_message(conn, conversation_id, user_message_id, text):
     """Resolve against preceding choices without changing any persisted metadata."""
     row = conn.execute("SELECT rowid ordering,* FROM message WHERE id=? AND conversation_id=? AND role='user'",
@@ -178,6 +226,10 @@ def resolve_user_message(conn, conversation_id, user_message_id, text):
             previous = _resolve(conn, item['content'] or '', previous)
             previous['origin_message_id'] = previous.get('origin_message_id') or item['id']
     scope = _resolve(conn, text, previous)
+    inherited_edit = scope['reason'] == 'inherited_single' and is_text_edit_request(text)
+    if scope['mode'] == 'none' or inherited_edit:
+        draft_scope = _draft_edit_scope(conn, conversation_id, row['ordering'], text, rows, previous)
+        scope = draft_scope or (_scope(conn, 'none', reason='unresolved_draft_edit') if inherited_edit else scope)
     scope.update(conversation_id=conversation_id, user_message_id=user_message_id)
     scope['origin_message_id'] = scope.get('origin_message_id') or user_message_id
     return scope

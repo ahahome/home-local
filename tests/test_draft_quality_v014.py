@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.agent import followup
-from app.agent.answer_contract import presentation_contract
+from app.agent import followup, harness, turn_intent
+from app.agent.answer_contract import is_draft_edit_followup, is_text_edit_request, presentation_contract
 from app.agent.answer_review import review_answer
 from app.agent.source_registry import _prose_references
 from app.jobs import tasks
@@ -41,6 +41,14 @@ def review(question, segments, *, draft='给我准备一封邮件。'):
     '保留原意，压到三十字以内，语气随和一点。',
     'Please write a short email to her.',
     'Translate this message into English.',
+    '帮我起封邮件。',
+    '帮我给她起封邮件。',
+    '照她的沟通要求帮我起封邮件。',
+    '请拟封信。',
+    '起条消息。',
+    '改成两句话就够了，别太正式，末尾另列我点发送之前要补齐的项目。',
+    '改为三行。',
+    '将上面的草稿改到五十字。',
 ])
 def test_explicit_drafting_and_revision_require_actual_draft_shape(question):
     contract = presentation_contract(question)
@@ -66,11 +74,72 @@ def test_readback_advice_and_greeting_do_not_require_draft(question):
     '查她 write an email 这段记录的日期。',
     'When did I write a short email to her?',
     'write an email 这段记录是哪天保存的？',
+    '那封邮件是谁帮我起的？',
+    '之前帮我起封邮件的记录是哪天保存的？',
+    '她以前帮我起封邮件。',
+    '什么时候改成两句话的？',
+    '查一下改成三行的记录。',
+    '不要起封邮件，只查记录。',
+    '不用改成两句话，只给我看原文。',
 ])
 def test_english_writing_readback_does_not_open_generation(question):
     contract = presentation_contract(question)
     assert contract['generation_requested'] is False
     assert contract['draft_requested'] is False
+
+
+@pytest.mark.parametrize('question', [
+    '改成两句', '翻译成英文', '语气随和一点', '把这封邮件缩短',
+    '把上面的草稿翻译成英文。', '请将上一段精简一点。',
+    '改成两句话就够了，别太正式，末尾另列我点发送之前要补齐的项目。',
+    '保留原意，压到三十字以内，语气随和一点；然后提醒我发之前还有什么没补。',
+    '太长了，改成两句。', '不够自然，语气随和一点。',
+])
+def test_closed_draft_edits_can_refer_only_to_immediate_previous_output(question):
+    assert is_draft_edit_followup(question) is True
+
+
+@pytest.mark.parametrize('question', [
+    '帮我起封邮件。', '起草一条新消息。', '给我一个沟通建议。',
+    '把王琪的邮件缩短。', '把新的邮件缩短。', '把我的邮件翻译成英文。',
+    '把这封邮件缩短：王琪你好。', '改成两句。下面是新文稿：王琪你好。',
+    '改成两句，王琪的近况是什么？', '换个人，改成两句。',
+    '改成两句的记录何时保存？', '查询现有记录。', '保留原意。',
+    '发送前列出还要补齐的项目。', '不要改成两句。',
+    '太长了。', '不够自然。', '太长了，给王琪起草邮件。',
+    '太长了，改成两句，新文稿：王琪你好。',
+])
+def test_new_objects_pasted_text_and_nonediting_queries_never_borrow_draft_recipient(question):
+    assert is_draft_edit_followup(question) is False
+
+
+@pytest.mark.parametrize('question', [
+    '把王琪的邮件缩短。', '把这封邮件缩短：王琪说她会过来。',
+    '改成两句，王琪说她会过来。', '把给她的邮件翻译成英文。',
+    '太长了，把这封邮件缩短：王琪说她会过来。',
+    '把这封有日期的邮件缩短：王琪说她会过来。',
+    '把这封有时间的邮件缩短：王琪说她会过来。',
+])
+def test_wide_edit_detector_routes_new_object_and_pasted_pronoun_through_strict_boundary(question):
+    assert is_text_edit_request(question) is True
+    assert is_draft_edit_followup(question) is False
+
+
+@pytest.mark.parametrize('question', [
+    '她的偏好呢？', '帮我给她起封邮件。', '帮我给她起草一封邮件。',
+    '给我一个建议。', '她的翻译稿是什么时候保存的？',
+    '请不要改成两句，只查记录。',
+])
+def test_wide_edit_detector_does_not_include_new_drafts_advice_or_readback(question):
+    assert is_text_edit_request(question) is False
+
+
+def test_wide_scope_gate_does_not_grant_generation_even_for_readback_shaped_like_edit_command():
+    question = '改成两句的记录是什么时候保存的？'
+    assert is_text_edit_request(question) is True
+    assert is_draft_edit_followup(question) is False
+    contract = presentation_contract(question)
+    assert contract['generation_requested'] is False and contract['draft_requested'] is False
 
 
 @pytest.mark.parametrize('segments', [
@@ -182,3 +251,51 @@ def test_prepared_email_with_material_placeholders_preserves_open_promise_and_ne
     # than treating the placeholder or checklist as a request to act.
     assert followup.prepare_followup(conn, fid)['draft'] == draft
     assert len(calls) == 1
+
+
+def test_closed_chat_revision_rereads_recipient_sources_and_remains_readonly(conn, monkeypatch):
+    pid = repo.create_person(conn, '许岚', status='active')
+    other = repo.create_person(conn, '陈岚', status='active')
+    eid = repo.add_evidence(conn, 'text', excerpt=SOURCE['text'])
+    mid = repo.add_memory(conn, 'semantic', SOURCE['text'], pid, .95, eid)
+    repo.add_memory(conn, 'episodic', '不应借编辑请求读取的其他人物私密记录。', other, .95, eid)
+    cid = repo.create_conversation(conn, 'Closed revision integration')
+    conn.commit()
+    observed = []
+
+    def classify(text, **kwargs):
+        return turn_intent.validate_intent({
+            'intent': 'query', 'record_spans': [], 'reason': '只起草或编辑，没有记事请求。'}, text)
+
+    def chat(messages, **kwargs):
+        if '本轮回答的资料编辑' not in messages[0]['content']:
+            return {'content': '邮件正文：数量【待补】，交期【待补】。确认清单后再约电话。'}
+        data = json.loads(messages[-1]['content'])
+        scope = data['runtime_context']['read_scope']
+        assert scope['person_ids'] == [pid]
+        assert data['runtime_context']['presentation']['draft_requested'] is True
+        source = next(s for s in data['sources'] if s.get('entity_id') == mid)
+        assert source['text'] == SOURCE['text']
+        assert '不应借编辑请求读取' not in json.dumps(data, ensure_ascii=False)
+        observed.append(scope)
+        return {'content': json.dumps({'answer_type': 'mixed', 'segments': [
+            segment('source_record', ids=[source['id']]),
+            segment('draft', '数量【待补】，交期【待补】。确认清单后再约电话。'),
+            segment('advice', '发送前补齐数量和交期，并核对清单。')], 'issues': []}, ensure_ascii=False)}
+
+    monkeypatch.setattr(harness, 'get_llm', lambda: SimpleNamespace(chat=chat))
+    monkeypatch.setattr(turn_intent, 'classify_turn', classify)
+    monkeypatch.setattr(harness.extract, 'extract_from_text', lambda *a, **kw: pytest.fail('draft edits are readonly'))
+    first = harness.run_turn(conn, cid, '许岚那边帮我起封邮件，数量和交期还没定。')
+    assert first['answer_review']['generation_task']['draft_present'] is True
+    second = harness.run_turn(conn, cid,
+        '太长了，改成两句话就够了，别太正式，末尾另列我点发送之前要补齐的项目。')
+    assert second['conversation_scope']['reason'] == 'inherited_draft_edit'
+    assert second['conversation_scope']['draft_anchor_assistant_message_id'] == first['assistant_message_id']
+    assert any(s.get('entity_id') == mid for s in second['source_dependencies'])
+    assert all(s.get('person', {}).get('id') != other for s in second['source_dependencies'])
+    assert second['answer_review']['generation_task']['draft_present'] is True
+    assert first['saved'] == first['pending'] == second['saved'] == second['pending'] == []
+    assert conn.execute('SELECT COUNT(*) FROM memory_item').fetchone()[0] == 2
+    assert conn.execute('SELECT COUNT(*) FROM interaction').fetchone()[0] == 0
+    assert len(observed) == 2

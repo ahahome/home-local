@@ -13,13 +13,23 @@
   "files": [
     {
       "path": "README.md",
-      "bytes": 54152,
-      "sha256": "d7861fe7ef8f39fb2a65e0766cf8cc80446ac157bc3d70d09bebb701b2b46db9"
+      "bytes": 54678,
+      "sha256": "e8dabfe970bb6bcef7b4d54ce9cb795994650e27d4995bd8ce3ac3ace65d262a"
+    },
+    {
+      "path": "docs/DELIVERY.md",
+      "bytes": 13083,
+      "sha256": "14b17dcea43f8b0ff97730e5c50f031220707a158d3559b4c67e489484df3955"
     },
     {
       "path": "docs/WRITE_QUALITY_V014.md",
-      "bytes": 18562,
-      "sha256": "ae822c770fadac401b5a38ccfb56790616ecfb1520f2105a95e0ca0dd9951bc5"
+      "bytes": 18722,
+      "sha256": "ba5ea5fbfc43d3feb6b9bfdd4c88e7049b82a4f5d76117ca4daf084fbb5b6554"
+    },
+    {
+      "path": "eval/README.md",
+      "bytes": 27066,
+      "sha256": "acc962aee60fd9ef55b90f62684ed698b00fac26d3b615a15b8d8bdaae148550"
     },
     {
       "path": "eval/fixtures/write_quality_v014.json",
@@ -96,5 +106,6 @@
       "bytes": 23032,
       "sha256": "218e025cf295e565aa4e425a173677d1e5bae4081fd0100e648d5e72eef87366"
     }
-  ]
+  ],
+  "final_implementation_commit": "6733db9"
 }

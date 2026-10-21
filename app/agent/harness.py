@@ -152,6 +152,19 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
 
     user_msg_id = user_message_id or repo.add_message(conn, conversation_id, "user", user_text)
     conn.commit()
+    locked_write_scope = None
+    if user_message_id:
+        previous = conn.execute("SELECT content,tool_calls FROM message WHERE id=? AND conversation_id=? AND role='user'",
+                                (user_msg_id, conversation_id)).fetchone()
+        if previous is None or previous['content'] != user_text:
+            raise ValueError('原用户消息不属于此对话或内容不一致')
+        previous_data = conversation_scope._metadata(previous['tool_calls'])
+        previous_scope = previous_data.get('conversation_scope')
+        previous_intent = previous_data.get('turn_intent')
+        if isinstance(previous_scope, dict) and previous_scope.get('mode') in {'single', 'multiple'} \
+                and isinstance(previous_intent, dict) and previous_intent.get('allow_writes') is True:
+            locked_write_scope = deepcopy(previous_scope)
+    defer_scope = expected_read_scope is not None or locked_write_scope is not None
     context_id = context_message_id or user_msg_id
     if context_id != user_msg_id:
         from app.jobs.chat_reanalysis import context_scope
@@ -160,9 +173,10 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
             raise ValueError('重新分析原文与原消息不一致')
         context_id = original['id']
     else:
-        read_scope = conversation_scope.for_user_message(conn, conversation_id, context_id, user_text)
+        resolver = conversation_scope.resolve_user_message if defer_scope else conversation_scope.for_user_message
+        read_scope = resolver(conn, conversation_id, context_id, user_text)
     focus = memory_focus.for_user_message(conn, conversation_id, context_id, user_text, read_scope,
-                                          persist=context_id == user_msg_id)
+                                          persist=context_id == user_msg_id and not defer_scope)
     read_scope = {**focus['read_scope'], 'user_message_id': user_msg_id}
     if context_id != user_msg_id:
         read_scope['context_message_id'] = context_id
@@ -171,6 +185,11 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
         if not isinstance(expected_read_scope, dict) or any(
                 read_scope.get(key) != expected_read_scope.get(key) for key in keys):
             raise ValueError('原问题的人物范围已变化，请重新明确提问')
+    if locked_write_scope is not None and any(read_scope.get(key) != locked_write_scope.get(key)
+            for key in ('version', 'conversation_id', 'user_message_id', 'mode', 'person_ids', 'blocked')):
+        raise ValueError('原记事选择的人物已变化，不能重放写入，请重新指定人物')
+    from app.memory.write_grounding import freeze_write_aliases
+    write_scope = freeze_write_aliases(conn, read_scope, user_text)
     try:
         llm = get_llm()
     except Exception:
@@ -211,12 +230,17 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
             if llm is None:
                 raise ValueError('模型服务配置不可用，记事尚未保存，请检查设置后重试。')
             emit("progress", {"message": "提取记事原文并检查身份与来源"})
-            known = [p["display_name"] for p in repo.all_active_persons(conn)][:100]
+            known = list(dict.fromkeys([
+                *(alias for pid in read_scope['person_ids'] for alias in repo.aliases_of(conn, pid)),
+                *(p['display_name'] for p in repo.all_active_persons(conn))]))[:100]
             anchor_ts = conn.execute('SELECT created_at FROM message WHERE id=?', (context_id,)).fetchone()[0]
             extraction = extract.extract_from_text(record_text, known, ms_to_local_str(anchor_ts)[:10])
             from app.memory import apply as apply_mod
             applied = apply_mod.apply_extraction(conn, extraction, user_msg_id, record_text,
-                                                evidence_id=intent['evidence_id'])
+                                                evidence_id=intent['evidence_id'], read_scope=write_scope)
+            user_metadata['write_audit'] = applied['write_audit']
+            conn.execute('UPDATE message SET tool_calls=? WHERE id=?',
+                         (json.dumps(user_metadata, ensure_ascii=False), user_msg_id))
             outcomes = applied["outcomes"]
             pending_ids = applied["pending_ids"]
             linked = [(pid, "mentioned") for pid in applied.get("person_ids", [])]
@@ -316,7 +340,8 @@ def run_turn(conn, conversation_id: str, user_text: str, emit=None, user_message
             try:
                 result = tools.execute_tool(conn, tc["function"]["name"], args,
                                             source_text=user_text, source_msg_id=user_msg_id,
-                                            read_scope=read_scope, turn_intent=execution_intent)
+                                            read_scope=write_scope if tc['function']['name'] in tools._WRITE_TOOLS else read_scope,
+                                            turn_intent=execution_intent)
             except Exception as e:  # noqa: BLE001
                 result = {"ok": False, "error": str(e)}
             if tc['function']['name'] in {'get_person', 'query_memory'}:

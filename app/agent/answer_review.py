@@ -14,6 +14,7 @@ import re
 from app.agent.source_registry import _prose_references, compact_source
 from app.agent.json_protocol import JSONProtocolError, parse_json_object
 from app.agent.answer_records import literal_generated_text, render_source_record
+from app.agent.prompts import DRAFTING_RULES
 
 _SOURCE_ID = re.compile(r'S[1-9]\d*\Z')
 _MARKER = re.compile(r'\[\[.*?\]\]', re.DOTALL)
@@ -95,6 +96,11 @@ runtime_context.presentation.generation_requested为true时，可以另用draft�
 或用advice给所要的行动建议。必须忠实于资料条件，不能补出性别、适用范围、日期和已保存结果。
 起草也不能虚构用户已经完成发送、约定、确认或其他行动；未发生的动作使用待执行或待确认措辞。
 后续缩短、翻译、润色请求应继续完成所要求的文本操作，保留原文条件与行动时态。
+presentation.draft_requested为true时，必须实际给出draft正文；可填的数量、交期、清单内容等
+未知时使用明确占位并另列发送前步骤，不能只返回资料、建议或no_answer。若缺少原文等
+确实无法起草的必要输入，只能用clarification提出具体问题，不能用通用“补充人物或问题”替代。
+generation_requested为true时clarification的text应为具体问题，不能夹带人物结论；
+系统会保留为待补信息，不视为草稿已完成。可以同时有draft与具体的待补问题。
 draft/advice不能有来源ID；生成正文与服务端记录分开显示。generation_requested为false时
 不允许生成正文或自由解释；需要澄清时使用clarification空text，系统会显示固定澄清提示。
 answer_type仍按内容种类声明；服务端会从校验后的段落推导最终类型，标签不一致会留审计。
@@ -187,10 +193,15 @@ def _validate(raw, available, draft, context):
             if ids:
                 raise ValueError('nonfact_has_sources')
             if kind == 'clarification':
-                block = '请补充要查询的人物、记录或具体问题，以便继续核对资料。'
+                if generation:
+                    if not text.strip() or len(text) > _MAX_ANSWER_CHARS:
+                        raise ValueError('empty_generation_clarification')
+                    block = '待补信息：\n\n' + literal_generated_text(text.strip())
+                else:
+                    block = '请补充要查询的人物、记录或具体问题，以便继续核对资料。'
                 kinds.add(kind)
                 blocks.append(block)
-                rendered.append({'kind': kind, 'text': '', 'source_ids': []})
+                rendered.append({'kind': kind, 'text': text.strip() if generation else '', 'source_ids': []})
                 continue
             if not generation:
                 suppressed.append(kind)
@@ -253,6 +264,15 @@ def _validate(raw, available, draft, context):
     if not blocks:
         blocks, kinds = [_NO_ANSWER], {'no_answer'}
         rendered.append({'kind': 'no_answer', 'text': '', 'source_ids': []})
+    draft_requested = generation and context['presentation'].get('draft_requested') is True
+    if draft_requested and not kinds.intersection({'draft', 'clarification'}):
+        raise ValueError('requested_draft_missing')
+    value['generation_task'] = {
+        'draft_requested': draft_requested, 'draft_present': 'draft' in kinds,
+        'clarification_present': 'clarification' in kinds,
+        'status': 'draft_provided' if 'draft' in kinds else 'needs_input' if draft_requested else 'not_requested',
+        'method': 'segment_shape_only', 'semantic_verified': False,
+    }
     value['declared_answer_type'] = value['answer_type']
     value['answer_type'] = _classification(kinds)
     value['answer_type_normalized'] = value['declared_answer_type'] != value['answer_type']
@@ -316,6 +336,10 @@ def review_answer(llm, question, draft_answer, sources, *, context=None):
     def unavailable(reason):
         metadata['unavailable_reason'] = reason
         if records:
+            if reason == 'requested_draft_missing':
+                return {'answer': '本轮没有生成所请求的草稿，请重试回答。记忆处理结果请以下方回执为准。',
+                        'metadata': metadata, 'warnings': [{'code': 'review_unavailable',
+                        'message': '修订结果缺少所请求的草稿，未将建议或资料展示当作任务完成。'}]}
             return {'answer': '本轮资料核对未完成，请重试回答。记忆处理结果请以下方回执为准。',
                     'metadata': metadata, 'warnings': [{'code': 'review_unavailable',
                     'message': '资料核对未完成，未展示未经核对的草稿。'}]}
@@ -351,7 +375,7 @@ def review_answer(llm, question, draft_answer, sources, *, context=None):
             return unavailable('input_budget_exceeded')
         # No chat_json or correction loop: a malformed model response fails
         # closed instead of spending additional revision attempts.
-        response = llm.chat([{'role': 'system', 'content': _SYSTEM + (_RECORD_SYSTEM if records else '')},
+        response = llm.chat([{'role': 'system', 'content': _SYSTEM + (_RECORD_SYSTEM + '\n' + DRAFTING_RULES if records else '')},
                              {'role': 'user', 'content': body}],
                             tier='mid', temperature=0, max_tokens=6000)
         if not isinstance(response, dict) or response.get('tool_calls'):
@@ -378,6 +402,7 @@ def review_answer(llm, question, draft_answer, sources, *, context=None):
                         declared_answer_type=proposed['declared_answer_type'],
                         answer_type_normalized=proposed['answer_type_normalized'],
                         response_envelope=proposed['response_envelope'],
+                        generation_task=proposed['generation_task'],
                         suppressed_segment_kinds=proposed['suppressed_segment_kinds'])
         return {'answer': answer, 'metadata': metadata, 'warnings': []}
     except Exception:

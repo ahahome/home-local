@@ -91,11 +91,11 @@ def setup_recovery(conn, monkeypatch):
 
     def extract(source, *args):
         inputs.append(source)
-        # Preserve the real failure shape: extraction loses the existing unique
-        # alias, leaving the entire patch pending; the later grounded tool writes
-        # the city to the user's selected person after the initial card snapshot.
+        # Identity now follows the selected alias. Keep a legitimate low-
+        # confidence field pending so the later grounded tool still changes the
+        # initial card snapshot, independently of the old identity-loss bug.
         return {'people': [{'name': '周汐', 'canonical_name': '周汐', 'aliases': [],
-            'fields': [{'field': 'city', 'value': '长沙', 'confidence': .9,
+            'fields': [{'field': 'city', 'value': '长沙', 'confidence': .7,
                         'evidence': '现在住在长沙', '_source_verified': True}],
             'facts': [], 'relations': [], 'promises': [], 'ledger': []}], 'my_notes': []}
 
@@ -136,7 +136,7 @@ def test_committed_city_and_pending_survive_fresh_readonly_answer_without_reextr
     assert repo.current_fields(conn, music)['city']['value'] == '长沙'
     assert conn.execute('SELECT COUNT(*) FROM applied_patch WHERE person_id=? AND field=?', (music, 'city')).fetchone()[0] == 1
     pending = conn.execute('SELECT * FROM pending_item').fetchall()
-    assert len(pending) == 1 and pending[0]['kind'] == 'person_identity' and pending[0]['resolved_at'] is None
+    assert len(pending) == 1 and pending[0]['kind'] == 'field' and pending[0]['resolved_at'] is None
     assert result['pending_ids'] == [pending[0]['id']]
     assert any(outcome['status'] == 'pending' for outcome in result['outcomes'])
     assert any(outcome['status'] == 'ok' and outcome['detail'] == 'city=长沙' for outcome in result['outcomes'])

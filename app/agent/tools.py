@@ -250,15 +250,27 @@ def _denied_write(name, reason):
 
 
 def _person_arg_grounded(conn, args, text, read_scope):
+    from app.memory.write_grounding import mentions, scoped_pronoun_reference
     person = args.get('person')
     pid = args.get('person_id')
+    if isinstance(read_scope, dict) and read_scope.get('blocked'):
+        return False
     if person or pid:
         aliases = repo.aliases_of(conn, pid) if pid else [person]
-        mentioned = any(isinstance(alias, str) and alias and alias in text for alias in aliases)
+        if pid and person and person not in aliases:
+            return False
+        found = mentions(conn, text)
+        mentioned = any(ids == {pid} for _, _, _, ids in found) if pid else \
+            any(isinstance(alias, str) and alias and alias in text for alias in aliases)
+        selected_name = (pid and isinstance(read_scope, dict) and read_scope.get('mode') == 'single'
+                         and read_scope.get('person_ids') == [pid] and
+                         any(pid in ids for _, _, _, ids in found) and
+                         not any(pid not in ids for _, _, _, ids in found))
         scoped_pronoun = (isinstance(read_scope, dict) and read_scope.get('mode') == 'single'
                           and read_scope.get('person_ids') == [pid]
-                          and re.search(r'[他她]|对方|\b(?:he|she|they)\b', text, re.I))
-        if not mentioned and not (pid and pid in text) and not scoped_pronoun:
+                          and scoped_pronoun_reference(text)
+                          and not any(pid not in ids for _, _, _, ids in found))
+        if not mentioned and not selected_name and not (pid and pid in text) and not scoped_pronoun:
             return False
     return True
 
@@ -420,6 +432,9 @@ def execute_tool(conn, name: str, args: dict, source_text: str | None = None,
                  turn_intent: dict | None = None) -> dict:
     from app.memory.writes import AmbiguousPerson
     try:
+        if name in _WRITE_TOOLS:
+            from app.memory.write_grounding import validate_write_scope
+            validate_write_scope(conn, source_text or '', read_scope)
         if name in _WRITE_TOOLS and turn_intent is not None:
             from app.agent.turn_intent import write_text
             grounded = write_text(turn_intent, source_text)
@@ -435,6 +450,13 @@ def execute_tool(conn, name: str, args: dict, source_text: str | None = None,
             if bound_span is None:
                 return _denied_write(name, '人物、内容、金额、日期或操作不在同一段已确认的记事原话中；请明确操作对象与日历日期。')
             source_text = bound_span
+            if name in {'save_person_fact', 'record_transfer', 'create_promise'} and args.get('person'):
+                from app.memory.write_grounding import scoped_identity
+                bound = scoped_identity(conn, {'name': args['person']}, bound_span, read_scope)
+                if bound:
+                    if args.get('person_id') and args['person_id'] != bound:
+                        return _denied_write(name, '人物称呼与选择的人物不一致。')
+                    args = {**args, 'person_id': bound}
         if name in {"save_person_fact", "record_transfer", "create_promise", "note"}:
             return _shared_write(conn, name, args, source_text, source_msg_id)
         if name in {'query_memory', 'get_person'}:
@@ -503,6 +525,8 @@ def _shared_write(conn, name, args, source_text, source_msg_id):
         person = args.get("person")
         if not person and not args.get('person_id'):
             raise ValueError("请指定对应人物")
+        if person and args.get('person_id') and person not in repo.aliases_of(conn, args['person_id']):
+            raise ValueError('人物称呼与人物ID不一致，请重新选择')
         pid = resolve_person(conn, person, person_id=args.get('person_id'), create=True)
         person = person or repo.get_person(conn, pid)['display_name']
         forced[person] = pid

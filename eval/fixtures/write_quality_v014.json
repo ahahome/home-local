@@ -1,0 +1,102 @@
+{
+  "version": "0.14.0-write-quality-1",
+  "provenance": "fictional_records_with_natural_questions",
+  "description": "内部虚构开发验收；known_regression 保留0.13已暴露反例，new_wording 在实现冻结前由独立验收代理构造并冻结且不向实现者披露文本。后者仅为内部新措辞，非外部盲测、用户分布或语义准确率。第一次采样后即为已知开发语料，所有失败与原答案保留。",
+  "persons": [
+    {"key": "yu", "name": "余麦", "aliases": ["小麦"]},
+    {"key": "zhou_pottery", "name": "周汐", "aliases": ["陶艺周汐"]},
+    {"key": "zhou_music", "name": "周汐", "aliases": ["乐团周汐"]},
+    {"key": "zhu", "name": "祝遥", "aliases": []},
+    {"key": "bai", "name": "白芮", "aliases": ["阿芮"]},
+    {"key": "yuan_book", "name": "袁牧", "aliases": ["书店袁牧"]},
+    {"key": "yuan_hike", "name": "袁牧", "aliases": ["登山袁牧"]},
+    {"key": "qiao", "name": "乔安", "aliases": ["小乔"]}
+  ],
+  "fields": [
+    {"key": "yu_company", "person": "yu", "field": "company", "value": "白桥照明", "valid_from": 1767225600000},
+    {"key": "bai_company", "person": "bai", "field": "company", "value": "旧川仪器", "valid_from": 1767225600000},
+    {"key": "qiao_company", "person": "qiao", "field": "company", "value": "鹿鸣纸品", "valid_from": 1767225600000}
+  ],
+  "memories": [
+    {"key": "yu_quote", "person": "yu", "text": "余麦说讨论样品报价时先发邮件列出数量和交期，收到信息后再约语音。", "ts": 1768006800000},
+    {"key": "pottery_order", "person": "zhou_pottery", "text": "陶艺周汐说接定制订单时先发器型参考图和尺寸，材料确认后才讨论工期。", "ts": 1768093200000},
+    {"key": "music_order", "person": "zhou_music", "text": "乐团周汐说演出邀约先邮件发场地与曲目范围，排练期间不接电话。", "ts": 1768179600000},
+    {"key": "bai_contact", "person": "bai", "text": "白芮说技术合作的事情先把问题清单发邮件，收到后再约电话。", "ts": 1768006800000},
+    {"key": "yuan_hike_contact", "person": "yuan_hike", "text": "登山袁牧说路线协调先发邮件列出出发点和人数，名单确认之后再开语音会。", "ts": 1768266000000},
+    {"key": "yuan_book_contact", "person": "yuan_book", "text": "书店袁牧说选书合作先发书目，周五集中看资料，不接受临时语音。", "ts": 1768352400000},
+    {"key": "qiao_contact", "person": "qiao", "text": "乔安说定制纸品先在邮件里给出纸张克重和印刷数量，样张通过之后再谈排产。", "ts": 1768438800000}
+  ],
+  "interactions": [],
+  "scenarios": [
+    {
+      "id": "known-alias-city-mixed", "cohort": "known_regression", "tags": ["identity", "mixed"],
+      "steps": [
+        {"op": "chat", "text": "周汐的邀约应该先怎么沟通？", "expect": {"intent": "query", "no_memory_writes": true, "ambiguity": ["zhou_pottery", "zhou_music"], "no_pending": true, "review_points": ["同名先澄清，不依据邀约猜人物。"]}},
+        {"op": "chat", "text": "是乐团周汐。帮我记下：乐团周汐现在住在长沙。再查她演出邀约需要先发什么。", "expect": {"intent": "mixed", "saved_fields": [{"person": "zhou_music", "field": "city", "value": "长沙"}], "absent_fields": [{"person": "zhou_music", "field": "company"}, {"person": "zhou_music", "field": "title"}], "unchanged_persons": ["zhou_pottery"], "allowed_persons": ["zhou_music"], "required_dependency_records": ["music_order"], "forbidden_source_records": ["pottery_order"], "no_pending": true, "review_points": ["长沙真实写入正确人物；乐团只是既有身份别名，不得成为公司或职位；邀约答案需保留场地、曲目及排练不接电话。"]}}
+      ]
+    },
+    {
+      "id": "known-institution-is-complete", "cohort": "known_regression", "tags": ["institution"],
+      "steps": [
+        {"op": "chat", "text": "帮我记下：祝遥现在在云岸策展工作。", "expect": {"intent": "record", "saved_fields": [{"person": "zhu", "field": "company", "value": "云岸策展"}], "absent_fields": [{"person": "zhu", "field": "title"}], "unchanged_persons": ["yu", "zhou_pottery", "zhou_music"], "no_pending": true, "review_points": ["完整公司名应为云岸策展，不拆为云岸和策展，不得把岗位猜测挂待确认。"]}},
+        {"op": "chat", "text": "查一下祝遥现在的公司和职位，有记录就列出来。", "expect": {"intent": "query", "no_memory_writes": true, "allowed_persons": ["zhu"], "review_points": ["回读当前完整公司，职位未记录应明确未知；不能借查询补出职位。"]}}
+      ]
+    },
+    {
+      "id": "known-explicit-company-and-role", "cohort": "known_regression", "tags": ["institution", "explicit_role"],
+      "steps": [
+        {"op": "chat", "text": "记下：祝遥目前就职于澄江文化传播有限公司，职位是项目经理。", "expect": {"intent": "record", "saved_fields": [{"person": "zhu", "field": "company", "value": "澄江文化传播有限公司"}, {"person": "zhu", "field": "title", "value": "项目经理"}], "no_pending": true, "review_points": ["机构名完整保留，明确职位正常保存；不能用禁止推断的修复吞掉真实职位。"]}}
+      ]
+    },
+    {
+      "id": "known-switch-and-retry", "cohort": "known_regression", "tags": ["scope", "retry"],
+      "steps": [
+        {"op": "chat", "text": "帮我记下：余麦现在住在杭州。", "expect": {"intent": "record", "saved_fields": [{"person": "yu", "field": "city", "value": "杭州"}], "unchanged_persons": ["zhu"], "no_pending": true, "review_points": ["第一条真实事实归余麦。"]}},
+        {"op": "chat", "text": "换成祝遥，帮我记下她现在住在昆明。", "expect": {"intent": "record", "saved_fields": [{"person": "zhu", "field": "city", "value": "昆明"}], "unchanged_persons": ["yu"], "no_pending": true, "review_points": ["换人后昆明归祝遥，不回写余麦。"]}},
+        {"op": "retry", "source_step": 1, "expect": {"intent": "record", "no_memory_writes": true, "saved_fields": [{"person": "yu", "field": "city", "value": "杭州"}, {"person": "zhu", "field": "city", "value": "昆明"}], "allowed_persons": ["yu"], "no_pending": true, "review_points": ["模拟持久任务对旧user_message_id重试；复用原判定与原人物，不重写、不产生重复提案，也不能把旧事实写到当前人物。"]}},
+        {"op": "chat", "text": "余麦和祝遥现在各住哪里？分开列一下。", "expect": {"intent": "query", "no_memory_writes": true, "allowed_persons": ["yu", "zhu"], "review_points": ["多人读取显示各自当前城市，不能合并档案或将一个人的城市覆盖另一个。"]}}
+      ]
+    },
+    {
+      "id": "known-mail-and-revision", "cohort": "known_regression", "tags": ["draft", "revision"],
+      "steps": [
+        {"op": "chat", "text": "按小麦说的报价流程，拟一封询问样品价格的短邮件，数量和交期我还没整理好。", "expect": {"intent": "query", "no_memory_writes": true, "allowed_persons": ["yu"], "required_dependency_records": ["yu_quote"], "review_points": ["必须给可编辑邮件；数量/交期留清楚占位，先补齐后询价；不可虚称已经整理、发送或获得报价。"]}},
+        {"op": "chat", "text": "保留原意，压到三十字以内，语气随和一点；然后提醒我发之前还有什么没补。", "expect": {"intent": "query", "no_memory_writes": true, "allowed_persons": ["yu"], "review_points": ["真正缩写上条邮件；三十字限制只针对草稿，提醒另列；保留未填数量和交期，发前提醒可执行。"]}}
+      ]
+    },
+    {
+      "id": "known-followup-attachment", "cohort": "known_regression", "tags": ["followup", "draft", "attachment"],
+      "steps": [
+        {"op": "prepare", "person": "bai", "goal": "写一段约白芮讨论传感器技术合作的邮件草稿；问题清单还没发送。", "expect": {"no_memory_writes": true, "review_points": ["真实followup HTTP任务产出邮件，先邮件清单、收到后再电话；没有附件实体，不能无占位/发送前提示便写我已整理或请见附件。"]}}
+      ]
+    },
+    {
+      "id": "new-selected-alias-scope", "cohort": "new_wording", "tags": ["identity", "mixed", "scope"],
+      "steps": [
+        {"op": "chat", "text": "袁牧对路线协调有什么沟通要求？", "expect": {"intent": "query", "no_memory_writes": true, "ambiguity": ["yuan_book", "yuan_hike"], "no_pending": true, "review_points": ["同名澄清，不靠路线协调自动挑登山别名。"]}},
+        {"op": "chat", "text": "说的是登山袁牧；顺便替我存一下，她已搬到贵阳了。再告诉我协调路线该先备哪些信息。", "expect": {"intent": "mixed", "saved_fields": [{"person": "yuan_hike", "field": "city", "value": "贵阳"}], "absent_fields": [{"person": "yuan_hike", "field": "company"}, {"person": "yuan_hike", "field": "title"}], "unchanged_persons": ["yuan_book"], "allowed_persons": ["yuan_hike"], "required_dependency_records": ["yuan_hike_contact"], "forbidden_source_records": ["yuan_book_contact"], "no_pending": true, "review_points": ["贵阳真实归选中的袁牧，登山不推成职业/机构；回查出发点、人数和名单确认后语音条件。"]}}
+      ]
+    },
+    {
+      "id": "new-institution-explicit-role", "cohort": "new_wording", "tags": ["institution", "explicit_role"],
+      "steps": [
+        {"op": "chat", "text": "留个记录：小乔如今在森屿空间设计上班。", "expect": {"intent": "record", "saved_fields": [{"person": "qiao", "field": "company", "value": "森屿空间设计"}], "absent_fields": [{"person": "qiao", "field": "title"}], "no_pending": true, "review_points": ["机构名尾部空间设计属于完整机构；没有岗位陈述，不写设计为职位，也不留待确认职业。"]}},
+        {"op": "chat", "text": "再补一条，小乔在森屿空间设计担任采购主管，职位这个字段也记进去。", "expect": {"intent": "record", "saved_fields": [{"person": "qiao", "field": "company", "value": "森屿空间设计"}, {"person": "qiao", "field": "title", "value": "采购主管"}], "no_pending": true, "review_points": ["承接同一人物，完整机构不变；明确岗位保存，不因保守机构规则被吞。"]}}
+      ]
+    },
+    {
+      "id": "new-mail-before-send", "cohort": "new_wording", "tags": ["draft", "revision", "attachment"],
+      "steps": [
+        {"op": "chat", "text": "小乔那边要询一批定制便签的价，照她的沟通要求帮我起封邮件。克重和印量都还没定，样张也没有。", "expect": {"intent": "query", "no_memory_writes": true, "allowed_persons": ["qiao"], "required_dependency_records": ["qiao_contact"], "review_points": ["给实际邮件，克重/印量显式占位或先补信息；样张没通过不能提前谈排产。无附件实体，不能虚称附样张；不擅自发邮件。"]}},
+        {"op": "chat", "text": "改成两句话就够了，别太正式，末尾另列我点发送之前要补齐的项目。", "expect": {"intent": "query", "no_memory_writes": true, "allowed_persons": ["qiao"], "review_points": ["实际改稿为两句，可编辑且随和；待补克重、印量和样张阶段关系不丢；发送前项目另列，不用来源卡代替草稿。"]}}
+      ]
+    }
+  ],
+  "human_review_rubric": [
+    "逐步检查实际当前字段、历史字段、pending原文与owner，以及本轮完整域表变化；保存回执和intent不能代替数据库事实。",
+    "机构/职位与人物绑定不由字符串包含推定正确，逐句对照用户原话与既有人物；明确岗位反例必须保留。",
+    "邮件、改稿、发送前步骤逐项人工/代理对照；重点核对未决输入、先后条件与附件/发送/完成等状态，不让格式正确掩盖任务遗漏。",
+    "仅内部虚构开发回归与新措辞；确定性检查数、代理证据审阅均不是独立人工准确率，也没有使用模型自评。",
+    "所有首次结果与失败保留，语料和runner冻结后不为使结果转绿而调整期望。"
+  ]
+}

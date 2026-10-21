@@ -18,6 +18,7 @@ from app.memory import disambiguate
 from app.memory.writes import (ledger_key, promise_key, resolve_person, AmbiguousPerson, discard_key,
                               matching_promise, explicit_transfer_direction, archived_only_aliases)
 from app.memory.extract import is_role_person, is_task_note
+from app.memory.write_grounding import constrain_person, scoped_identity, is_pronoun
 from app.store import repo
 from app.store.db import savepoint
 from app.util import (clamp, new_id, normalize_value, now_ms, patch_fingerprint,
@@ -43,7 +44,7 @@ class Outcome(dict):
 def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerpt: str,
                      channel: str = "chat", forced: dict[str, str] | None = None,
                      evidence_id: str | None = None, commit: bool = True,
-                     index_names: bool = True) -> dict:
+                     index_names: bool = True, read_scope: dict | None = None) -> dict:
     """把 extract 的结构化结果落库。返回 {outcomes, person_ids, pending_ids}。
 
     forced: {canonical_name: person_id}，用于「用户已确认身份」的重放——绕过二次消歧。
@@ -53,6 +54,7 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
     outcomes: list[dict] = []
     person_ids: list[str] = []
     pending_ids: list[str] = []
+    write_audit: list[dict] = []
     def rejected(kind, fp):
         return repo.has_patch(conn, discard_key(kind, fp, source_msg_id))
 
@@ -95,14 +97,57 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
             outcomes.append(Outcome("person", "skipped",
                                     f"{name} 是角色词/亲属称谓，不建档（FR-ID-01）"))
             continue
+        selected = resolve_person(conn, person_id=forced[name]) if name in forced else \
+            scoped_identity(conn, p, evidence_excerpt, read_scope)
+        original_identity = {'name': p['name'], 'canonical_name': name}
+        p, constraints = constrain_person(conn, p, evidence_excerpt, selected)
+        for check in constraints:
+            write_audit.append({**check, 'identity': original_identity})
+            if check['action'] == 'skipped':
+                outcomes.append(Outcome(check['kind'], 'skipped',
+                    '原文称呼或工作单位片段不足以支持这项独立事实，未保存。'))
+        if selected:
+            display = repo.get_person(conn, selected)['display_name']
+            write_audit.append({'kind': 'identity', 'action': 'bound',
+                'reason': 'explicit_confirmation' if name in forced else 'scoped_exact_mention',
+                'candidate': original_identity, 'person_id': selected, 'display_name': display})
+            # Preserve an actual known alias, but do not register a pronoun or
+            # model-invented canonical spelling as a new name.
+            if p['name'] not in repo.aliases_of(conn, selected):
+                p['name'] = display
+            p['canonical_name'] = name = display
+        elif is_pronoun(p['name']):
+            outcomes.append(Outcome('person', 'skipped', '记事中的代词无法唯一绑定，未建立人物或保存事实。'))
+            continue
         # ---- 身份消歧（forced 命中的跳过：用户已确认身份） ----
-        if name in forced:
-            person_id = forced[name]
+        if selected:
+            person_id = selected
         else:
             if {name, p.get('name')} & archived_only_aliases(conn):
                 outcomes.append(Outcome('person', 'skipped',
                                         f'{name} 对应已归档人物，不自动建档或更新，请先恢复或明确另建人物'))
                 continue
+            # A model's canonical spelling is not evidence that a new mention
+            # is an existing person. Exact original aliases win; unsupported
+            # renaming to an existing identity requires explicit confirmation.
+            original = p['name']
+            exact = conn.execute('SELECT DISTINCT p.id FROM person p JOIN person_alias a ON p.id=a.person_id '
+                "WHERE a.alias=? AND p.deleted_at IS NULL AND p.status!='merged'", (original,)).fetchall()
+            canonical = conn.execute('SELECT DISTINCT p.id FROM person p JOIN person_alias a ON p.id=a.person_id '
+                "WHERE a.alias=? AND p.deleted_at IS NULL AND p.status!='merged'", (name,)).fetchall()
+            if original != name and not exact and canonical:
+                pid_pending = repo.add_pending(conn, 'person_identity', {
+                    'mention': original, 'canonical_name': name,
+                    'candidates': [{'person_id': row['id'], 'display_name': repo.get_person(conn, row['id'])['display_name'],
+                                    'score': 0.0} for row in canonical],
+                    'patch': p, 'source_msg_id': source_msg_id, 'channel': channel,
+                    'evidence_id': evidence_id, 'source_text': evidence_excerpt, 'fingerprint': identity_fp,
+                }, reason='模型规范名与原文称呼不一致，请确认人物身份')
+                pending_ids.append(pid_pending)
+                outcomes.append(Outcome('person', 'pending', f'{original} 的人物归属待确认'))
+                continue
+            if original != name:
+                p['canonical_name'] = name = original
             res = disambiguate.resolve(conn, name)
             if res.kind == "confirm":
                 # 存疑必回问（P1）：整条 patch 挂起，等用户确认身份后再应用
@@ -131,6 +176,8 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
         # ---- 字段（双时态 upsert + 置信度分档 + 指纹幂等） ----
         for f in p["fields"]:
             confidence = min(f['confidence'], .7) if f.get('_source_verified') is False else f['confidence']
+            if f.get('_write_constraint_reason'):
+                confidence = min(confidence, .7)
             fp = patch_fingerprint(person_id, f["field"], f["value"], source_msg_id)
             if rejected('field', fp):
                 outcomes.append(Outcome('field', 'skipped', f"{f['field']}：这条来源的信息已被丢弃"))
@@ -153,7 +200,8 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
                             "evidence_id": evidence_id, "source_msg_id": source_msg_id,
                             "fingerprint": fp,
                             "valid_from": f.get("valid_from"),
-                        }, reason="原文凭证无法核验，待确认" if f.get('_source_verified') is False else "置信度不足，待确认")
+                        }, reason='工作单位边界不明确，请核对完整机构名后处理' if f.get('_write_constraint_reason') else
+                            "原文凭证无法核验，待确认" if f.get('_source_verified') is False else "置信度不足，待确认")
                         pending_ids.append(pid2)
                         outcomes.append(Outcome("field", "pending", f"{f['field']}={f['value']}"))
                     else:
@@ -364,7 +412,8 @@ def apply_extraction(conn, extraction: dict, source_msg_id: str, evidence_excerp
 
     if commit:
         conn.commit()
-    return {"outcomes": outcomes, "person_ids": person_ids, "pending_ids": pending_ids}
+    return {"outcomes": outcomes, "person_ids": person_ids, "pending_ids": pending_ids,
+            'write_audit': write_audit}
 
 
 def _index_person_name(conn, person_id: str, name: str) -> None:

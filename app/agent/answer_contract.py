@@ -33,6 +33,12 @@ _TEXT_STYLE = re.compile(_COMMAND_PREFIX +
     + _COMMAND_PREFIX + r'保留(?:原意|原来的意思|原有条件)', re.I)
 _GUIDANCE = re.compile(_COMMAND_PREFIX +
     r'(?:提醒我|提醒一下|列出|列一下).{0,30}(?:步骤|准备|注意|发(?:送)?(?:前|之前)|遗漏|没补|补什么|检查)', re.I)
+# Unlike a bare occurrence of "write an email", an imperative at the clause
+# start requests a new draft. Questions about earlier writing remain readbacks.
+_WRITE_DRAFT = re.compile(
+    r'^(?:(?:please|can you|could you|would you|and|then)\s+)*write\s+'
+    r'(?:(?:me|us|a|an|the|short|brief|polite|formal)\s+){0,4}'
+    r'(?:email|letter|message|reply)\b', re.I)
 
 _NEGATED = re.compile(r'(?:不要|不用|无需|不必|别|不想|不需要).{0,8}$|'
                       r'\b(?:do not|don\x27t|no need to|without)\s+(?:\w+\s+){0,3}$', re.I)
@@ -44,10 +50,15 @@ _PAST_CONTEXT = re.compile(r'(?:当时|以前|之前|曾经)|^(?:他|她|他们|
 _REQUEST_PREFIX = re.compile(r'请|帮我|替我|麻烦|能否|能不能|想要')
 _CLAUSES = re.compile(r'[，,。！？!?；;\n]+|但是|但|不过|而是|\bbut\b', re.I)
 _GREETING = re.compile(r'\s*(?:你好|您好|嗨|哈[喽啰]|早上好|晚上好|谢谢|hello|hi|thanks)[！!。,.，\s]*', re.I)
+_DRAFT_OUTPUT = re.compile(
+    r'起草|草拟|拟[一几条份段个封]|拟写|代[写笔]|写(?:一|个|条|段|封|份|给)|'
+    r'回复(?:一|他|她|对方)|开场白|话术|文案|措辞|'
+    r'\b(?:draft|compose|rewrite)\b', re.I)
 
 
 def presentation_contract(question):
     requested = False
+    draft_requested = False
     if isinstance(question, str):
         requested = bool(_GREETING.fullmatch(question))
         for clause in _CLAUSES.split(question):
@@ -56,11 +67,15 @@ def presentation_contract(question):
                        if not _PAST_CONTEXT.search(clause[:match.start()]) or
                        _REQUEST_PREFIX.search(clause[:match.start()])]
             if not _TEXT_READBACK.search(clause):
-                matches += [match for pattern in (_TEXT_TRANSFORM, _TEXT_TARGET, _TEXT_STYLE, _GUIDANCE)
+                matches += [match for pattern in (_TEXT_TRANSFORM, _TEXT_TARGET, _TEXT_STYLE, _GUIDANCE, _WRITE_DRAFT)
                             for match in pattern.finditer(clause)]
             if not _NEGATED_COMMAND.search(clause) and any(
                     not _NEGATED.search(clause[:match.start()]) for match in matches):
                 requested = True
-                break
-    return {'version': 1, 'facts': 'server_records', 'generation_requested': requested,
+                draft_requested = draft_requested or any(
+                    not _NEGATED.search(clause[:match.start()])
+                    for pattern in (_DRAFT_OUTPUT, _TEXT_TRANSFORM, _TEXT_TARGET, _TEXT_STYLE, _WRITE_DRAFT)
+                    for match in pattern.finditer(clause))
+    return {'version': 2, 'facts': 'server_records', 'generation_requested': requested,
+            'draft_requested': draft_requested,
             'method': 'conservative_language_heuristic', 'semantic_verified': False}

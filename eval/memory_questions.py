@@ -102,18 +102,33 @@ def validate_fixture(fixture):
                     raise ValueError('no_memory_writes must be boolean')
                 focus = expect.get('memory_focus')
                 if focus is not None and (not isinstance(focus, dict)
-                        or not set(focus) <= {'status', 'reason', 'registration_status'}
+                        or not set(focus) <= {'status', 'reason', 'registration_status', 'records'}
                         or focus.get('status') not in {'selected', 'clarify', 'not_applicable'}
                         or 'reason' in focus and (not isinstance(focus['reason'], str) or not focus['reason'])
                         or 'registration_status' in focus and focus['registration_status'] not in {
                             'registered', 'not_selected', 'budget_exceeded'}):
                     raise ValueError('memory_focus needs an explicit supported status and optional reason/registration')
+                if focus is not None and 'records' in focus:
+                    focus_records = focus['records']
+                    if not isinstance(focus_records, list) or len(focus_records) != len(set(focus_records)) \
+                            or not set(focus_records) <= {item['key'] for item in fixture.get('memories', [])} \
+                            or bool(focus_records) != (focus['status'] == 'selected'):
+                        raise ValueError('memory_focus records must exactly identify a nonempty selected memory set')
                 for field in expect.get('saved_fields', []):
                     if field.get('person') not in people or not field.get('field') or 'value' not in field:
                         raise ValueError('saved_fields needs an explicit person, field and value')
-                for key in ('relevant', 'excluded', 'source_records', 'forbidden_source_records'):
+                for key in ('relevant', 'excluded', 'source_records', 'forbidden_source_records',
+                            'required_dependency_records', 'required_cited_records'):
                     if not set(expect.get(key, [])) <= records:
                         raise ValueError('Unknown relevance/source record in ' + case['id'])
+                    if key.startswith('required_') and key in expect and (
+                            not isinstance(expect[key], list) or not expect[key]
+                            or len(expect[key]) != len(set(expect[key]))):
+                        raise ValueError('Required source contracts must contain nonempty, unique record labels')
+                if not set(expect.get('previous_source_states', {})) <= records or any(
+                        value not in {'current', 'updated', 'moved', 'withdrawn', 'unavailable'}
+                        for value in expect.get('previous_source_states', {}).values()):
+                    raise ValueError('Previous source states must identify known records and lifecycle states')
                 for key in ('ambiguity', 'allowed_persons', 'excluded_persons'):
                     if not set(expect.get(key, [])) <= people:
                         raise ValueError('Unknown person expectation in ' + case['id'])
@@ -125,6 +140,8 @@ def validate_fixture(fixture):
                         raise ValueError('Unsupported lifecycle action')
                     if 'memory' in action and action['memory'] not in records:
                         raise ValueError('Unknown action record')
+                    if 'person' in action and action['person'] is not None and action['person'] not in people:
+                        raise ValueError('Unknown action person')
     return fixture
 
 
@@ -205,6 +222,16 @@ def source_checks(conn, source):
                 errors.append('withdrawn or deleted memory exposed')
             if source.get('temporal_status') != 'historical_background':
                 errors.append('background memory presented with wrong temporal status')
+            edited = conn.execute("SELECT created_at FROM memory_correction WHERE memory_id=? AND action='edit' "
+                                  'ORDER BY revision DESC,created_at DESC,id DESC LIMIT 1', (row['id'],)).fetchone()
+            lifecycle = conn.execute("SELECT action,created_at FROM memory_correction WHERE memory_id=? "
+                                     "AND action IN ('withdraw','restore') "
+                                     'ORDER BY revision DESC,created_at DESC,id DESC LIMIT 1', (row['id'],)).fetchone()
+            context = {'status': row['status'], 'recorded_at': row['created_at'],
+                       'last_user_edit_at': edited['created_at'] if edited else None,
+                       'last_lifecycle_change': dict(lifecycle) if lifecycle else None}
+            if source.get('record_context') != context:
+                errors.append('memory time context differs from stored lifecycle audit')
     elif kind == 'field':
         try:
             identity = json.loads(source['entity_id'])
@@ -415,11 +442,29 @@ def _answer_checks(app, conn, result, expect, people, records):
             observed = registration.get('status') if key == 'registration_status' else actual.get(key)
             checks.append(_check('memory_focus_' + key, observed == expected[key],
                                  expected=expected[key], actual=observed))
+        if 'records' in expected:
+            checks.extend(_focus_source_checks(conn, result, actual, expected['records'], records))
     for index, source in enumerate(result.get('sources', [])):
         failures = source_checks(conn, source)
         checks.append(_check('cited_source_snapshot:' + str(index), not failures, failures=failures))
-    dependencies = result.get('source_dependencies', result.get('sources', []))
-    for index, source in enumerate(dependencies):
+        checks.append(_check('cited_source_was_read:' + str(index), isinstance(source, dict)
+                             and any(source == dependency for dependency in result.get('source_dependencies', []))))
+    # Required exposure is measured from actual dependencies, never substituted
+    # with final citations: access and citation are separate contracts.
+    dependencies = result.get('source_dependencies', [])
+    for key, sources, name in (
+            ('required_dependency_records', dependencies, 'required_dependency_record:'),
+            ('required_cited_records', result.get('sources', []), 'required_cited_record:')):
+        observed = {record_key(source, records) for source in sources}
+        for label in expect.get(key, []):
+            checks.append(_check(name + label, label in observed, record=label))
+    # Include final citations for scope/forbidden checks even if a malformed
+    # response omitted the dependency list entirely.
+    for index, source in enumerate([*dependencies, *result.get('sources', [])]):
+        if not isinstance(source, dict):
+            checks.append(_check('exposed_source_snapshot:' + str(index), False,
+                                 failures=['unsupported source snapshot']))
+            continue
         if source.get('type') != 'profile_context':
             failures = source_checks(conn, source)
             checks.append(_check('exposed_source_snapshot:' + str(index), not failures, failures=failures))
@@ -435,6 +480,127 @@ def _answer_checks(app, conn, result, expect, people, records):
                                  owners <= {people[key] for key in expect['allowed_persons']}))
     warning_codes = [warning['code'] for warning in result.get('source_warnings', [])]
     checks.append(_check('no_fabricated_citation', 'invalid_citation' not in warning_codes))
+    return checks
+
+
+def _source_identity(source):
+    if not isinstance(source, dict):
+        return None
+    person = source.get('person')
+    return (source.get('type'), _canonical_entity(source),
+            person.get('id') if isinstance(person, dict) else None)
+
+
+def _focus_binding_checks(conn, result, binding, references):
+    """Verify the persisted user binding and the actual preceding answer.
+
+    Old quotation content must match its saved anchor exactly, including the
+    historical revision. Identity equality alone cannot establish this.
+    """
+    def metadata(row):
+        try:
+            return json.loads(row['tool_calls']) if row and row['tool_calls'] else {}
+        except (ValueError, TypeError):
+            return None
+
+    def row(message_id):
+        return conn.execute('SELECT rowid AS ordering,* FROM message WHERE id=?', (message_id,)).fetchone()
+
+    user = row(binding.get('user_message_id'))
+    answer = row(result.get('assistant_message_id'))
+    user_meta, answer_meta = metadata(user), metadata(answer)
+    conversation_id = result.get('conversation_id')
+    bound_to_user = bool(user and user['role'] == 'user' and conversation_id
+                         and user['conversation_id'] == conversation_id == binding.get('conversation_id')
+                         and binding.get('source_sha256') == hashlib.sha256(user['content'].encode()).hexdigest()
+                         and isinstance(user_meta, dict) and user_meta.get('memory_focus') == binding)
+    if bound_to_user and answer:
+        last_user = conn.execute("SELECT id FROM message WHERE conversation_id=? AND role='user' "
+                                 'AND rowid<? ORDER BY rowid DESC LIMIT 1',
+                                 (conversation_id, answer['ordering'])).fetchone()
+        bound_to_user = bool(answer['role'] == 'assistant' and answer['conversation_id'] == conversation_id
+                             and user['ordering'] < answer['ordering']
+                             and last_user and last_user['id'] == user['id']
+                             and isinstance(answer_meta, dict)
+                             and isinstance(answer_meta.get('memory_focus'), dict)
+                             and answer_meta['memory_focus'].get('binding') == binding)
+    else:
+        bound_to_user = False
+    checks = [_check('memory_focus_persisted_user_binding', bound_to_user)]
+    anchor = row(binding.get('anchor_assistant_message_id'))
+    preceding = None
+    if user:
+        for candidate in conn.execute("SELECT rowid AS ordering,* FROM message WHERE conversation_id=? "
+                                      "AND role='assistant' AND rowid<? ORDER BY rowid DESC",
+                                      (user['conversation_id'], user['ordering'])):
+            if not isinstance(metadata(candidate), list):
+                preceding = candidate
+                break
+    anchor_precedes = bool(user and anchor and anchor['role'] == 'assistant'
+                           and anchor['conversation_id'] == user['conversation_id'] == binding.get('conversation_id')
+                           and anchor['ordering'] < user['ordering']
+                           and preceding and preceding['id'] == anchor['id'])
+    checks.append(_check('memory_focus_anchor_precedes_user', anchor_precedes))
+    anchor_meta = metadata(anchor)
+    available = []
+    if isinstance(anchor_meta, dict):
+        cited = anchor_meta.get('sources')
+        dependencies = anchor_meta.get('source_dependencies')
+        available = [source for source in cited if isinstance(source, dict) and source.get('type') == 'memory'] \
+            if isinstance(cited, list) else []
+        # Single-memory legacy bindings may refer to a unique read dependency.
+        if not available and len(references) == 1 and isinstance(dependencies, list):
+            available = [source for source in dependencies
+                         if isinstance(source, dict) and source.get('type') == 'memory']
+    checks.append(_check('memory_focus_anchor_exact_snapshots', bool(references)
+                         and anchor_precedes and all(reference in available for reference in references)))
+    return checks
+
+
+def _focus_source_checks(conn, result, actual, expected_records, records):
+    """Check selected identities and current registration without refreshing the anchor.
+
+    Binding snapshots intentionally retain the old revision after an edit. The
+    exposed focus and registered dependencies must contain current quotations.
+    """
+    checks = []
+    sources = actual.get('sources') if isinstance(actual.get('sources'), list) else []
+    observed = [record_key(source, records) for source in sources]
+    checks.append(_check('memory_focus_exact_records', len(observed) == len(expected_records)
+                         and set(observed) == set(expected_records),
+                         expected=expected_records, actual=observed))
+    if actual.get('status') != 'selected':
+        return checks
+    binding = actual.get('binding') if isinstance(actual.get('binding'), dict) else {}
+    references = binding.get('reference_snapshots')
+    references = references if isinstance(references, list) else []
+    checks.extend(_focus_binding_checks(conn, result, binding, references))
+    identities = [_source_identity(source) for source in sources]
+    anchored = [_source_identity(source) for source in references]
+    checks.append(_check('memory_focus_complete_anchor', bool(identities)
+                         and len(anchored) == len(identities) and set(anchored) == set(identities)
+                         and len(set(identities)) == len(identities),
+                         expected_count=len(expected_records), anchor_count=len(references)))
+    for index, source in enumerate(sources):
+        failures = source_checks(conn, source)
+        checks.append(_check('memory_focus_current_snapshot:' + str(index), not failures, failures=failures))
+    registration = actual.get('registration') if isinstance(actual.get('registration'), dict) else {}
+    source_ids = registration.get('source_ids')
+    source_ids = source_ids if isinstance(source_ids, list) else []
+    dependencies = result.get('source_dependencies', [])
+    registered = [next((source for source in dependencies if isinstance(source, dict)
+                        and source.get('id') == source_id), None) for source_id in source_ids]
+    # Compare complete current content. Local labels and capture timestamps are
+    # registry metadata, so they are the only keys removed for the comparison.
+    def content(source):
+        return {key: value for key, value in source.items() if key not in {'id', 'captured_at'}} \
+            if isinstance(source, dict) else None
+    checks.append(_check('memory_focus_registered_complete_set', bool(sources)
+                         and len(source_ids) == len(sources) and len(set(source_ids)) == len(source_ids)
+                         and all(isinstance(source_id, str) and source_id for source_id in source_ids)
+                         and all(content(source) == content(exposed)
+                                 for source, exposed in zip(sources, registered)),
+                         expected_count=len(expected_records), registered_count=len(source_ids)))
     return checks
 
 
@@ -459,6 +625,9 @@ def _dialogue(app, conn, case, people, records):
                 if wanted:
                     checks.append(_check('old_source_state:' + str(key), state['status'] == wanted,
                                          expected=wanted, actual=state['status']))
+        for key in expect.get('previous_source_states', {}):
+            checks.append(_check('old_source_state_present:' + key,
+                                 any(state['record'] == key for state in prior_states), record=key))
         material, before = _material(app, conn, records), _data_snapshot(conn)
         before_messages = {row['id'] for row in app['repo'].list_messages(conn, cid, limit=-1)}
         try:
@@ -653,6 +822,9 @@ def _answer_diagnostics(units):
             'registration_status_counts': _diagnostic_counts(
                 focus.get('registration', {}).get('status') if isinstance(focus.get('registration'), dict) else None
                 for focus in focuses),
+            'selected_source_count_counts': dict(sorted(Counter(
+                str(len(focus['sources'])) if isinstance(focus.get('sources'), list) else 'not_reported'
+                for focus in focuses if focus.get('status') == 'selected').items())),
             'meaning': 'Persisted memory reference resolution and source registration; no answer quality score',
         },
     }
@@ -685,6 +857,17 @@ def summarize(track, details):
                                    for metric in ('recall_at_1', 'recall_at_3', 'recall_at_5', 'mrr_at_5')}}
     else:
         summary.update(_answer_diagnostics(units))
+        def contract(prefix):
+            selected = [check for check in checks if check['name'].startswith(prefix)]
+            return {'total': len(selected), 'passed': sum(check['passed'] for check in selected),
+                    'failed': sum(not check['passed'] for check in selected),
+                    'status': 'checked' if selected else 'not_exercised'}
+        summary['evidence_contract_checks'] = {
+            'required_dependencies': contract('required_dependency_record:'),
+            'required_citations': contract('required_cited_record:'),
+            'memory_focus': contract('memory_focus_'),
+            'query_write_boundary': contract('query_has_no_memory_writes'),
+            'meaning': 'Separate observable contracts; none is an answer semantic accuracy score'}
     return summary
 
 
@@ -727,11 +910,13 @@ def evaluate(fixture=None, *, track='retrieval', app_root=None, repeat=1, tags=N
               'expectation_semantics': {
                   'relevant': 'Fixed-query relevance labels used only for retrieval ranking metrics',
                   'source_records': 'Potentially relevant evidence for human review, not mandatory citations or an answer score',
+                  'required_dependency_records': 'Nonempty explicit record set that must actually be read as dependencies',
+                  'required_cited_records': 'Nonempty explicit record set that must appear in final citations, independently of access',
                   'limited_fact_rules': 'Literal string probes only; negation and entailment require human review',
                   'deterministic_checks': 'Stored provenance, identity scope, source status and lifecycle contracts',
                   'no_memory_writes': 'Actual domain-table changes excluding the original audit evidence, not the intent label',
                   'saved_fields': 'Exact current stored field value, not a model claim or a pending proposal',
-                  'memory_focus': 'Deterministic reference status, reason and source registration; not semantic correctness'},
+                  'memory_focus': 'Reference status, exact selected identities, immutable anchor and complete current source registration; not semantic correctness'},
               'human_review_rubric': fixture.get('human_review_rubric', []),
               'selected_scenarios': len(cases) * repeat, 'details': details, 'summary': summarize(track, [])}
     if checkpoint:

@@ -1,0 +1,27 @@
+{
+  "description": "Independent transport cases; these are not product acceptance questions.",
+  "cases": [
+    {"id": "plain_object", "raw": " {\"sample\":true,\"nested\":{\"value\":3}}\n", "envelope": "plain"},
+    {"id": "complete_json_fence", "raw": "\n```json\n{\"sample\":true}\n```\n", "envelope": "json_fence"},
+    {"id": "crlf_json_fence", "raw": "```JSON \r\n{\"sample\":true}\r\n```", "envelope": "json_fence"},
+    {"id": "ticks_in_string", "raw": "```json\n{\"literal\":\"```\"}\n```", "envelope": "json_fence"},
+    {"id": "unlabelled_fence", "raw": "```\n{\"sample\":true}\n```", "error": "invalid_json"},
+    {"id": "wrong_language_fence", "raw": "```python\n{\"sample\":true}\n```", "error": "invalid_json"},
+    {"id": "prefix_prose", "raw": "Here is the object:\n```json\n{\"sample\":true}\n```", "error": "invalid_json"},
+    {"id": "suffix_prose", "raw": "```json\n{\"sample\":true}\n```\nDone.", "error": "invalid_json"},
+    {"id": "two_fences", "raw": "```json\n{\"sample\":true}\n```\n```json\n{}\n```", "error": "invalid_json"},
+    {"id": "two_plain_objects", "raw": "{\"sample\":true} {}", "error": "invalid_json"},
+    {"id": "same_line_fence", "raw": "```json {\"sample\":true}```", "error": "invalid_json"},
+    {"id": "unclosed_fence", "raw": "```json\n{\"sample\":true}", "error": "invalid_json"},
+    {"id": "comments", "raw": "```json\n{\"sample\":true // comment\n}\n```", "error": "invalid_json"},
+    {"id": "trailing_comma", "raw": "```json\n{\"sample\":true,}\n```", "error": "invalid_json"},
+    {"id": "duplicate_top_key", "raw": "```json\n{\"sample\":false,\"sample\":true}\n```", "error": "invalid_json"},
+    {"id": "duplicate_nested_key", "raw": "{\"nested\":{\"sample\":false,\"sample\":true}}", "error": "invalid_json"},
+    {"id": "nan", "raw": "```json\n{\"sample\":NaN}\n```", "error": "invalid_json"},
+    {"id": "infinity", "raw": "{\"sample\":Infinity}", "error": "invalid_json"},
+    {"id": "overflow_float", "raw": "{\"sample\":1e999}", "error": "invalid_json"},
+    {"id": "array_is_not_object", "raw": "```json\n[{\"sample\":true}]\n```", "error": "json_object_required"},
+    {"id": "null_is_not_object", "raw": "null", "error": "json_object_required"},
+    {"id": "json_string_is_not_object", "raw": "\"{\\\"sample\\\":true}\"", "error": "json_object_required"}
+  ]
+}

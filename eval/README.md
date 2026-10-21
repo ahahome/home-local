@@ -2,6 +2,8 @@
 
 当前实现的验收结果见 [主 README](../README.md)、[交付说明](../docs/DELIVERY.md) 与 [模拟验收](../docs/MOCK_QA.md)。2026-10-03 对已有 30 条 holdout 样本各采样一次、关闭缓存的 [网关复测](results/20261003-130302-a2a33e1.json) 通过 29/30，字段召回 0.75；这不是全新留出集，仍存在公司字段漏抽。此前完整运行是 28/30，简单合成样本的 82/82 字段匹配另行报告。下文的历史泛化缺口和「本轮全过」描述来自原评测框架建立阶段，不应作为当前模型分数。
 
+0.14 写入与草稿验收、0.13 资料回答与工作流验收分别列在下文；各阶段按实现 hash 保留原始失败和修后回归，不能与上述 L1 历史抽取分数混算。
+
 四层判定，成本不同。**免费层跑在每次提交上；花钱层只在改 prompt / 改抽取逻辑时跑。**
 
 | 层 | 位置 | 花钱 | 覆盖什么 |
@@ -14,6 +16,62 @@
 
 评估器本身的比对逻辑在 `eval/metrics.py`，由 `tests/test_eval_metrics.py` 覆盖。
 **理由：评估器写错了比被测代码错了更危险**——指标会假绿，问题被掩盖。
+
+## 0.14 记忆写入与沟通草稿
+
+`fixtures/write_quality_v014.json` 共 9 场景、18 步，分别检查同名别名归属、机构与显式职位、换人与旧消息重试、邮件及改稿、持久沟通准备。`write_quality_v014.py` 执行真实生产 harness、写工具与 HTTP/持久任务；每场景使用独立进程和临时 SQLite，不打开用户工作库。模型为配置的 `qwen3.7-flash` / `qwen3.7-plus`，关闭 embedding 和缓存。完整方法见 [0.14 验收](../docs/WRITE_QUALITY_V014.md)，原始报告、失败及逐步旁注见 [结果索引](results/write-quality-v014/README.md)。
+
+| 冻结实现 | 语料范围 | 终稿步骤 / 运行异常 | 已执行机器检查 |
+| --- | --- | --- | --- |
+| 首次 `46bc6fea…` | 已知回归，6 场景 | 12 / 0 | 194/195 |
+| 首次 `46bc6fea…` | 首次新措辞，3 场景 | 6 / 0 | 104/106 |
+| 最终 `2805f5d1…` | 首次失败三场景的全部原 6 步，定向已知回归 | 6 / 0 | 94/94 |
+
+首次两组均失败退出，保留代词城市未保存、草稿缺失及改稿人物 scope 丢失等失败。新措辞由内部验收代理在实现冻结前保留，仍是同源构造的开发资料；首次采样后即成为已知语料。派生 `fixtures/write_quality_v014_regression.json` 不改三场景的种子、原问题和预期，仅用于修后定向回归。每组只采样一次，不重采筛绿，也不相加为模型准确率。最终实现仅重新采样这 6 步；机构/职位、旧消息重试和 followup 的完整真实结果仍对应首次实现，最终相关行为由控制测试支撑。
+
+最终冻结时自动回归为 **1752 项 Python 测试、6 项 Node 界面重试测试通过**，Web 语法检查通过。这些是无模型控制检查。真实定向回归确认贵阳实际保存到正确同名人物、city 与 applied_patch 各新增一次，写入后只读恢复没有重放写入；四份邮件/改稿均实际交付 draft，两次改稿继承人物并重新读取资料。原抽取仍可能返回空 people，本次由后续真实工具补存，不能据此称漏抽消失。
+
+**94/94 不代表草稿语义全过。** 实际输出仍有先询价后补规格、弱化样张通过后再谈排产条件的偏差，发送前需要人工核对。`generation_task` 仅验证段落形状，所有生成内容保持 `semantic_verified=false`；原始语义评分为 null、审阅待定，代理旁注不替代独立人工评分。人物自动隔离检查覆盖指定人物表，承诺、账目、提醒和关系等差分仍需另审；准备状态写入也不能解释成全库零写入。
+
+```sh
+# 离线验证 fixture，不调用模型。
+.venv/bin/python -m eval.write_quality_v014 --validate-only
+
+# 以下会调用真实模型；输出到新目录，不覆盖已归档结果。
+.venv/bin/python -m eval.write_quality_v014 --cohort known_regression --output-dir /tmp/home-v014-known
+.venv/bin/python -m eval.write_quality_v014 --cohort new_wording --output-dir /tmp/home-v014-wording
+.venv/bin/python -m eval.write_quality_v014 --fixture eval/fixtures/write_quality_v014_regression.json --cohort known_regression --output-dir /tmp/home-v014-targeted
+```
+
+在当前代码上执行上述命令会形成新的已知开发回归，不能复现为首次未见采样。结果记录实现、fixture、runner 与 helper hash，比较时须核对完整 hash 和实际检查范围；冻结协议与归档完整性见 [SHA256 清单](results/write-quality-v014/manifest.json)。
+
+## 0.13 资料回答与完整关系工作流
+
+`fixtures/answer_evidence_v013.json` 覆盖 9 场景 20 答及 2 个固定检索，`answer_followups_v013.json` 另含 4 场景 8 请求。资料事实由服务端来源快照展示；生成正文仍需独立语义核对。`relationship_workflow_v013.py --user-review` 通过真实 HTTP 路由和持久任务执行查询 → 准备沟通 → 记录实际结果 → 分析提案 → 显式用户审阅确认 → 再次查询与准备。模拟用户修订来自预声明 fixture，与原模型提案质量分开计数，不自动把预期提案写成模型结果。
+
+结果按三个实现阶段留档：首版 20 答 **383/386**、工作流 **26/41**；第二阶段同题 20 答 **391/393**，额外 8 请求仅 7 份终稿、1 次运行异常，**72/72 仅为已执行检查**。第二阶段用户审阅闭环 **57/57**、原提案严格检查 **2/3**，总 **59/60**，失败退出。最终 `e24ebb88…` 仅复验已知 8 答，**99/99、0 运行异常**；最终用户审阅闭环 **57/57**、原提案严格检查 **3/3**，总 **60/60**。第二阶段整组 20 答和旧 0.12 回归没有改标为最终实现结果。
+
+最终仍观察到首次邮件未实际起草、无依据身份待确认提案、称呼推成工作事实，以及沟通草稿无据声称已有附件。来源一致、协议完成、显式用户修订后的产品闭环均不证明一般语义正确。原始语义评分和审阅状态保持不变。完整阶段区分与限制见 [0.13 验收](../docs/ANSWER_EVIDENCE_V013.md) 和 [结果索引](results/answer-evidence-v013/README.md)。
+
+```sh
+# 以下问答与工作流会调用真实模型，使用独立临时库。
+.venv/bin/python -m eval.memory_questions --track answers --cases eval/fixtures/answer_evidence_v013.json --repeat 1 --output-dir /tmp/home-v013-answers
+.venv/bin/python -m eval.memory_questions --track retrieval --cases eval/fixtures/answer_evidence_v013.json --output-dir /tmp/home-v013-retrieval
+.venv/bin/python -m eval.memory_questions --track answers --cases eval/fixtures/answer_followups_v013.json --repeat 1 --output-dir /tmp/home-v013-followups
+.venv/bin/python -m eval.relationship_workflow_v013 --user-review --output-dir /tmp/home-v013-workflow
+```
+
+固定检索默认离线，不调用模型；当前代码上的复跑属于当前实现的已知开发回归，不能复现为当时的新措辞检查。原始失败、各阶段报告和独立旁注保留在结果目录，并由 [SHA256 清单](results/answer-evidence-v013/manifest.json) 索引。
+
+## 0.12 多轮记忆集合与证据比较
+
+`fixtures/memory_dialogue_v012.json` 在真实采样前冻结，8 组、每次 20 答，覆盖同人物集合比较及编辑、撤销和转移，普通日期问法、恢复、明确换人、同名、多人物与单数歧义，以及 record/mixed 的实际保存。使用虚构开发资料，不能称为独立未见语义基准。实现与最终结果见 [0.12 验收](../docs/MEMORY_DIALOGUE_V012.md)。
+
+```sh
+.venv/bin/python -m eval.memory_questions --track answers --cases eval/fixtures/memory_dialogue_v012.json --repeat 3 --output-dir /tmp/home-v012-acceptance
+```
+
+新增 `required_dependency_records` 与 `required_cited_records` 非空记录集合，分别检查实际已读依赖和最终引用，不能互相替代。`expect.memory_focus.records` 检查精确当前成员、原问题持久绑定、同对话最近前序终稿、旧快照逐字一致，以及完整本轮注册。日期元数据对照实际纠错审计；缺失旧来源状态明确失败，没有相应断言的范围显示 `not_exercised`。既有 `source_records` 仍只作审阅提示，不暗中升级为引用要求。负控包含缺源、重复集合、旧版本、伪造正文/锚点和日期，语义判断仍单列待人工审阅。
 
 ## 0.10 分类诊断与记忆追问
 

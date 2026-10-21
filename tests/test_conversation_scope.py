@@ -29,6 +29,172 @@ def conversation(conn):
     return cid
 
 
+def completed_draft(conn, cid, text='为林舟起草一封邮件。'):
+    scope = turn(conn, cid, text)
+    metadata = {'conversation_scope': deepcopy(scope), 'answer_review': {
+        'status': 'completed', 'method': 'server_record_revision',
+        'generation_task': {'draft_requested': True, 'draft_present': True,
+                            'status': 'draft_provided', 'semantic_verified': False}}}
+    aid = repo.add_message(conn, cid, 'assistant', '你好，想先确认【待补：具体安排】。',
+                           json.dumps(metadata, ensure_ascii=False))
+    conn.commit()
+    return scope, aid, metadata
+
+
+@pytest.mark.parametrize('text', [
+    '改成两句。', '翻译成英文。', '语气随和一点。', '把这封邮件缩短。',
+    '改成两句话就够了，别太正式，末尾另列我点发送之前要补齐的项目。',
+    '太长了，改成两句。', '不够自然，语气随和一点。',
+])
+def test_closed_edits_inherit_only_adjacent_completed_single_person_draft(conn, text):
+    pid = person(conn, '林舟')
+    cid = conversation(conn)
+    original, aid, _ = completed_draft(conn, cid)
+    edited = turn(conn, cid, text)
+    assert edited['mode'] == 'single' and edited['person_ids'] == [pid]
+    assert edited['reason'] == 'inherited_draft_edit'
+    assert edited['draft_anchor_assistant_message_id'] == aid
+    assert edited['origin_message_id'] == original['origin_message_id']
+
+
+@pytest.mark.parametrize('text', [
+    '帮我起封邮件。', '再起草一条消息。', '给我一个沟通建议。', '查询现有记录。',
+    '把王琪的邮件缩短。', '把我的邮件翻译成英文。',
+    '把这封邮件缩短：王琪你好。', '改成两句。以下是新稿：王琪你好。',
+    '把这封邮件缩短：王琪说她会过来。', '改成两句，王琪说她会过来。',
+    '把这封有日期的邮件缩短：王琪说她会过来。',
+    '把这封有时间的邮件缩短：王琪说她会过来。',
+    '把王琪给她的邮件缩短。', '把给她的邮件翻译成英文。',
+    '换个人，改成两句。', '请解释归并排序。',
+])
+def test_new_drafts_unknown_named_objects_and_unrelated_queries_do_not_inherit_recipient(conn, text):
+    person(conn, '林舟')
+    cid = conversation(conn)
+    completed_draft(conn, cid)
+    result = turn(conn, cid, text)
+    # Existing explicit-switch ambiguity can already require clarification;
+    # neither that path nor the edit fallback may borrow the old recipient.
+    assert result['mode'] in {'none', 'clarify'} and result['person_ids'] == []
+    assert 'draft_anchor_assistant_message_id' not in result
+
+
+@pytest.mark.parametrize('change', [
+    'unavailable', 'no_draft', 'needs_input', 'unreviewed', 'missing_review',
+    'invalid_metadata', 'wrong_person', 'wrong_user', 'wrong_conversation',
+    'wrong_origin', 'missing_user_scope', 'tool_after', 'user_after',
+])
+def test_incomplete_or_mismatched_draft_anchors_never_select_previous_person(conn, change):
+    person(conn, '林舟')
+    other = person(conn, '陈岚')
+    cid = conversation(conn)
+    original, aid, metadata = completed_draft(conn, cid)
+    if change == 'unavailable':
+        metadata['answer_review']['status'] = 'unavailable'
+    elif change == 'no_draft':
+        metadata['answer_review']['generation_task']['draft_present'] = False
+    elif change == 'needs_input':
+        metadata['answer_review']['generation_task'].update(draft_present=False, status='needs_input')
+    elif change == 'unreviewed':
+        metadata['answer_review']['method'] = 'test_double'
+    elif change == 'missing_review':
+        metadata.pop('answer_review')
+    elif change == 'invalid_metadata':
+        metadata = []
+    elif change == 'wrong_person':
+        metadata['conversation_scope']['person_ids'] = [other]
+    elif change == 'wrong_user':
+        metadata['conversation_scope']['user_message_id'] = 'some-other-user'
+    elif change == 'wrong_conversation':
+        metadata['conversation_scope']['conversation_id'] = 'some-other-conversation'
+    elif change == 'wrong_origin':
+        metadata['conversation_scope']['origin_message_id'] = 'some-other-origin'
+    elif change == 'missing_user_scope':
+        conn.execute('UPDATE message SET tool_calls=NULL WHERE id=?', (original['user_message_id'],))
+    elif change == 'tool_after':
+        repo.add_message(conn, cid, 'tool', '新工具输出')
+    elif change == 'user_after':
+        turn(conn, cid, '先解释排序算法。')
+    conn.execute('UPDATE message SET tool_calls=? WHERE id=?', (json.dumps(metadata), aid))
+    conn.commit()
+    result = turn(conn, cid, '改成两句。')
+    assert result['mode'] == 'none' and result['person_ids'] == []
+
+
+@pytest.mark.parametrize('prior_question', ['比较林舟和陈岚，起草消息。', '给所有人起草消息。', '起草一封邮件。'])
+def test_multiple_global_and_unscoped_drafts_do_not_supply_single_recipient(conn, prior_question):
+    person(conn, '林舟')
+    person(conn, '陈岚')
+    cid = conversation(conn)
+    completed_draft(conn, cid, prior_question)
+    result = turn(conn, cid, '改成两句。')
+    assert result['mode'] == 'none' and result['person_ids'] == []
+
+
+@pytest.mark.parametrize('action', ['archive', 'merge'])
+def test_draft_edit_rechecks_recipient_availability(conn, action):
+    pid = person(conn, '林舟')
+    cid = conversation(conn)
+    completed_draft(conn, cid)
+    if action == 'archive':
+        repo.archive_person(conn, pid)
+    else:
+        repo.set_person_status(conn, pid, 'merged')
+    conn.commit()
+    result = turn(conn, cid, '改成两句。')
+    assert result['blocked'] and result['reason'] == 'unavailable_person'
+    assert result['person_ids'] == []
+
+
+def test_explicit_person_and_global_queries_keep_priority_over_previous_draft(conn):
+    person(conn, '林舟')
+    other = person(conn, '陈岚')
+    cid = conversation(conn)
+    completed_draft(conn, cid)
+    result = turn(conn, cid, '把陈岚的邮件改成两句。')
+    assert result['person_ids'] == [other] and result['reason'] == 'explicit_name'
+    result = turn(conn, cid, '给所有人改成两句。')
+    assert result['mode'] == 'global' and result['person_ids'] == []
+
+
+@pytest.mark.parametrize('text', ['她的偏好呢？', '帮我给她起封邮件。', '给我一个和她沟通的建议。'])
+def test_ordinary_pronoun_queries_and_new_drafts_keep_existing_user_identity_resolution(conn, text):
+    pid = person(conn, '林舟')
+    cid = conversation(conn)
+    turn(conn, cid, '林舟的偏好是什么？')
+    # An ordinary pronoun is still resolved from the user's explicit choice;
+    # it does not need any assistant draft to establish identity.
+    result = turn(conn, cid, text)
+    assert result['person_ids'] == [pid] and result['reason'] == 'inherited_single'
+
+
+def test_explicit_names_global_and_ambiguity_still_win_over_edit_candidate_guard(conn):
+    person(conn, '林舟')
+    other = person(conn, '陈岚')
+    first = person(conn, '同名周敏')
+    second = person(conn, '同名周敏')
+    cid = conversation(conn)
+    completed_draft(conn, cid)
+    result = turn(conn, cid, '把陈岚给她的邮件缩短。')
+    assert result['person_ids'] == [other] and result['reason'] == 'explicit_name'
+    result = turn(conn, cid, '改成两句，再给所有人看她的消息。')
+    assert result['mode'] == 'global'
+    result = turn(conn, cid, '把同名周敏给她的邮件缩短。')
+    assert result['blocked'] and result['reason'] == 'ambiguous_name'
+    assert {item['person_id'] for item in result['candidates']} == {first, second}
+
+
+def test_draft_edit_retry_uses_only_anchor_before_original_user_and_ignores_later_draft(conn):
+    first = person(conn, '林舟')
+    person(conn, '陈岚')
+    cid = conversation(conn)
+    _, aid, _ = completed_draft(conn, cid)
+    original_edit = turn(conn, cid, '改成两句。')
+    completed_draft(conn, cid, '给陈岚起草邮件。')
+    retried = conversation_scope.for_user_message(conn, cid, original_edit['user_message_id'], '改成两句。')
+    assert retried['person_ids'] == [first]
+    assert retried['draft_anchor_assistant_message_id'] == aid
+
+
 def test_explicit_person_pronoun_switch_and_conversation_isolation(conn):
     first, second = person(conn, '林舟'), person(conn, '陈岚')
     cid = conversation(conn)

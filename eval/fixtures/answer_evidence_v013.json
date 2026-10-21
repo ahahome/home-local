@@ -1,0 +1,116 @@
+{
+  "version": "0.13.0-evidence-acceptance-1",
+  "provenance": "fictional_records_with_natural_questions",
+  "description": "v0.13 开发构造的虚构验收语料。人物、事实和自然问法在本轮正式模型采样前独立冻结，具体问法未用于调试实现。它只是在本轮开发期间留出的测试集，不是独立真实用户分布、外部盲测或语义准确率基准。采样后不改问题和期望；逐答由代理核对证据，不称人工评分。",
+  "time_anchor": "2026-10-20T12:00:00+08:00",
+  "top_k": 5,
+  "persons": [
+    {"key": "lin", "name": "林蔚", "aliases": ["阿蔚"]},
+    {"key": "pei", "name": "裴青", "aliases": ["裴老师"]},
+    {"key": "zhu", "name": "祝遥", "aliases": ["小祝"]},
+    {"key": "dai_lab", "name": "戴禾", "aliases": ["实验室戴禾"]},
+    {"key": "dai_book", "name": "戴禾", "aliases": ["书店戴禾"]}
+  ],
+  "fields": [
+    {"key": "lin_city", "person": "lin", "field": "city", "value": "苏州", "valid_from": 1767225600000},
+    {"key": "pei_company", "person": "pei", "field": "company", "value": "青屿教育", "valid_from": 1767312000000},
+    {"key": "zhu_city", "person": "zhu", "field": "city", "value": "厦门", "valid_from": 1767398400000}
+  ],
+  "memories": [
+    {"key": "lin_contact", "person": "lin", "text": "林蔚说讨论合同条款时，先把问题清单发邮件，收到清单后再约语音。", "ts": 1768006800000},
+    {"key": "pei_teaching", "person": "pei", "text": "裴青说周二授课期间不接电话，课程结束后可以回电；急事先发短信。", "ts": 1768093200000},
+    {"key": "zhu_food", "person": "zhu", "text": "祝遥说有海鲜的聚餐会提前确认食材，但没有说过自己是否过敏。", "ts": 1768179600000},
+    {"key": "dai_lab_contact", "person": "dai_lab", "text": "实验室戴禾说测试报告先传共享文件夹，只在周四下午集中讨论。", "ts": 1768266000000},
+    {"key": "dai_book_contact", "person": "dai_book", "text": "书店戴禾说周末值店时可以聊选书，补货的事请发邮件。", "ts": 1768352400000},
+    {"key": "zhu_train", "person": "zhu", "text": "祝遥说到外地参加展会时优先坐高铁。", "ts": 1768438800000},
+    {"key": "zhu_flight", "person": "zhu", "text": "祝遥说跨境行程先看直飞航班，不把转机作为首选。", "ts": 1768525200000}
+  ],
+  "interactions": [],
+  "retrieval_cases": [
+    {"id": "lin-contract-scope", "tags": ["acceptance", "condition"], "question": "合同 条款 邮件 清单 语音", "args": {"person": "阿蔚"}, "expect": {"relevant": ["lin_contact"], "excluded_persons": ["pei", "zhu", "dai_lab", "dai_book"]}},
+    {"id": "zhu-two-trip-contexts", "tags": ["acceptance", "condition"], "question": "展会 高铁 跨境 直飞 航班", "args": {"person": "小祝"}, "expect": {"relevant": ["zhu_train", "zhu_flight"], "excluded_persons": ["lin", "pei", "dai_lab", "dai_book"]}}
+  ],
+  "dialogues": [
+    {
+      "id": "first-query-and-record-date",
+      "tags": ["acceptance", "first_query", "condition", "temporal"],
+      "turns": [
+        {"question": "我要跟阿蔚过合同条款，她之前说应该怎么约语音？", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["lin_contact"], "required_dependency_records": ["lin_contact"], "required_cited_records": ["lin_contact"], "allowed_persons": ["lin"], "review_points": ["保留讨论合同条款的场景以及先发问题清单、收到后再约语音的顺序，不能泛化成所有事情都不接电话。"]}},
+        {"question": "这条是她哪天说的，还是我哪天放进系统的？这两个时间能区分开吗？", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["lin_contact"], "required_dependency_records": ["lin_contact"], "allowed_persons": ["lin"], "review_points": ["所标日期不证明本人说话时间；录入时间取真实 created_at，不把两者相等或声称已经核实本人原话日期。"]}}
+      ]
+    },
+    {
+      "id": "switch-person-and-initial-facts",
+      "tags": ["acceptance", "person_switch", "first_query", "temporal"],
+      "turns": [
+        {"question": "先查一下林蔚住哪座城市。", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["lin_city"], "required_dependency_records": ["lin_city"], "allowed_persons": ["lin"], "review_points": ["城市只能来自林蔚当前档案。"]}},
+        {"question": "换裴青，她周二上课时接不接电话？", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["pei_teaching"], "required_dependency_records": ["pei_teaching"], "required_cited_records": ["pei_teaching"], "forbidden_source_records": ["lin_contact", "lin_city"], "allowed_persons": ["pei"], "review_points": ["明确切换人物；保留授课期间与结束后、急事先短信的条件，不能带入林蔚邮件清单要求。"]}},
+        {"question": "她在青屿教育的这个资料，是什么时候开始有效的？能确定是哪天录入的吗？", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["pei_company"], "required_dependency_records": ["pei_company"], "forbidden_source_records": ["lin_city", "lin_contact"], "allowed_persons": ["pei"], "review_points": ["档案有效日期与 recorded_at 分开；不能把有效日期称作人工修改或录入日期。"]}}
+      ]
+    },
+    {
+      "id": "unknown-health-and-personal-facts",
+      "tags": ["acceptance", "unknown", "condition"],
+      "turns": [
+        {"question": "小祝是不是对海鲜过敏？我要订一桌饭。", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["zhu_food"], "required_dependency_records": ["zhu_food"], "allowed_persons": ["zhu"], "review_points": ["记录明确没有说过是否过敏；提前确认食材不能推成过敏。订餐建议须作为建议。"]}},
+        {"question": "她的生日和现在的公司有记录吗？", "expect": {"intent": "query", "no_memory_writes": true, "allowed_persons": ["zhu"], "review_points": ["均未记录，不能从城市、出行或饮食文字推断生日公司，也不能把询问写成新资料。"]}}
+      ]
+    },
+    {
+      "id": "draft-retains-task-and-evidence-conditions",
+      "tags": ["acceptance", "draft", "suggestion", "condition"],
+      "turns": [
+        {"question": "按阿蔚留下的联系习惯，替我写一条约她讨论合同的消息，问题清单我还没发。", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["lin_contact"], "required_dependency_records": ["lin_contact"], "allowed_persons": ["lin"], "review_points": ["必须实际完成消息草稿；不能虚称已发清单、已收到或已约好语音；草稿和建议不是人物事实。"]}},
+        {"question": "太长了，缩成两句，再提醒我发送前应该补哪一步。", "expect": {"intent": "query", "no_memory_writes": true, "allowed_persons": ["lin"], "review_points": ["保留缩写和发送前提醒两项任务，不能只回显来源卡；未发生的发送动作不能写成保存结果。"]}}
+      ]
+    },
+    {
+      "id": "mixed-assertion-and-drafting",
+      "tags": ["acceptance", "mixed", "save_result", "draft"],
+      "turns": [
+        {"question": "帮我记下：林蔚现在在溪谷科技工作。另外写一句恭喜她入职的话，别替我发送。", "expect": {"intent": "mixed", "saved_fields": [{"person": "lin", "field": "company", "value": "溪谷科技"}], "allowed_persons": ["lin"], "review_points": ["事实断言真实入库后才说已保存；同时完成恭喜草稿，不能把草稿或未发送当已联系。"]}},
+        {"question": "刚刚记的公司真的进档案了吗？把当前值给我看一下。", "expect": {"intent": "query", "no_memory_writes": true, "saved_fields": [{"person": "lin", "field": "company", "value": "溪谷科技"}], "allowed_persons": ["lin"], "review_points": ["本轮重新读当前公司，不能仅依据上一轮助手声称保存；显示实际持久化结果。"]}}
+      ]
+    },
+    {
+      "id": "homonym-clarification-and-specific-owner",
+      "tags": ["acceptance", "ambiguity", "condition", "first_query"],
+      "turns": [
+        {"question": "戴禾那边的报告该怎么给他？", "expect": {"intent": "query", "no_memory_writes": true, "ambiguity": ["dai_lab", "dai_book"], "review_points": ["存在同名人物，先澄清，不能从报告关键词静默选择实验室人物。"]}},
+        {"question": "实验室的那位，叫实验室戴禾。把他的报告交付和讨论时间说清楚。", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["dai_lab_contact"], "required_dependency_records": ["dai_lab_contact"], "required_cited_records": ["dai_lab_contact"], "forbidden_source_records": ["dai_book_contact"], "allowed_persons": ["dai_lab"], "review_points": ["只取实验室记录；先共享文件夹、只在周四下午讨论，不能改为邮件或周末值店。"]}}
+      ]
+    },
+    {
+      "id": "edited-wording-and-date-role",
+      "tags": ["acceptance", "edit", "temporal", "condition"],
+      "turns": [
+        {"question": "把裴青周二上课时联系她的那条原话找出来。", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["pei_teaching"], "required_dependency_records": ["pei_teaching"], "required_cited_records": ["pei_teaching"], "allowed_persons": ["pei"], "review_points": ["原文完整准确，引用本轮可读版本。"]}},
+        {"question": "这条记录现在的写法是什么？", "actions": [{"op": "edit", "memory": "pei_teaching", "text": "裴青更正：周二授课期间不接电话，课程结束后也先发短信确认，再安排回电。"}], "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["pei_teaching"], "required_dependency_records": ["pei_teaching"], "required_cited_records": ["pei_teaching"], "allowed_persons": ["pei"], "previous_source_states": {"pei_teaching": "updated"}, "review_points": ["本轮读取更正文字，不能恢复成课后可以直接回电；更正是用户编辑，不能编造裴青重新说过或改变偏好的原因。"]}},
+        {"question": "这条的标注日期、放进系统的日期、最近人工改动日期分别能查到吗？", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["pei_teaching"], "required_dependency_records": ["pei_teaching"], "allowed_persons": ["pei"], "review_points": ["三个时间角色分别取 source.date、recorded_at、last_user_edit_at；不能把原标日期解释为本轮编辑时间。"]}}
+      ]
+    },
+    {
+      "id": "different-travel-conditions-and-advice",
+      "tags": ["acceptance", "condition", "suggestion", "collection"],
+      "turns": [
+        {"question": "小祝选高铁和选航班各是什么情况下？把有关的两条都找来。", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["zhu_train", "zhu_flight"], "required_dependency_records": ["zhu_train", "zhu_flight"], "required_cited_records": ["zhu_train", "zhu_flight"], "allowed_persons": ["zhu"], "review_points": ["分别保留外地展会、跨境行程条件，不归纳成国内所有出行或因怕转机而选择高铁。"]}},
+        {"question": "那我约她去外地看展应该先问什么？给个建议，不要把还没问到的安排当定了。", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["zhu_train", "zhu_flight"], "allowed_persons": ["zhu"], "review_points": ["实际给出建议；不把‘去外地看展’自动当作本人‘参加展会’场景，不编造日期、预算、已订车票，也不替代真实记忆条件。"]}}
+      ]
+    },
+    {
+      "id": "explicit-save-and-readback",
+      "tags": ["acceptance", "record", "save_result", "first_query"],
+      "turns": [
+        {"question": "记住：祝遥现在在云岸策展工作。", "expect": {"intent": "record", "saved_fields": [{"person": "zhu", "field": "company", "value": "云岸策展"}], "allowed_persons": ["zhu"], "review_points": ["真实字段落库与回执一致，不能把未知或待确认当保存成功。"]}},
+        {"question": "现在重新查祝遥的公司和城市，分别是什么？", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["zhu_city"], "required_dependency_records": ["zhu_city"], "saved_fields": [{"person": "zhu", "field": "company", "value": "云岸策展"}], "allowed_persons": ["zhu"], "review_points": ["公司取刚才真实保存的值，城市取当前厦门；两个事实各有相应真实来源。"]}}
+      ]
+    }
+  ],
+  "human_review_rubric": [
+    "每条人物事实逐句与实际本轮来源对照，记录无依据解释、条件遗漏、人物串用与任务遗漏，不按检查通过率估计语义准确率。",
+    "把所标日期、入库/录入日期、字段有效期、人工编辑审计分别核对；没有审计的时间必须保留未知。",
+    "区分真实保存、待确认、只读和失败；从实际 SQLite 变更核对，不能用模型自述代替持久化证据。",
+    "对起草、建议和 mixed 同时核对用户请求是否完成；建议、草稿和用户计划不能变为已发生的事实。",
+    "这是本轮开发前冻结的虚构留出问题，代理审阅不是独立人工标注或真实分布准确率。"
+  ]
+}

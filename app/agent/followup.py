@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from datetime import date, datetime
 
 from app.config import tz
+from app.agent.prompts import DRAFTING_RULES
 from app.llm import get_llm
 from app.memory.apply import apply_extraction
 from app.store import repo
@@ -254,8 +255,11 @@ def prepare_followup(conn, fid, emit=None):
          '只有current_fields表示当前档案；recent_changes是版本历史，其中current=false或valid_to非空'
          '的旧值已失效，不能当作现状。memories是有来源的历史背景，不能推断为当前仍然成立。'
          'sources原文仅用于核查已列出的条目，不得从原文额外抽取未出现在这些条目中的事实或承诺。'
+         '必须给出用户所需渠道的可编辑正文；缺少可填信息时保留明确占位，并在正文之后单列发送前步骤，'
+         '不能改成只给建议或要求先补齐资料。这里没有向你提供附件文件，也没有发生发送动作。'
+         'open_promises是未完成承诺，不是已经准备或附上的材料；不要把承诺写成已经完成。'
          '只输出 JSON：{"draft":"可编辑的消息草稿","source_ids":["使用的资料来源ID"]}。'
-         'source_ids只能从快照sources.id选取；没有资料时起草中性询问，不臆测对方情况。'},
+         'source_ids只能从快照sources.id选取；没有资料时起草中性询问，不臆测对方情况。\n' + DRAFTING_RULES},
         {'role': 'user', 'content': _json({'goal': goal, 'brief': brief})},
     ], tier='mid', max_tokens=2500)
     if not isinstance(result, dict) or not isinstance(result.get('draft'), str) \

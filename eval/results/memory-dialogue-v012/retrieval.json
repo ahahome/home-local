@@ -1,0 +1,274 @@
+{
+  "evaluation": "memory-questions-v08",
+  "schema_version": 1,
+  "track": "retrieval",
+  "created_at": "2026-10-20T03:12:02.398837+00:00",
+  "report_id": "20261020-031202-398837-68807",
+  "run_status": "complete",
+  "fixture_version": "0.12.0-dialogue-acceptance-1",
+  "fixture_hash": "31156596f125bbf920f1d347ce8b3a374c492d6f3952ca13e6862142922891d5",
+  "corpus_provenance": "fictional_records_with_natural_questions",
+  "corpus_description": "v0.12 真实模型采样前冻结的虚构开发验收语料。沿用既有人物与记录，新增同名人物；所有自然问法均在本轮采样前确定，采样后不修改。不是独立真实用户分布或未见语义基准；语义逐轮待人工审阅，不按自由回答关键词估计准确率。",
+  "app_root": "/Users/emdoor/Documents/projects/integrate/home-local",
+  "app_source_hash": "03a19327124586cfb40c73ca246084b8a3ff91716b2437e170928186a5d3baf3",
+  "runner_source_hash": "0cab27da2a00ae850c9f1bfd8f9429a28f8ba021945a8f3e98d05d3d7265190c",
+  "app_source_changed_during_run": false,
+  "app_git": {
+    "sha": "d5b1cc3c459e2654359bedd72b918e28c15c432f",
+    "dirty": true
+  },
+  "runner_git": {
+    "sha": "d5b1cc3c459e2654359bedd72b918e28c15c432f",
+    "dirty": true
+  },
+  "configuration": {
+    "repeat": 1,
+    "tags": [],
+    "limit": null,
+    "worker_timeout_seconds": 600,
+    "models": [],
+    "configured_model_tiers": [],
+    "embedding": "disabled",
+    "cache": false,
+    "runtime": "separate process and temporary SQLite per scenario and repeat",
+    "retrieval_mode": "FTS only; network forbidden"
+  },
+  "limitations": [
+    "Fictional development corpus, not real users or an unseen semantic benchmark",
+    "String checks and source integrity do not establish answer correctness",
+    "Answer semantics require human review; no LLM self-grading"
+  ],
+  "expectation_semantics": {
+    "relevant": "Fixed-query relevance labels used only for retrieval ranking metrics",
+    "source_records": "Potentially relevant evidence for human review, not mandatory citations or an answer score",
+    "required_dependency_records": "Nonempty explicit record set that must actually be read as dependencies",
+    "required_cited_records": "Nonempty explicit record set that must appear in final citations, independently of access",
+    "limited_fact_rules": "Literal string probes only; negation and entailment require human review",
+    "deterministic_checks": "Stored provenance, identity scope, source status and lifecycle contracts",
+    "no_memory_writes": "Actual domain-table changes excluding the original audit evidence, not the intent label",
+    "saved_fields": "Exact current stored field value, not a model claim or a pending proposal",
+    "memory_focus": "Reference status, exact selected identities, immutable anchor and complete current source registration; not semantic correctness"
+  },
+  "human_review_rubric": [
+    "多轮承接：比较类集合必须沿上一条明确引用、同一归属的全部记忆重新读源；不得凭助手旧话续答。",
+    "生命周期：编辑读最新版并保留原锚身份；撤销或转移任一项均整组澄清，不能悄悄缩小集合。",
+    "日期：逐条分辨记忆日期、首次录入、人工编辑和恢复审计，未知时间明确未知。",
+    "身份：显式换人优先；同名未选、多人物集合和多条后的单数引用需澄清，不串档。",
+    "证据：必需已读依赖与必需最终引用分别按记录身份验证；这些是可验证契约，不是回答语义准确率。",
+    "写入：查询检查实际领域表无变化；record/mixed检查真实字段落库，口头成功不能替代回执。",
+    "人工语义：逐句核查结论、限定条件和来源；任何关键词命中或协议通过都不能当正确率。"
+  ],
+  "selected_scenarios": 1,
+  "details": [
+    {
+      "question": "电话 邮件 联系",
+      "tags": [
+        "acceptance",
+        "collection"
+      ],
+      "expected": {
+        "relevant": [
+          "xu_phone",
+          "xu_email"
+        ],
+        "excluded_persons": [
+          "tang",
+          "gu",
+          "zheng_product",
+          "zheng_design"
+        ]
+      },
+      "id": "xu-both-contact-records",
+      "tool": "query_memory",
+      "actual_arguments": {
+        "person": "小许",
+        "query": "电话 邮件 联系",
+        "top_k": 5
+      },
+      "result": {
+        "ok": true,
+        "results": [
+          {
+            "type": "memory",
+            "id": "489c4152b5824e6f",
+            "text": "许澄说项目事项都写邮件，不要直接给他打电话。",
+            "ts": 1757725200000,
+            "kind": "semantic",
+            "person": "许澄",
+            "source": {
+              "type": "memory",
+              "entity_id": "489c4152b5824e6f",
+              "person": {
+                "id": "74df102668e94d32",
+                "display_name": "许澄"
+              },
+              "text": "许澄说项目事项都写邮件，不要直接给他打电话。",
+              "date": 1757725200000,
+              "temporal_status": "historical_background",
+              "revision": 0,
+              "ts": 1757725200000,
+              "kind": "semantic",
+              "evidence": {
+                "id": "0671bfb6ada7450b",
+                "kind": "text",
+                "excerpt": "许澄说项目事项都写邮件，不要直接给他打电话。",
+                "source_ref": "eval-v08:xu_email",
+                "blob_hash": null,
+                "created_at": 1792465923056
+              },
+              "captured_at": 1792465923058,
+              "record_context": {
+                "status": "active",
+                "recorded_at": 1792465923056,
+                "last_user_edit_at": null,
+                "last_lifecycle_change": null
+              },
+              "origin_source": {
+                "id": "0671bfb6ada7450b",
+                "kind": "text",
+                "excerpt": "许澄说项目事项都写邮件，不要直接给他打电话。",
+                "source_ref": "eval-v08:xu_email",
+                "blob_hash": null,
+                "created_at": 1792465923056
+              }
+            },
+            "score": 0.0933,
+            "match_type": "text_partial",
+            "when": "2025-09-13 09:00"
+          },
+          {
+            "type": "memory",
+            "id": "ad28c4035cec4936",
+            "text": "许澄说周三午休方便接电话，其他时候先留言。",
+            "ts": 1757638800000,
+            "kind": "semantic",
+            "person": "许澄",
+            "source": {
+              "type": "memory",
+              "entity_id": "ad28c4035cec4936",
+              "person": {
+                "id": "74df102668e94d32",
+                "display_name": "许澄"
+              },
+              "text": "许澄说周三午休方便接电话，其他时候先留言。",
+              "date": 1757638800000,
+              "temporal_status": "historical_background",
+              "revision": 0,
+              "ts": 1757638800000,
+              "kind": "semantic",
+              "evidence": {
+                "id": "349f8fbb70ae430a",
+                "kind": "text",
+                "excerpt": "许澄说周三午休方便接电话，其他时候先留言。",
+                "source_ref": "eval-v08:xu_phone",
+                "blob_hash": null,
+                "created_at": 1792465923056
+              },
+              "captured_at": 1792465923058,
+              "record_context": {
+                "status": "active",
+                "recorded_at": 1792465923056,
+                "last_user_edit_at": null,
+                "last_lifecycle_change": null
+              },
+              "origin_source": {
+                "id": "349f8fbb70ae430a",
+                "kind": "text",
+                "excerpt": "许澄说周三午休方便接电话，其他时候先留言。",
+                "source_ref": "eval-v08:xu_phone",
+                "blob_hash": null,
+                "created_at": 1792465923056
+              }
+            },
+            "score": 0.0467,
+            "match_type": "text_partial",
+            "when": "2025-09-12 09:00"
+          }
+        ],
+        "scope": "all",
+        "scope_inferred": false,
+        "scoped_person": {
+          "id": "74df102668e94d32",
+          "display_name": "许澄"
+        },
+        "scoped_person_ids": [
+          "74df102668e94d32"
+        ]
+      },
+      "ranked_records": [
+        "xu_email",
+        "xu_phone"
+      ],
+      "metrics": {
+        "recall_at_1": 0.5,
+        "recall_at_3": 1.0,
+        "recall_at_5": 1.0,
+        "mrr_at_5": 1.0
+      },
+      "deterministic_checks": [
+        {
+          "name": "tool_completed",
+          "passed": true
+        },
+        {
+          "name": "excluded_records_absent",
+          "passed": true
+        },
+        {
+          "name": "source_snapshot:0",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "person_isolation:0",
+          "passed": true
+        },
+        {
+          "name": "source_snapshot:1",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "name": "person_isolation:1",
+          "passed": true
+        }
+      ],
+      "semantic_review": {
+        "status": "not_applicable_fixed_retrieval"
+      },
+      "repeat": 1
+    }
+  ],
+  "summary": {
+    "scenarios": 1,
+    "units": 1,
+    "runtime_errors": 0,
+    "scenario_errors": 0,
+    "failed_turns": null,
+    "deterministic_checks": {
+      "total": 6,
+      "passed": 6,
+      "failed": 0
+    },
+    "limited_fact_checks": {
+      "total": 0,
+      "passed": 0,
+      "failed": 0,
+      "meaning": "Limited string rules, not semantic answer accuracy"
+    },
+    "semantic_review": {
+      "status": "not_applicable",
+      "pending_turns": 0,
+      "reviewed_turns": 0,
+      "score": null
+    },
+    "retrieval": {
+      "positive_queries": 1,
+      "nonranking_cases": 0,
+      "recall_at_1": 0.5,
+      "recall_at_3": 1.0,
+      "recall_at_5": 1.0,
+      "mrr_at_5": 1.0
+    }
+  }
+}

@@ -1,0 +1,210 @@
+{
+  "provenance": "controlled_offline_reproduction_not_recovered_real_trace",
+  "report_path": "/Users/emdoor/Documents/projects/integrate/home-local/eval/results/answer-evidence-v013/final-followups/answers-20261020-104913-948740-87843-d8d0fc28.json",
+  "results": [
+    {
+      "mode": "no_write_tool",
+      "error": null,
+      "extract_calls": [
+        "帮我记下：乐团周汐现在住在长沙。"
+      ],
+      "model_calls": [
+        {
+          "kind": "classifier",
+          "text": "周汐的邀约应该先怎么沟通？"
+        },
+        {
+          "kind": "classifier",
+          "text": "是乐团周汐。帮我记下：乐团周汐现在住在长沙。再查她演出邀约需要先发什么。"
+        },
+        {
+          "kind": "draft"
+        }
+      ],
+      "final_dependencies": [
+        {
+          "type": "memory",
+          "entity_id": "cc93cf1970224ffc",
+          "status": "current"
+        },
+        {
+          "type": "profile_context",
+          "entity_id": "da97534586744a18",
+          "status": "current"
+        }
+      ],
+      "field_rows": [],
+      "pending_rows": [
+        {
+          "id": "7555c7736d584784",
+          "kind": "person_identity",
+          "payload": "{\"candidates\": [{\"display_name\": \"周汐\", \"person_id\": \"b7c537af01d54d83\", \"score\": 0.9}, {\"display_name\": \"周汐\", \"person_id\": \"da97534586744a18\", \"score\": 0.9}], \"canonical_name\": \"周汐\", \"channel\": \"chat\", \"evidence_id\": \"855c63ed16c64971\", \"fingerprint\": \"75d09c5bc7099027584fb1e71233ed3199202ffbe5c2ab262032d90d9308fe0d\", \"mention\": \"周汐\", \"patch\": {\"aliases\": [], \"canonical_name\": \"周汐\", \"facts\": [{\"_source_verified\": true, \"confidence\": 0.9, \"evidence\": \"乐团周汐现在住在长沙\", \"text\": \"周汐现在住在长沙\"}], \"fields\": [{\"_source_verified\": true, \"confidence\": 0.9, \"evidence\": \"现在住在长沙\", \"field\": \"city\", \"valid_from\": null, \"value\": \"长沙\"}, {\"_source_verified\": true, \"confidence\": 0.9, \"evidence\": \"乐团周汐\", \"field\": \"company\", \"valid_from\": null, \"value\": \"乐团\"}], \"ledger\": [], \"name\": \"周汐\", \"promises\": [], \"relations\": [], \"value_read\": null}, \"source_msg_id\": \"e1520e8bc5724029\", \"source_text\": \"帮我记下：乐团周汐现在住在长沙。\"}",
+          "reason": "身份不确定（最高分 0.90 且存在并列候选）",
+          "created_at": 1792494127928,
+          "resolved_at": null,
+          "resolution": null
+        }
+      ],
+      "tool_rows": [],
+      "answer_saved": true
+    },
+    {
+      "mode": "save_person_fact",
+      "error": {
+        "type": "SourceChangedError",
+        "message": "引用资料在生成期间发生变化，请重试以读取最新记录"
+      },
+      "extract_calls": [
+        "帮我记下：乐团周汐现在住在长沙。"
+      ],
+      "model_calls": [
+        {
+          "kind": "classifier",
+          "text": "周汐的邀约应该先怎么沟通？"
+        },
+        {
+          "kind": "classifier",
+          "text": "是乐团周汐。帮我记下：乐团周汐现在住在长沙。再查她演出邀约需要先发什么。"
+        },
+        {
+          "kind": "draft",
+          "tool": "save_person_fact",
+          "args": {
+            "person_id": "61b85aeacac54766",
+            "person": "乐团周汐",
+            "field": "city",
+            "value": "长沙"
+          }
+        },
+        {
+          "kind": "draft"
+        }
+      ],
+      "final_dependencies": [
+        {
+          "type": "memory",
+          "entity_id": "d9908696f7474a1f",
+          "status": "current"
+        },
+        {
+          "type": "profile_context",
+          "entity_id": "61b85aeacac54766",
+          "status": "updated",
+          "old": {
+            "type": "profile_context",
+            "entity_id": "61b85aeacac54766",
+            "text": "人物：周汐（别名：乐团周汐）"
+          },
+          "current": {
+            "type": "profile_context",
+            "entity_id": "61b85aeacac54766",
+            "text": "人物：周汐（别名：乐团周汐）\n字段：city=长沙"
+          },
+          "diff": [
+            "--- captured",
+            "+++ current",
+            "@@ -1 +1,2 @@",
+            " 人物：周汐（别名：乐团周汐）",
+            "+字段：city=长沙"
+          ]
+        }
+      ],
+      "field_rows": [
+        {
+          "person_id": "61b85aeacac54766",
+          "field": "city",
+          "value": "长沙",
+          "confidence": 0.95,
+          "evidence_id": "01db5effe91b4c12",
+          "valid_from": 1792494127971,
+          "valid_to": null,
+          "recorded_at": 1792494127971
+        }
+      ],
+      "pending_rows": [
+        {
+          "id": "dd8a6c4a72f2434d",
+          "kind": "person_identity",
+          "payload": "{\"candidates\": [{\"display_name\": \"周汐\", \"person_id\": \"7754a51998fc4b4c\", \"score\": 0.9}, {\"display_name\": \"周汐\", \"person_id\": \"61b85aeacac54766\", \"score\": 0.9}], \"canonical_name\": \"周汐\", \"channel\": \"chat\", \"evidence_id\": \"01db5effe91b4c12\", \"fingerprint\": \"75d09c5bc7099027584fb1e71233ed3199202ffbe5c2ab262032d90d9308fe0d\", \"mention\": \"周汐\", \"patch\": {\"aliases\": [], \"canonical_name\": \"周汐\", \"facts\": [{\"_source_verified\": true, \"confidence\": 0.9, \"evidence\": \"乐团周汐现在住在长沙\", \"text\": \"周汐现在住在长沙\"}], \"fields\": [{\"_source_verified\": true, \"confidence\": 0.9, \"evidence\": \"现在住在长沙\", \"field\": \"city\", \"valid_from\": null, \"value\": \"长沙\"}, {\"_source_verified\": true, \"confidence\": 0.9, \"evidence\": \"乐团周汐\", \"field\": \"company\", \"valid_from\": null, \"value\": \"乐团\"}], \"ledger\": [], \"name\": \"周汐\", \"promises\": [], \"relations\": [], \"value_read\": null}, \"source_msg_id\": \"d5803357da1c44db\", \"source_text\": \"帮我记下：乐团周汐现在住在长沙。\"}",
+          "reason": "身份不确定（最高分 0.90 且存在并列候选）",
+          "created_at": 1792494127941,
+          "resolved_at": null,
+          "resolution": null
+        }
+      ],
+      "tool_rows": [
+        {
+          "id": "1a9a6e17a55d45b1",
+          "conversation_id": "53565c2778384b1c",
+          "role": "tool",
+          "content": "{\"ok\": true, \"outcomes\": [{\"kind\": \"field\", \"status\": \"ok\", \"detail\": \"city=长沙\"}], \"person_ids\": [\"61b85aeacac54766\"], \"pending_ids\": [], \"receipt\": {\"type\": \"save_person_fact\", \"outcomes\": [{\"kind\": \"field\", \"status\": \"ok\", \"detail\": \"city=长沙\"}], \"pending_ids\": []}}",
+          "tool_calls": "{\"tool_call_id\": \"offline-write\", \"name\": \"save_person_fact\"}",
+          "created_at": 1792494127971
+        }
+      ],
+      "answer_saved": false
+    },
+    {
+      "mode": "note",
+      "error": null,
+      "extract_calls": [
+        "帮我记下：乐团周汐现在住在长沙。"
+      ],
+      "model_calls": [
+        {
+          "kind": "classifier",
+          "text": "周汐的邀约应该先怎么沟通？"
+        },
+        {
+          "kind": "classifier",
+          "text": "是乐团周汐。帮我记下：乐团周汐现在住在长沙。再查她演出邀约需要先发什么。"
+        },
+        {
+          "kind": "draft",
+          "tool": "note",
+          "args": {
+            "text": "帮我记下：乐团周汐现在住在长沙。"
+          }
+        },
+        {
+          "kind": "draft"
+        }
+      ],
+      "final_dependencies": [
+        {
+          "type": "memory",
+          "entity_id": "cc2c32bf8e3644b3",
+          "status": "current"
+        },
+        {
+          "type": "profile_context",
+          "entity_id": "da60d98ce98148c6",
+          "status": "current"
+        }
+      ],
+      "field_rows": [],
+      "pending_rows": [
+        {
+          "id": "e11843870de14ee4",
+          "kind": "person_identity",
+          "payload": "{\"candidates\": [{\"display_name\": \"周汐\", \"person_id\": \"f31d82dbc31142f0\", \"score\": 0.9}, {\"display_name\": \"周汐\", \"person_id\": \"da60d98ce98148c6\", \"score\": 0.9}], \"canonical_name\": \"周汐\", \"channel\": \"chat\", \"evidence_id\": \"d0e787c56114465b\", \"fingerprint\": \"75d09c5bc7099027584fb1e71233ed3199202ffbe5c2ab262032d90d9308fe0d\", \"mention\": \"周汐\", \"patch\": {\"aliases\": [], \"canonical_name\": \"周汐\", \"facts\": [{\"_source_verified\": true, \"confidence\": 0.9, \"evidence\": \"乐团周汐现在住在长沙\", \"text\": \"周汐现在住在长沙\"}], \"fields\": [{\"_source_verified\": true, \"confidence\": 0.9, \"evidence\": \"现在住在长沙\", \"field\": \"city\", \"valid_from\": null, \"value\": \"长沙\"}, {\"_source_verified\": true, \"confidence\": 0.9, \"evidence\": \"乐团周汐\", \"field\": \"company\", \"valid_from\": null, \"value\": \"乐团\"}], \"ledger\": [], \"name\": \"周汐\", \"promises\": [], \"relations\": [], \"value_read\": null}, \"source_msg_id\": \"c8b9574a4bb64572\", \"source_text\": \"帮我记下：乐团周汐现在住在长沙。\"}",
+          "reason": "身份不确定（最高分 0.90 且存在并列候选）",
+          "created_at": 1792494127980,
+          "resolved_at": null,
+          "resolution": null
+        }
+      ],
+      "tool_rows": [
+        {
+          "id": "69634cb860df452f",
+          "conversation_id": "26a510e4ceca4c1d",
+          "role": "tool",
+          "content": "{\"ok\": true, \"outcomes\": [{\"kind\": \"note\", \"status\": \"ok\", \"detail\": \"帮我记下：乐团周汐现在住在长沙。\"}], \"person_ids\": [], \"pending_ids\": [], \"receipt\": {\"type\": \"note\", \"outcomes\": [{\"kind\": \"note\", \"status\": \"ok\", \"detail\": \"帮我记下：乐团周汐现在住在长沙。\"}], \"pending_ids\": []}}",
+          "tool_calls": "{\"tool_call_id\": \"offline-write\", \"name\": \"note\"}",
+          "created_at": 1792494127981
+        }
+      ],
+      "answer_saved": true
+    }
+  ]
+}

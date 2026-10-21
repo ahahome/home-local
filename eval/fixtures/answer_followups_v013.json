@@ -1,0 +1,64 @@
+{
+  "version": "0.13.0-followups-new-wording-1",
+  "provenance": "fictional_records_with_natural_questions",
+  "description": "v0.13 首版反例修复期间，独立于具体补丁设计冻结的额外虚构新措辞语料。具体问题在最终应用冻结前不向实现代理披露，不使用问题调实现；首次正式采样前冻结，采样后不改问题或期望。仅内部开发构造的新措辞检查，非外部盲测、真实用户分布或语义准确率基准。与首版20答的已知同题回归分开报告，不失败后重跑筛绿。",
+  "time_anchor": "2026-10-20T19:00:00+08:00",
+  "top_k": 5,
+  "persons": [
+    {"key": "yu", "name": "余麦", "aliases": ["小麦"]},
+    {"key": "zhou_pottery", "name": "周汐", "aliases": ["陶艺周汐"]},
+    {"key": "zhou_music", "name": "周汐", "aliases": ["乐团周汐"]}
+  ],
+  "fields": [
+    {"key": "yu_company", "person": "yu", "field": "company", "value": "白桥照明", "valid_from": 1767225600000}
+  ],
+  "memories": [
+    {"key": "yu_quote", "person": "yu", "text": "余麦说讨论样品报价时先发邮件列出数量和交期，收到信息后再约语音。", "ts": 1768006800000},
+    {"key": "pottery_order", "person": "zhou_pottery", "text": "陶艺周汐说接定制订单时先发器型参考图和尺寸，材料确认后才讨论工期。", "ts": 1768093200000},
+    {"key": "music_order", "person": "zhou_music", "text": "乐团周汐说演出邀约先邮件发场地与曲目范围，排练期间不接电话。", "ts": 1768179600000}
+  ],
+  "interactions": [],
+  "retrieval_cases": [
+    {"id": "yu-sample-quote", "tags": ["new_wording", "condition"], "question": "样品 报价 数量 交期 邮件", "args": {"person": "小麦"}, "expect": {"relevant": ["yu_quote"], "excluded_persons": ["zhou_pottery", "zhou_music"]}}
+  ],
+  "dialogues": [
+    {
+      "id": "message-revision-followup",
+      "tags": ["new_wording", "generation_followup", "draft"],
+      "turns": [
+        {"question": "按小麦说的报价流程，拟一封询问样品价格的短邮件，数量和交期我还没整理好。", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["yu_quote"], "required_dependency_records": ["yu_quote"], "allowed_persons": ["yu"], "review_points": ["实际提供短邮件草稿，保留报价时先数量交期的条件，不虚称信息已经整理或邮件已经发出；占位信息须清楚可辨。"]}},
+        {"question": "保留原意，压到三十字以内，语气随和一点；然后提醒我发之前还有什么没补。", "expect": {"intent": "query", "no_memory_writes": true, "allowed_persons": ["yu"], "review_points": ["承接上一条草稿并完成简写、语气修改和发送前提醒，不因没有再次出现写字或建议字样而只返回记录卡/澄清。三十字限制针对草稿，提醒可另列。不能把缺少的数量交期改成已提供。"]}}
+      ]
+    },
+    {
+      "id": "known-alias-selection-is-readonly",
+      "tags": ["new_wording", "ambiguity", "readonly_identity"],
+      "turns": [
+        {"question": "周汐接定制之前要求我准备什么？", "expect": {"intent": "query", "no_memory_writes": true, "ambiguity": ["zhou_pottery", "zhou_music"], "review_points": ["同名先澄清，不能依据定制关键词静默决定人物。"]}},
+        {"question": "我指的是陶艺周汐。看看她接单时要先提供哪些东西。", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["pottery_order"], "required_dependency_records": ["pottery_order"], "required_cited_records": ["pottery_order"], "forbidden_source_records": ["music_order"], "allowed_persons": ["zhou_pottery"], "review_points": ["这是选择已有别名，不是新增别名、公司或人物提案；不得生成pending身份项。原文保留器型图、尺寸、材料确认后工期三者条件，不混入演出信息。"]}}
+      ]
+    },
+    {
+      "id": "alias-selection-keeps-genuine-new-fact",
+      "tags": ["new_wording", "ambiguity", "mixed", "identity_negative_control"],
+      "turns": [
+        {"question": "周汐的邀约应该先怎么沟通？", "expect": {"intent": "query", "no_memory_writes": true, "ambiguity": ["zhou_pottery", "zhou_music"], "review_points": ["同名先澄清，不能依据邀约猜人物。"]}},
+        {"question": "是乐团周汐。帮我记下：乐团周汐现在住在长沙。再查她演出邀约需要先发什么。", "expect": {"intent": "mixed", "saved_fields": [{"person": "zhou_music", "field": "city", "value": "长沙"}], "source_records": ["music_order"], "required_dependency_records": ["music_order"], "allowed_persons": ["zhou_music"], "forbidden_source_records": ["pottery_order"], "review_points": ["选择既有别名后还有明确的新居住事实，不能被身份只读守卫吞掉；长沙须进入正确人物当前city而非待确认或另一同名者。查邀约任务也需完成，保留先邮件场地曲目及排练不接电话条件。"]}}
+      ]
+    },
+    {
+      "id": "possessive-memory-date-followup",
+      "tags": ["new_wording", "memory_reference", "temporal", "edit"],
+      "turns": [
+        {"question": "把余麦关于样品报价和语音的那段记忆原文列出来。", "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["yu_quote"], "required_dependency_records": ["yu_quote"], "required_cited_records": ["yu_quote"], "allowed_persons": ["yu"], "review_points": ["引用完整唯一联系记忆，后续日期追问应有明确可核验锚点。"]}},
+        {"question": "那条记录的标注日期与录入、修改日期分别是什么？", "actions": [{"op": "edit", "memory": "yu_quote", "text": "余麦的报价沟通要求：先发邮件说明数量、交期和样品规格，收到后再约语音。"}], "expect": {"intent": "query", "no_memory_writes": true, "source_records": ["yu_quote"], "required_dependency_records": ["yu_quote"], "allowed_persons": ["yu"], "previous_source_states": {"yu_quote": "updated"}, "review_points": ["承接‘那条记录的’所有格记忆指代，本轮重新读修改后版本；分别使用记忆所标ts、首次created_at、memory_correction最近编辑created_at，不从上一条助手文本复述日期。人工编辑不证明本人改口。"]}}
+      ]
+    }
+  ],
+  "human_review_rubric": [
+    "逐答核对资料卡原文/身份/日期与本轮SQLite来源；只读和保存状态使用真实变更判断。",
+    "独立检查生成任务是否实际完成，以及草稿是否描述尚未发生的发送、准备或对方答复。",
+    "已有别名澄清和带真正新增事实的mixed要分别核对，不用前者误写修复来吞掉后者。",
+    "这是内部开发新措辞语料，首次采样后不再是未见问题；代理证据审阅不计算人工或语义准确率。"
+  ]
+}

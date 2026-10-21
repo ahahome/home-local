@@ -59,7 +59,7 @@ const chatSourceTemporal={historical_background:'已记录背景',current_field:
 function validChatSource(source){return !!source&&typeof source==='object'&&/^S[1-9]\d*$/.test(source.id||'')&&Object.hasOwn(chatSourceKinds,source.type)&&typeof source.entity_id==='string'&&typeof source.text==='string';}
 function chatSourceAttrs(cid,mid,sid){return `data-cid="${esc(cid)}" data-mid="${esc(mid)}" data-sid="${esc(sid)}"`;}
 function chatSourceLabel(source){return [source.person?.display_name,chatSourceTemporal[source.temporal_status]||chatSourceKinds[source.type],source.date?memoryDate(source.date):''].filter(Boolean).join(' · ');}
-function chatSourceWarnings(meta){const warnings=[...new Set((Array.isArray(meta?.source_warnings)?meta.source_warnings:[]).map(item=>typeof item?.message==='string'?item.message.trim():'').filter(Boolean))];return warnings.length?`<div class="chat-source-warnings" role="note">${warnings.map(text=>`<p>${esc(text)}</p>`).join('')}</div>`:'';}
+function chatSourceWarnings(meta){const warnings=[...new Set((Array.isArray(meta?.source_warnings)?meta.source_warnings:[]).filter(item=>!(item?.code==='review_unavailable'&&meta?.answer_review?.status==='unavailable')).map(item=>typeof item?.message==='string'?item.message.trim():'').filter(Boolean))];return warnings.length?`<div class="chat-source-warnings" role="note">${warnings.map(text=>`<p>${esc(text)}</p>`).join('')}</div>`:'';}
 function chatPersonChoices(meta,mid,cid){
   const scope=meta?.conversation_scope;if(scope?.mode!=='clarify'||!mid||!cid)return '';
   const seen=new Set(),candidates=(Array.isArray(scope.candidates)?scope.candidates:[]).filter(person=>{if(typeof person?.person_id!=='string'||!person.person_id||typeof person.display_name!=='string'||seen.has(person.person_id))return false;seen.add(person.person_id);return true;}).slice(0,20);
@@ -87,7 +87,7 @@ function chatIntentStatus(meta,mid,cid){
   if(!mid||!cid||!intent||intent.allow_writes!==false||!(intent.intent==='unknown'||['failed','invalid'].includes(intent.status)))return '';
   const category=intent.classifier?.failure_category||(intent.status==='failed'?'request':null);
   const reason=category==='config'?'记事分析配置不可用，请先检查设置。':['timeout','request','refusal'].includes(category)?'记事分析服务暂时不可用。':['json','schema','empty_content','truncated'].includes(category)?'记事分析响应未通过校验。':category==='span'?'未能确认完整、安全的记事原文。':'尚不能确定这条消息是否需要记事。';
-  return `<section class="chat-intent-status" aria-label="重新分析消息"><p>${esc(reason)} 本次未保存记事或执行操作。</p><p class="muted">重新分析后，若原文包含明确记事内容，将按原文保存。旧回答保留。</p>${btn('重新分析原消息','chat-reanalyze',`data-cid="${esc(cid)}" data-mid="${esc(mid)}"`,'small-button')}</section>`;
+  return `<section class="chat-intent-status" aria-label="重新分析消息"><p>${esc(reason)} 本次未保存记事或执行操作。</p><p class="muted">重新分析会再次判断原文；如包含明确记事，将保存或执行操作。旧回答保留。任务中心的普通重试会沿用本次记事判断。</p>${btn('重新分析原消息（可能保存）','chat-reanalyze',`data-cid="${esc(cid)}" data-mid="${esc(mid)}"`,'small-button')}</section>`;
 }
 async function reanalyzeChat(data){
   if(state.page!=='chat'||state.cid!==data.cid)return;
@@ -104,8 +104,38 @@ async function reanalyzeChat(data){
     throw error;
   }finally{state.sending=false;if(button?.isConnected)button.disabled=false;}
 }
+function chatReviewStatus(meta,mid,cid){
+  if(meta?.answer_review?.status!=='unavailable')return '';
+  const intent=meta.turn_intent,scope=meta.conversation_scope;
+  const readonly=intent?.intent==='query'&&intent.allow_writes===false&&['classified','ok'].includes(intent.status)&&Array.isArray(intent.record_spans)&&intent.record_spans.length===0&&scope?.conversation_id===cid&&typeof scope.user_message_id==='string'&&scope.blocked===false;
+  const retry=readonly&&mid&&cid?`<p class="muted">沿用原问题和人物，重新读取资料并生成回答。旧回答保留。</p>${btn('重新生成回答（仅查询）','chat-regenerate',`data-cid="${esc(cid)}" data-mid="${esc(mid)}"`,'small-button')}`:'<p class="muted">本轮记事或操作结果请以下方回执为准；可重新明确提出查询。</p>';
+  const notice=meta.answer_review.method==='server_record_revision'?'资料核对未完成，未展示未经核对的草稿。':'资料核对未完成，请对照引用来源核实当前回答。';
+  return `<section class="chat-intent-status" aria-label="回答核对状态"><p>${notice}</p>${retry}</section>`;
+}
+function chatRegenerationLabel(meta){
+  const marker=meta?.regeneration;if(typeof marker?.question!=='string'||!marker.source_assistant_message_id||marker.source_user_message_id!==meta?.conversation_scope?.user_message_id)return '';
+  const scope=meta.conversation_scope,names=(Array.isArray(scope.candidates)?scope.candidates:[]).filter(person=>Array.isArray(scope.person_ids)&&scope.person_ids.includes(person?.person_id)&&typeof person.display_name==='string').map(person=>person.display_name);
+  return `<p class="muted">重新回答原问题${names.length?` · ${esc(names.join('、'))}`:''}：${esc(chatUserText(marker.question,{conversation_scope:scope}))}</p>`;
+}
+async function regenerateChat(data){
+  if(state.page!=='chat'||state.cid!==data.cid)return;
+  if(state.sending||currentStream())return toast('请等待当前回复，或先取消');
+  const cid=state.cid;state.sending=true;
+  const button=document.querySelector(`[data-action="chat-regenerate"][data-mid="${CSS.escape(data.mid)}"]`);if(button)button.disabled=true;
+  try{
+    const task=await api(`/conversations/${encodeURIComponent(cid)}/messages/${encodeURIComponent(data.mid)}/regenerate`,{});
+    if(state.page==='chat'&&state.cid===cid)await loadMessages();
+    if(terminal.has(task.status)){if(state.page==='chat'&&state.cid===cid)toast('这条问题已有重新生成的回答，请查看后续结果；中断的任务可在任务中心重试。');}
+    else watch(task,cid);
+  }catch(error){
+    if(!error.status)throw new Error('连接中断，生成可能已经开始。可再次点击，系统会继续同一次生成。');
+    throw error;
+  }finally{state.sending=false;if(button?.isConnected)button.disabled=false;}
+}
 function chatAnswer(text,meta,mid,cid){
-  const host=document.createElement('div');host.innerHTML=md(text,true);
+  const host=document.createElement('div');
+  const fixedFailure=meta?.answer_review?.status==='unavailable'&&meta.answer_review.method==='server_record_revision'&&text==='本轮资料核对未完成，请重试回答。记忆处理结果请以下方回执为准。';
+  host.innerHTML=fixedFailure?'':md(text,true);
   const sources=new Map();for(const source of Array.isArray(meta?.sources)?meta.sources:[])if(validChatSource(source)&&!sources.has(source.id))sources.set(source.id,source);
   const used=new Set();
   if(cid&&mid&&sources.size){
@@ -117,7 +147,7 @@ function chatAnswer(text,meta,mid,cid){
     }
   }
   const list=[...used].map(id=>sources.get(id));
-  return host.innerHTML+chatSourceWarnings(meta)+chatPersonChoices(meta,mid,cid)+(list.length?`<details class="chat-sources"><summary>引用资料（${list.length}）</summary><ol class="chat-source-list">${list.map(source=>`<li>${btn(`${esc(source.id)} <span>${esc(chatSourceLabel(source))}</span>`,'chat-source',chatSourceAttrs(cid,mid,source.id),'chat-source-link')}<p class="chat-source-preview">${esc(memoryPreview(source.text,130))}</p></li>`).join('')}</ol></details>`:'');
+  return chatRegenerationLabel(meta)+host.innerHTML+chatSourceWarnings(meta)+chatPersonChoices(meta,mid,cid)+(list.length?`<details class="chat-sources"><summary>引用资料（${list.length}）</summary><ol class="chat-source-list">${list.map(source=>`<li>${btn(`${esc(source.id)} <span>${esc(chatSourceLabel(source))}</span>`,'chat-source',chatSourceAttrs(cid,mid,source.id),'chat-source-link')}<p class="chat-source-preview">${esc(memoryPreview(source.text,130))}</p></li>`).join('')}</ol></details>`:'')+chatReviewStatus(meta,mid,cid);
 }
 function message(role,text,meta,mid=null,cid=state.cid){return `<div class="message ${role}"${mid?` data-message-id="${esc(mid)}"`:''}>${avatar(role==='user'?'我':'h')}<div class="message-content ${role==='assistant'?'markdown':''}">${role==='assistant'?chatAnswer(text,meta,mid,cid):esc(chatUserText(text,meta))}${role==='assistant'?receipts(meta):chatIntentStatus(meta,mid,cid)}</div></div>`;}
 async function go(page){history.pushState(null,'','#/'+page);await route();}
@@ -286,7 +316,7 @@ function chatSourcePeople(source,recordState){
 function chatSourceBody(view){
   const {source,recordState}=view,status=chatSourceStates[recordState.status]||chatSourceStates.unavailable,seen=new Set();
   const evidence=[[source.evidence,'引用时的证据'],[source.initial_source,'初始确认记录'],[source.origin_source,'原始来源']].map(([item,title],index)=>{if(!item)return index===0?memorySourceDetail(null,title):'';const key=item.id||item.source_ref||JSON.stringify(item);if(seen.has(key))return '';seen.add(key);return memorySourceSection(item,title);}).join('');
-  return `<section class="chat-source-detail"><p class="chat-source-meta">${tag(source.id)} ${tag(chatSourceTemporal[source.temporal_status]||chatSourceKinds[source.type])}${source.field?` <span>${esc(fieldLabel(source.field))}</span>`:''}</p><p class="chat-source-status ${status.cls}" role="status">${esc(status.text)}</p><h3>回答时引用的内容</h3><p class="memory-detail-content">${esc(source.text)}</p><dl class="memory-detail-meta"><dt>所属人物</dt><dd>${esc(source.person?.display_name||(source.people||[]).map(person=>person.display_name).filter(Boolean).join('、')||'个人 / 全局')}</dd><dt>${source.type==='field'?'记录日期':source.temporal_status==='contact'?'联系日期':'发生 / 记录日期'}</dt><dd>${esc(followupDate(source.date))}</dd>${source.type==='field'&&source.valid_from!=null?`<dt>有效期间</dt><dd>${esc(followupDate(source.valid_from))} 至 ${source.valid_to!=null?esc(followupDate(source.valid_to)):'回答时仍有效'}</dd>`:''}${source.type==='memory'&&source.revision!=null?`<dt>引用版本</dt><dd>${esc(source.revision)}</dd>`:''}</dl><p class="chat-source-captured">引用保存于 ${esc(followupDate(source.captured_at))}</p>${evidence}<div class="chat-source-actions">${source.type==='memory'&&recordState.status!=='unavailable'?btn('当前记忆详情','memory-detail',`data-id="${esc(source.entity_id)}"`,'small-button'):''}${chatSourcePeople(source,recordState)}${btn('重新核对','chat-source',chatSourceAttrs(view.cid,view.mid,view.sid),'ghost small-button')}</div></section>`;
+  return `<section class="chat-source-detail"><p class="chat-source-meta">${tag(source.id)} ${tag(chatSourceTemporal[source.temporal_status]||chatSourceKinds[source.type])}${source.field?` <span>${esc(fieldLabel(source.field))}</span>`:''}</p><p class="chat-source-status ${status.cls}" role="status">${esc(status.text)}</p><h3>回答时引用的内容</h3><p class="memory-detail-content">${esc(source.text)}</p><dl class="memory-detail-meta"><dt>所属人物</dt><dd>${esc(source.person?.display_name||(source.people||[]).map(person=>person.display_name).filter(Boolean).join('、')||'个人 / 全局')}</dd><dt>${source.type==='field'?'字段生效日期':source.type==='memory'?'记忆所标日期':source.temporal_status==='contact'?'联系时间':'发生时间'}</dt><dd>${esc(followupDate(source.date))}</dd>${source.type==='field'&&source.valid_from!=null?`<dt>有效期间</dt><dd>${esc(followupDate(source.valid_from))} 至 ${source.valid_to!=null?esc(followupDate(source.valid_to)):'回答时仍有效'}</dd>`:''}${source.type==='memory'&&source.revision!=null?`<dt>引用版本</dt><dd>${esc(source.revision)}</dd>`:''}</dl><p class="chat-source-captured">引用保存于 ${esc(followupDate(source.captured_at))}</p>${evidence}<div class="chat-source-actions">${source.type==='memory'&&recordState.status!=='unavailable'?btn('当前记忆详情','memory-detail',`data-id="${esc(source.entity_id)}"`,'small-button'):''}${chatSourcePeople(source,recordState)}${btn('重新核对','chat-source',chatSourceAttrs(view.cid,view.mid,view.sid),'ghost small-button')}</div></section>`;
 }
 async function openChatSource(data){
   const {cid,mid,sid}=data;if(!cid||!mid||!/^S[1-9]\d*$/.test(sid||''))return;
@@ -825,7 +855,7 @@ const actions={
   'skip-content':()=>$('#main').focus(),
   'chat-history-open':()=>toggleChatHistory(true), 'chat-history-close':()=>toggleChatHistory(false),
   'new-chat':()=>state.sending?toast('请等待当前消息提交完成'):newConversation(), 'select-chat':async d=>{if(state.sending)return toast('请等待当前消息提交完成');toggleChatHistory(false);state.cid=d.id;localStorage.setItem('home-conversation',d.id);await go('chat');},
-  'send-chat':()=>sendChat(), prompt:d=>promptChat(d.text), 'chat-reanalyze':d=>reanalyzeChat(d),
+  'send-chat':()=>sendChat(), prompt:d=>promptChat(d.text), 'chat-reanalyze':d=>reanalyzeChat(d), 'chat-regenerate':d=>regenerateChat(d),
   'chat-source':openChatSource,
   'chat-choose-person':chooseChatPerson,
   'quick-note':async()=>{const text=$('#quick-note').value.trim();if(!text)return toast('请输入近况');await promptChat(text);state.quickNote='';}, 'capture-text':()=>promptChat($('#capture-text').value),

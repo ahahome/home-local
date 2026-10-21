@@ -1,0 +1,203 @@
+{
+  "schema_version": 1,
+  "algorithm": "sha256",
+  "path_base": "repository_root",
+  "scope": "Files with .json, .md or .py suffix under eval/results/answer-evidence-v013, excluding this manifest. Includes original failures, reports, separate evidence reviews and archived diagnostic/runner sources.",
+  "files": [
+    {
+      "path": "eval/results/answer-evidence-v013/README.md",
+      "bytes": 5080,
+      "sha256": "fa0436fd6773d5d8e96d05ebabe8ba4ce152360a7366db7a0411b9ae57d54e14"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/development-baseline/acceptance-evidence-review.md",
+      "bytes": 15262,
+      "sha256": "b0c480b96e6030fd87cd2c8cea4d3a509bbb09c083dc88d49e420a9a71e6863e"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/development-baseline/answers-20261020-101316-277113-85942-267024bc-review.md",
+      "bytes": 997415,
+      "sha256": "28dd992838b4dde558e1ec03a3f84390b5d970c20020272f8854559e355b62f8"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/development-baseline/answers-20261020-101316-277113-85942-267024bc.json",
+      "bytes": 1328549,
+      "sha256": "bf6184cf93aa85f1cb74ccbd4b409ebcaa4e5e7ec7c8e90d201ad35ca92a35b4"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/development-baseline/baseline-failure-diagnostics.json",
+      "bytes": 14496,
+      "sha256": "52762b6639cee3875d32abd9df202f82b49c01b998b26147dbb9a0d2691960a4"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/development-baseline/retrieval-20261020-101316-277124-85943-267024bc-review.md",
+      "bytes": 8361,
+      "sha256": "d12353653f78d3837f9aff085cd63d07e3ca0c9eea4ee7b1d3e52fac58b7aa77"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/development-baseline/retrieval-20261020-101316-277124-85943-267024bc.json",
+      "bytes": 13509,
+      "sha256": "f372c479b6762b65b992bba439af0cd3cb2e3bf11d24f1efd1d4b6862ca4b246"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-focused-regression/answers-20261020-111912-974019-89002-e24ebb88-review.md",
+      "bytes": 253689,
+      "sha256": "54cb9f447a7181a37b2c8509a4cef7cf2c177a5dc87d43b7109c680fc10b45b8"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-focused-regression/answers-20261020-111912-974019-89002-e24ebb88.json",
+      "bytes": 338744,
+      "sha256": "c63ba56359aebbbc24bec6ec8cad73f79a56d4c5b50439b9969d8b57e7cc28f0"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-focused-regression/focused-evidence-review.md",
+      "bytes": 8209,
+      "sha256": "9ff12fbbe8ef9f47c24a704dcc5fe52a7fced0e675dfad3209d70cc63b8b2f78"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-followups/answers-20261020-104913-948740-87843-d8d0fc28-review.md",
+      "bytes": 190330,
+      "sha256": "8dc7ae0dfea62b4fe82477c73f5b14c411fa143ed6ff28b24a80a7fc6b1ae0db"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-followups/answers-20261020-104913-948740-87843-d8d0fc28.json",
+      "bytes": 257748,
+      "sha256": "60552da5291110a76d4f734d3224ebf09886e0addb277c992316ac2f4394e29c"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-followups/followups-evidence-review.md",
+      "bytes": 7481,
+      "sha256": "e71cb7a88f778ee8ff04fc09231ac2ad17d51ac390016e0c45f71a796bf92e44"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-followups/retrieval-20261020-104942-661612-87924-d8d0fc28-review.md",
+      "bytes": 4020,
+      "sha256": "5fcaa02241e7c60f3100ddf7ca39b037d1a152f00047a24969626d09c9f5e2f8"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-followups/retrieval-20261020-104942-661612-87924-d8d0fc28.json",
+      "bytes": 7819,
+      "sha256": "ddbb240c67e46a298431084535e002c53722ee3dd6e83b29b49fd120af9c53a5"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-regression/answers-20261020-104913-948742-87842-d8d0fc28-review.md",
+      "bytes": 1011046,
+      "sha256": "6a38445149cbcf19627790076b436ac29043b312019d219639c6f07c4dbd77a2"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-regression/answers-20261020-104913-948742-87842-d8d0fc28.json",
+      "bytes": 1344384,
+      "sha256": "1247096995d640c96fe654b048d17e8334c02fe8693c1aa1e8d00c205177f0d5"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-regression/regression-evidence-review.md",
+      "bytes": 10655,
+      "sha256": "369234697ffd923490daea873245cb306efcab703377cc88594e2ffb5f945d10"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-regression/retrieval-20261020-104942-661604-87923-d8d0fc28-review.md",
+      "bytes": 8361,
+      "sha256": "7a25386fad388718dc82239aa4bae353d16f335dd71d84739eebce1828cde9e2"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-regression/retrieval-20261020-104942-661604-87923-d8d0fc28.json",
+      "bytes": 13509,
+      "sha256": "779f22d25dd1edfeecef879f7c46d8011dc43488c548b1c71373a24e76325a9a"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-regression-v012/answers-20261020-104933-520213-87902-d8d0fc28-review.md",
+      "bytes": 1001296,
+      "sha256": "4276cd37ccf10dd9a5bd3f99c871f251db4e268332f16715c2f9b26e5dbea27d"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-regression-v012/answers-20261020-104933-520213-87902-d8d0fc28.json",
+      "bytes": 1339616,
+      "sha256": "70f55a36c92366b21f049c121517e85df79fd312aa4eb0ccbb164dee557610f0"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-regression-v012/evidence-review.md",
+      "bytes": 11343,
+      "sha256": "9c147fb527eeca1f44deaa5c6752c025d1b2d8c3a155581cdffb8749cea00c7e"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-workflow/workflow-20261020-111939-e24ebb88-review.md",
+      "bytes": 308194,
+      "sha256": "5f13a08183f18e545952eec1ebf978567b097c0a2c593a947e6da261a0392ada"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-workflow/workflow-20261020-111939-e24ebb88.json",
+      "bytes": 379138,
+      "sha256": "30dd9670bac1c8cab5032c3648a46a044c63733e1e1032597c90b637d109f07c"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-workflow/workflow-evidence-review.md",
+      "bytes": 11561,
+      "sha256": "b1136d516541c1707abb913faf4eb7d4ca78266db5b3afc5f2cb00530115cac2"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-workflow-user-review/workflow-20261020-104933-d8d0fc28-review.md",
+      "bytes": 301802,
+      "sha256": "7a73cad09fd4831eae01129b69b1159e6b6f0e3ef7fdf4c33a80b25a9c5febc1"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-workflow-user-review/workflow-20261020-104933-d8d0fc28.json",
+      "bytes": 371578,
+      "sha256": "77e6e57d18f70934f01c18e62647baa954030250388fc87723b716ee9449f002"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/final-workflow-user-review/workflow-evidence-review.md",
+      "bytes": 11594,
+      "sha256": "823ba136bb50e199aaf57d08beab350c7b872f14c309304ca6a774f441098e85"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/regression-evidence-review.md",
+      "bytes": 11395,
+      "sha256": "b3c97c53f250cb14dc50f1b2841de60dce501100ea70af7540f0b690212351f4"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/regression-v012/answers-20261020-101359-011419-86062-267024bc-review.md",
+      "bytes": 991601,
+      "sha256": "a01f754008957409a2f7b6250f4d777f9c2dff411ef0b2134bab768a94c4e22e"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/regression-v012/answers-20261020-101359-011419-86062-267024bc.json",
+      "bytes": 1329006,
+      "sha256": "8736297005539502e8ac705d3f9c88578ef8b376786dba07de63d14b60687e54"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/source-change-diagnostic/README.md",
+      "bytes": 809,
+      "sha256": "75cb3934d15e88c043345e929bf459946ff1f9dae2b404acea68070093a710f7"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/source-change-diagnostic/home_v013_source_diagnostic.json",
+      "bytes": 10111,
+      "sha256": "e47bf245259e3d866da3a9488ab42d89913df27637a4d4352deb43d448d6ce28"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/source-change-diagnostic/home_v013_source_diagnostic.py",
+      "bytes": 7013,
+      "sha256": "601701911135fbbb74881a1fa235de23e258bd3cf2b691ce1e93e5da2c98838c"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/workflow/runner-original.py",
+      "bytes": 27007,
+      "sha256": "595352328090a9926cdc11d557177849eab75c202dca8e2ad0def01a62119123"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/workflow/workflow-20261020-101404-267024bc-review.md",
+      "bytes": 186870,
+      "sha256": "f717bfb606e7a6af96288ba79202822ee328021e272cac75720791333049d826"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/workflow/workflow-20261020-101404-267024bc.json",
+      "bytes": 225551,
+      "sha256": "e9f36f00bf336233f0c46dd0a3ab7fd1b06c02eb43518322f3ff2d3a8b7c81de"
+    },
+    {
+      "path": "eval/results/answer-evidence-v013/workflow/workflow-evidence-review.md",
+      "bytes": 9451,
+      "sha256": "8cb5122dc5fa38dd7b01575d7efadd55b5c1c51a7bfe4378e768bbefc44277ea"
+    }
+  ]
+}

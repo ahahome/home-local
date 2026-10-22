@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="440" viewBox="0 0 1440 440" role="img" aria-labelledby="title desc">
+  <title id="title">home · 私人关系助理</title>
+  <desc id="desc">记住重要的人，和那些小事。以人物为中心，连接近况、记忆、承诺与下一次交流。</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2=".7"><stop stop-color="#10382e"/><stop offset="1" stop-color="#092821"/></linearGradient>
+    <radialGradient id="light"><stop stop-color="#4dba85" stop-opacity=".24"/><stop offset="1" stop-color="#4dba85" stop-opacity="0"/></radialGradient>
+    <linearGradient id="node" x2="1" y2="1"><stop stop-color="#285b48"/><stop offset="1" stop-color="#153e32"/></linearGradient>
+    <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#b4ddc7" opacity=".1"/></pattern>
+  </defs>
+  <rect width="1440" height="440" rx="26" fill="url(#bg)"/>
+  <rect width="1440" height="440" rx="26" fill="url(#grid)"/>
+  <ellipse cx="1070" cy="190" rx="425" ry="300" fill="url(#light)"/>
+  <path d="M732 0 624 440" stroke="#a5e4c3" stroke-opacity=".06"/>
+  <g fill="none" stroke="#a5ddbe" stroke-opacity=".12">
+    <circle cx="1096" cy="219" r="102"/><circle cx="1096" cy="219" r="165"/><circle cx="1096" cy="219" r="229"/>
+  </g>
+  <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif">
+    <text x="66" y="61" fill="#99bea9" font-size="15" letter-spacing="3">RELATIONSHIPS, REMEMBERED.</text>
+    <text x="63" y="151" fill="#f0fff6" font-size="88" font-weight="700" letter-spacing="-5">home</text>
+    <circle cx="322" cy="143" r="8" fill="#a8edbc"/>
+    <text x="66" y="227" fill="#ebfff2" font-size="42" font-weight="600" letter-spacing="1">记住重要的人，和那些小事。</text>
+    <text x="68" y="275" fill="#a7c9b6" font-size="21">让近况有来源，让约定有回响，让下一次交流更从容。</text>
+    <g font-size="15" fill="#d0ecda" text-anchor="middle">
+      <rect x="67" y="323" width="116" height="39" rx="19.5" fill="#aad6bb" fill-opacity=".09" stroke="#afd8be" stroke-opacity=".2"/>
+      <text x="125" y="349">人物档案</text>
+      <rect x="195" y="323" width="116" height="39" rx="19.5" fill="#aad6bb" fill-opacity=".09" stroke="#afd8be" stroke-opacity=".2"/>
+      <text x="253" y="349">来源记忆</text>
+      <rect x="323" y="323" width="116" height="39" rx="19.5" fill="#aad6bb" fill-opacity=".09" stroke="#afd8be" stroke-opacity=".2"/>
+      <text x="381" y="349">行动跟进</text>
+    </g>
+    <text x="68" y="405" fill="#759d88" font-size="13" letter-spacing="1.2">LOCAL WORKSPACE  /  v0.14</text>
+    <g stroke="#9cd7b5" stroke-opacity=".37" fill="none">
+      <path d="M1096 219 975 103M1096 219 1288 116M1096 219 1282 321M1096 219 941 340"/>
+      <path d="M975 103Q1140 24 1288 116M1288 116Q1375 215 1282 321M941 340Q1059 419 1282 321" stroke-dasharray="4 7" stroke-opacity=".15"/>
+    </g>
+    <circle cx="1096" cy="219" r="59" fill="#a7e4ba" fill-opacity=".06" stroke="#b6efc7" stroke-opacity=".12"/>
+    <circle cx="1096" cy="219" r="43" fill="#d9f5df"/>
+    <text x="1096" y="230" font-size="31" fill="#1a523b" text-anchor="middle" font-weight="600">人</text>
+    <g text-anchor="middle" font-size="17" fill="#c6e8d3">
+      <rect x="924" y="78" width="102" height="50" rx="16" fill="url(#node)" stroke="#9dd2b5" stroke-opacity=".32"/><text x="975" y="110">近况</text>
+      <rect x="1237" y="91" width="102" height="50" rx="16" fill="url(#node)" stroke="#9dd2b5" stroke-opacity=".32"/><text x="1288" y="123">记忆</text>
+      <rect x="1231" y="296" width="102" height="50" rx="16" fill="url(#node)" stroke="#9dd2b5" stroke-opacity=".32"/><text x="1282" y="328">约定</text>
+      <rect x="890" y="315" width="102" height="50" rx="16" fill="url(#node)" stroke="#9dd2b5" stroke-opacity=".32"/><text x="941" y="347">来源</text>
+    </g>
+    <g fill="#b8e8c8"><circle cx="1025" cy="148" r="3"/><circle cx="1190" cy="168" r="3"/><circle cx="1190" cy="271" r="3"/><circle cx="1019" cy="279" r="3"/></g>
+  </g>
+</svg>

@@ -1,18 +1,72 @@
 # home · 私人关系助理
 
+![home：记住重要的人，和那些小事](docs/assets/readme/home-cover.svg)
+
+<p align="center">
+  <img alt="Version 0.14" src="https://img.shields.io/badge/version-0.14-087d64?style=flat-square">
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-306998?style=flat-square">
+  <img alt="FastAPI" src="https://img.shields.io/badge/API-FastAPI-009688?style=flat-square">
+  <img alt="SQLite + FTS5" src="https://img.shields.io/badge/Storage-SQLite%20%2B%20FTS5-4a6b5b?style=flat-square">
+  <img alt="Vanilla JavaScript" src="https://img.shields.io/badge/UI-Vanilla%20JS-d6b54a?style=flat-square">
+</p>
+
+<p align="center">
+  <a href="#界面预览">界面预览</a> ·
+  <a href="#安装与启动">快速开始</a> ·
+  <a href="#恢复演示数据">演示数据</a> ·
+  <a href="#架构与代码目录">系统架构</a> ·
+  <a href="docs/DELIVERY.md">交付与验收</a> ·
+  <a href="docs/presentations/home-project-introduction-v0.14-20261022.pptx">项目介绍 PPT</a>
+</p>
+
 以人为索引，把交流、人物近况、承诺和资金往来整理成可以查询、确认与纠错的本地工作台。
 
 你可以直接记录「张晨在星桥软件做设计师，我答应给他发方案」，也可以上传聊天导出、截图、名片和文档。home 提取人物与信息，保留来源，把不确定的身份或事实放进待确认；之后可以查看人物历史、回顾承诺、核对账本、起草跟进消息，以及开展有来源的研究。
 
-产品方向参考 [Mars](https://marsdata.ai) 的公开关系维护能力。当前版本为 **0.14.0**，是独立的本地单用户应用。档案与附件存储在本机；文本、相关记忆和图片通过配置的模型网关推理。
+当前版本为 **0.14.0**，是本地单用户应用。档案与附件存储在本机；文本、相关记忆和图片通过配置的模型网关推理。
 
 仓库包含可跨机器恢复的[虚构演示数据](demo/README.md)，首次使用可按下方「恢复演示数据」说明载入，无需重新调用模型生成。
 
 [完整项目介绍 PPT（0.14，56 页）](docs/presentations/home-project-introduction-v0.14-20261022.pptx)覆盖产品流程、桌面与手机界面、记忆与 Agent 架构、人物写入归属、草稿与改稿、来源变化后的只读恢复，以及分阶段验收和已知限制，整理于 2026 年 10 月 22 日。界面截图保留历史版本标注；实现与验收详情见本文及[交付说明](docs/DELIVERY.md)。
 
+## 界面预览
+
+2026 年 10 月 22 日更新的实际前端：墨绿导航、翡翠色主操作、亮色工作区与统一卡片。以下截图来自仓库演示数据的独立恢复副本，所有人物与内容均为虚构；对话展示已保存的历史消息，本次未重新调用模型生成。点击图片可查看大图。
+
+**今日跟进 · 把下一步放在眼前**
+
+[![今日工作台：真实待跟进计数、分组事项、快速记录与档案变化](docs/assets/readme/today-desktop.png)](docs/assets/readme/today-desktop.png)
+
+| 人物档案 · 把散落的信息连起来 | 记忆工作台 · 保存、核对与纠错 |
+| --- | --- |
+| [![人物档案列表，姓名、背景与档案入口](docs/assets/readme/persons-desktop.png)](docs/assets/readme/persons-desktop.png) | [![已保存记忆、更新提案、搜索与状态筛选](docs/assets/readme/memories-desktop.png)](docs/assets/readme/memories-desktop.png) |
+| 对话、字段历史、真实联系和资金往来围绕同一个人组织。 | 原始来源、所标日期和处理历史保留，修改与撤销有据可查。 |
+
+| 对话 · 回答与来源放在一起 | 关系星图 · 换个视角看已有联系 |
+| --- | --- |
+| [![对话工作区：历史会话、记忆日期追问、引用与输入区](docs/assets/readme/chat-desktop.png)](docs/assets/readme/chat-desktop.png) | [![深绿关系星图：66位可见人物和已记录关系](docs/assets/readme/atlas-desktop.png)](docs/assets/readme/atlas-desktop.png) |
+| 可查看引用时的资料与当前记录，纯查询和实际保存分别呈现。 | 平面与立体投影均保留，点击人物继续查看档案。 |
+
+**移动端 · 随手记录，随时回看**
+
+<p align="center">
+  <img src="docs/assets/readme/today-mobile.png" width="280" alt="手机今日跟进：概览、事项和底部导航">
+  &nbsp;&nbsp;
+  <img src="docs/assets/readme/memories-mobile.png" width="280" alt="手机记忆工作台：提案页签、筛选与记忆列表">
+</p>
+
+桌面与手机共用同一套业务能力，完整导航从手机菜单展开。界面范围、响应尺寸及检查记录见[本次 UI 验收](docs/UI_STUDIO_V014.md)；更早的功能截图保留在[0.11 布局验收](docs/UI_WORKSPACE_V011.md)中。
+
+| 记下近况 | 核对记忆 | 接续交流 |
+| --- | --- | --- |
+| 直接描述，或导入聊天、截图与文档。 | 查来源、确认不确定信息、修改并保留历史。 | 查看约定、准备草稿、由你发送，再记录实际结果。 |
+
 ## 项目状态
 
 截至 2026 年 10 月 21 日，已实现可运行的 Web 工作台、持久任务、对话进度与终稿、摄入与确认、历史纠错、承诺账本、项目、技能、关系星图、研究与备份。0.14 增加按原文称呼绑定已选人物、别名与事实分离、单位边界不清时待确认，以及模型等待期间身份变化的写入复验；沟通草稿补充正文、待补项和发送前步骤要求，明确代笔缺少正文时提示重试。实现、首次真实采样与限制见[0.14验收](docs/WRITE_QUALITY_V014.md)。0.13 的服务端资料展示与只读恢复、0.12 的同人物多条记忆追问、0.11 的统一布局，以及此前的确认与纠错继续保留。下表中的抽取评测与原演示数据统计仍为 10 月 3 日的历史结果。
+
+<details>
+<summary>展开完整验证记录与历史结果（0.3–0.14）</summary>
 
 | 验证范围 | 已测结果 | 应如何理解 |
 | --- | --- | --- |
@@ -38,25 +92,9 @@
 | 完整链路 | 真实对话、名片与收款截图、群聊导入及重复提交复测通过 | 使用独立测试库与虚构资料，包含状态和去重断言 |
 | 数据量与界面 | 66 位人物、341 次互动、71 条承诺、131 笔账目 | 包含归档、历史、待确认与撤销状态；61 位人物正常可见 |
 
+</details>
+
 0.12–0.14 的交付范围与结果入口见[交付与验收](docs/DELIVERY.md)。10 月 3 日的历史抽取依据见[批量模拟数据验收](docs/MOCK_QA.md)和[当日模型复测结果](eval/results/20261003-130302-a2a33e1.json)；此前完整抽取运行通过 28/30，单次采样有波动。评测文件名中的 Git SHA 表示采样时的 HEAD，不代表后续实现的版本。
-
-### 界面预览
-
-以下截图全部使用虚构测试资料。正式数据库和 API 密钥不包含在截图中。
-
-![0.11 今日工作台：待跟进总数、分组事项与轻量记录区](docs/assets/v011/today-desktop.jpg)
-
-![0.11 对话工作区：历史会话、回答与来源、输入区](docs/assets/v011/chat-desktop.jpg)
-
-![0.11 人物详情：身份概览、沟通入口与分区档案](docs/assets/v011/person-desktop.jpg)
-
-![记忆更新审阅：核对沟通原文、当前档案与生效日期，编辑后确认](docs/assets/outcome-memory-v05-review.png)
-
-![对话引用：保留回答时内容、当前修改依据与原始沟通](docs/assets/memory-citations-v07-source-desktop.png)
-
-![关系星图：61 位可见人物，密集数据默认平面布局](docs/assets/mock-atlas.png)
-
-更多 0.11 界面与移动端检查见 [0.11 布局与交互验收](docs/UI_WORKSPACE_V011.md)。以上为历史功能截图，0.12–0.14 沿用工作台布局，后续新增行为见各版本验收文档。
 
 ## 功能与入口
 
@@ -88,6 +126,13 @@
 - 浏览器。前端没有 Node 构建步骤；Node.js 用于可选的语法检查和界面回归测试。
 
 依赖列在 `requirements.txt`。当前未提供依赖锁文件，换机器安装后应运行自动测试验证环境。
+
+### 获取代码
+
+```sh
+git clone https://github.com/ahahome/home-local.git
+cd home-local
+```
 
 ### Windows / PowerShell
 
@@ -403,17 +448,34 @@ git diff --check
 
 ## 架构与代码目录
 
-```text
-浏览器 / 原始文件 / 聊天导出 / 网页
-                    ↓
-FastAPI → 持久任务 → 解析或转写 → 模型抽取 / Agent 工具
-                    ↓
-身份消歧 → 来源与置信度检查 → 统一写入 / 待确认 / 去重
-                    ↓
-SQLite：人物、字段历史、记忆、互动、承诺、账目、证据、任务事件
-                    ↓
-结构化与全文检索 → 档案、对话、项目、提醒、日志和研究报告
+```mermaid
+flowchart LR
+  UI[Web 工作台] -->|HTTP / SSE| API[FastAPI]
+  subgraph LOCAL[本地运行与存储]
+    API --> JOB[持久任务与事件]
+    API --> QUERY[结构化 / FTS5 检索]
+    JOB --> INGEST[文件解析与资料摄入]
+    JOB --> AGENT[对话 / 研究 / 沟通编排]
+    AGENT --> QUERY
+    INGEST --> WRITE[人物归属 / 来源 / 写入约束]
+    AGENT -->|获准记事| WRITE
+    WRITE --> DB[(SQLite 与历史审计)]
+    WRITE --> PENDING[身份与事实待确认]
+    PENDING -->|用户核对确认| WRITE
+    AGENT -->|沟通结果分析| PROPOSAL[记忆更新提案]
+    PROPOSAL -->|审阅并复验来源和版本| DB
+    QUERY --> DB
+    INGEST --> BLOB[原始附件]
+  end
+  AGENT -.相关上下文.-> LLM[配置的外部模型 API]
+  INGEST -.抽取 / 图片转写.-> LLM
+  classDef primary fill:#e2f3e9,stroke:#69a98a,color:#174b37
+  classDef store fill:#f3f8f5,stroke:#9ebcaa,color:#274a39
+  class UI,API,AGENT primary
+  class DB,BLOB,PENDING,PROPOSAL store
 ```
+
+档案、原始附件与审计保存在本机。模型推理会将相关上下文发送至配置的 API，具体读写和恢复边界见上文及版本验收。
 
 | 路径 | 职责 |
 | --- | --- |
@@ -434,7 +496,7 @@ SQLite：人物、字段历史、记忆、互动、承诺、账目、证据、�
 | `app/store/` | SQLite schema、迁移执行、数据访问、附件内容寻址存储 |
 | `app/jobs/` | 持久任务与定时提醒、日志、周反思 |
 | `migrations/` | 从原 schema 升级任务、会话锁、纠错审计、互动类型与沟通跟进表 |
-| `web/` | 无需构建的前端及本地 Markdown/HTML 清理依赖 |
+| `web/` | 无需构建的前端、独立视觉主题与本地 Markdown/HTML 清理依赖 |
 | `tests/`、`eval/` | 自动回归、不变量、检索与真实模型问答、写入及沟通工作流评测 |
 | `scripts/` | 演示数据恢复、批量模拟、缓存输出重放和完整链路验收 |
 | `docs/` | 初始审查、交付验收、模拟验收与虚构数据截图 |

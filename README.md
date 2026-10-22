@@ -8,6 +8,7 @@
   <img alt="FastAPI" src="https://img.shields.io/badge/API-FastAPI-009688?style=flat-square">
   <img alt="SQLite + FTS5" src="https://img.shields.io/badge/Storage-SQLite%20%2B%20FTS5-4a6b5b?style=flat-square">
   <img alt="Vanilla JavaScript" src="https://img.shields.io/badge/UI-Vanilla%20JS-d6b54a?style=flat-square">
+  <a href="LICENSE"><img alt="License: prior written permission required" src="https://img.shields.io/badge/License-Permission%20Required-9b633a?style=flat-square"></a>
 </p>
 
 <p align="center">
@@ -16,7 +17,8 @@
   <a href="#恢复演示数据">演示数据</a> ·
   <a href="#架构与代码目录">系统架构</a> ·
   <a href="docs/DELIVERY.md">交付与验收</a> ·
-  <a href="docs/presentations/home-project-introduction-v0.14-20261022.pptx">项目介绍 PPT</a>
+  <a href="docs/presentations/home-project-introduction-v0.14-20261022.pptx">项目介绍 PPT</a> ·
+  <a href="#许可与授权">许可与授权</a>
 </p>
 
 以人为索引，把交流、人物近况、承诺和资金往来整理成可以查询、确认与纠错的本地工作台。
@@ -24,6 +26,8 @@
 你可以直接记录「张晨在星桥软件做设计师，我答应给他发方案」，也可以上传聊天导出、截图、名片和文档。home 提取人物与信息，保留来源，把不确定的身份或事实放进待确认；之后可以查看人物历史、回顾承诺、核对账本、起草跟进消息，以及开展有来源的研究。
 
 当前版本为 **0.14.0**，是本地单用户应用。档案与附件存储在本机；文本、相关记忆和图片通过配置的模型网关推理。
+
+> **使用须授权**：本项目采用[自定义许可](LICENSE)，下载、运行、修改、部署、分发或商用前须取得仓库所有者 [ahahome](https://github.com/ahahome) 的明确书面批准。公开浏览及托管平台条款授予的权限见[许可与授权](#许可与授权)；下方安装运行说明供已获授权者使用。
 
 仓库包含可跨机器恢复的[虚构演示数据](demo/README.md)，首次使用可按下方「恢复演示数据」说明载入，无需重新调用模型生成。
 
@@ -598,3 +602,13 @@ SQLite 使用 WAL、外键和忙等待；字段记录生效时间与记录时间
 近期优先处理 0.14 已观察到的草稿条件偏差：先给规格再询价、样张通过后再排产等前置条件需要在正文中保留；同时继续检验代词抽取为空时的漏保存问题。后续补充真实数据回归与多次采样、独立的语义检索与回答质量评测，提高复杂语义的归属与收支判断，完善依赖与部署复现，再按需求接入 IM、录音与外部消息服务。这些方向尚未计入已完成范围。
 
 旧 README 的功能点计数与历史模型成绩不再作为当前完成率依据。[初始审查](docs/PROJECT_AUDIT.md) 保留修改前的问题；[交付说明](docs/DELIVERY.md) 与 [模拟验收](docs/MOCK_QA.md) 描述实际行为和验证结果。
+
+## 许可与授权
+
+本项目自有代码、文档、图片、PPT 与演示材料采用[根目录 LICENSE](LICENSE) 中的自定义许可，保留所有未明确授予的权利，**不采用 MIT 许可**。除另有单独许可的材料外，个人、学习、研究、内部及商业用途均须事先获得仓库所有者 **ahahome** 的明确书面批准；获批范围之外的使用需要另行批准。
+
+可以通过托管平台公开浏览仓库，并依平台适用条款使用其托管、展示及站内 Fork 等功能；这些权限不代表已获准运行、修改、再分发或商用。依法享有的权利及已依据其他适用许可或书面协议获得的权限不受本声明限制。
+
+需要授权时，请在[仓库 Issues](https://github.com/ahahome/home-local/issues) 中提出申请，说明拟使用的内容、用途、使用范围，以及是否涉及修改、部署或分发。提交申请、仓库公开可见或维护者未回复均不代表已获批准；只有 ahahome 的明确书面批准才构成本项目授权，授权以其有权授予的范围为限。
+
+第三方组件继续适用各自的许可，本项目的限制不覆盖第三方许可独立授予的权利。前端包含的 Marked 使用 MIT，DOMPurify 使用 Apache-2.0 / MPL-2.0 双许可；完整版权与许可文本保留在[第三方依赖说明](web/vendor/THIRD_PARTY.md)所链接的文件中。以上为中文摘要，具体条款以 [LICENSE](LICENSE) 为准。

@@ -13,13 +13,13 @@
   "files": [
     {
       "path": "README.md",
-      "bytes": 59873,
-      "sha256": "3c3eaf9cb738af5bcf04e15581c10cf0d126f73bdeb16a6c7c0ca472199ccd13"
+      "bytes": 61916,
+      "sha256": "045ff87ed443bf9c75e0be2adfa5dd868b7748677c93d7abb6f87aef9813abcc"
     },
     {
       "path": "docs/DELIVERY.md",
-      "bytes": 13691,
-      "sha256": "e782ba18064234360af234a53745e2b22b90b45ff7766a06a4b5d5850688094b"
+      "bytes": 14143,
+      "sha256": "81a82c5b7cc528a56faf2b0eebb62e0d939b5a00dd220bfacf161d115439b292"
     },
     {
       "path": "docs/WRITE_QUALITY_V014.md",

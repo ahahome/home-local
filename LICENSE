@@ -1,0 +1,60 @@
+home License
+
+Copyright (c) 2026 home contributors.
+All rights reserved except as expressly stated below.
+
+1. Scope
+
+This notice applies to the project-authored code, documentation, assets,
+presentations, and demonstration materials in this repository (the "Project
+Materials"), except materials identified as subject to a separate license.
+
+2. Public viewing and hosting-platform rights
+
+You may view this public repository through its hosting platform and make
+incidental technical copies necessary for such viewing. This notice does not
+restrict permissions granted under the hosting platform's applicable terms
+to host, display, or fork the repository using the platform's built-in
+features. Those permissions do not grant a broader right to run, modify,
+redistribute, or commercially exploit the Project Materials.
+
+3. Prior written permission
+
+Except as provided in Section 2 or under applicable law, you must obtain
+express prior written permission from the repository owner, GitHub user
+ahahome (https://github.com/ahahome), before downloading, copying, installing,
+running, deploying, modifying, creating derivative works of, distributing,
+sublicensing, selling, or otherwise using the Project Materials.
+
+This requirement applies to personal, educational, research, internal
+business, noncommercial, and commercial use. Permission applies only to the
+activities and scope expressly stated in the written grant and only to
+rights the approving party is entitled to grant. Activities outside that
+scope require further express written permission. Public availability,
+silence, or submission of a permission request does not constitute approval.
+
+To request permission, open an authorization request in the repository's
+Issues at https://github.com/ahahome/home-local/issues and describe your
+intended use and scope. Only an express written approval from ahahome
+constitutes approval under this notice. Retain this notice and applicable
+copyright notices in any permitted copies of the Project Materials.
+
+4. Third-party materials and separate permissions
+
+Third-party components remain governed by their respective licenses.
+Nothing in this notice restricts rights independently granted under those
+licenses or revokes permissions already granted under a separate applicable
+license or written agreement. Preserve third-party copyright and license
+notices as required by their terms. See web/vendor/THIRD_PARTY.md for the
+bundled browser dependencies and their license texts.
+
+5. No warranty and limitation of liability
+
+THE PROJECT MATERIALS ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE COPYRIGHT HOLDERS
+SHALL NOT BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE PROJECT MATERIALS OR THEIR USE OR OTHER DEALINGS IN
+THE PROJECT MATERIALS.
